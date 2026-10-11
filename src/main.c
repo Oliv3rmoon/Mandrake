@@ -164,7 +164,9 @@ void app_draw_toast(void)
     float x = (plat_width() - w) * 0.5f, y = plat_height() - 190 + rise;
     draw_rrect(x, y, w, h, h * 0.5f, argb_alpha(TH_PILL_A(0xf0), a));
     icon_draw(ICON_INFO_CIRCLE, x + 22, y + 18, 28, argb_alpha(TH_FOCUS, a));
+    draw_set_glyph_alpha(a); /* the pictures of the buttons fade with the text */
     toast_runs(toast, x + 62, y + 17, a, true);
+    draw_set_glyph_alpha(1.0f);
 }
 
 /* ---------------------------------------------------------------- message box */
@@ -997,7 +999,7 @@ void app_start_game(int index, bool resume)
         app_toast_for("BIOS not found, SCPH1001.BIN is recommended due to the low compatibility of OpenBios.", 10.0f);
     if (app.settings.renderer == 1)
         app_toast_for("Rendering on the CPU, using the GPU is recommended.", 5.0f);
-    app_toast_for("Press [L3] + [R3] to open the game menu...", 5.0f);
+    app_toast_for("Press {L3} + {R3} to open the game menu...", 5.0f);
     plat_audio_open(host_sample_rate());
     plat_audio_clear();
     ra_game_loaded(g->path);
@@ -1025,7 +1027,7 @@ void app_start_game(int index, bool resume)
     if (resume && play_load_resume())
         app_toast("Continuing where you left off...");
     if (controls_gun_active())
-        app_toast("Light gun: point the controller at the screen, R2 fires, R3 re-centres");
+        app_toast("Light gun: point the controller at the screen, {R2} fires, {R3} re-centres");
     app.screen = SCREEN_GAME;
 }
 
@@ -1108,7 +1110,12 @@ static void update_lightbars(void)
         return;
     uint32_t cover = app.game ? covers_color(app.game_index) & 0xffffff : 0;
     for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
-        plat_set_lightbar(i, app.settings.lightbar == 2 && cover ? cover : players[i]);
+    {
+        uint32_t rgb = app.settings.lightbar == 2 && cover ? cover : players[i];
+        if (app.settings.lightbar == 3) /* red in analog mode, off in digital */
+            rgb = app.game && host_analog_mode(i) ? 0xff0000 : 0x000000;
+        plat_set_lightbar(i, rgb);
+    }
 }
 
 static float auto_since, auto_shown; /* auto-save: time since the last, and its icon */
@@ -1140,16 +1147,20 @@ static void game_screen(PadState *pads)
     bool open_menu = combo_hit;
     /* touchpad held + R2: fast forward; + L2: rewind */
     uint32_t all = pads[0].buttons | pads[1].buttons;
-    bool fast = touch && (all & BIT(BTN_R2)), back = touch && (all & BIT(BTN_L2));
+    /* touchpad + two shoulder buttons: the DualShock's analog mode combo (L1 + R1 + Select...): the
+     * touchpad is the Select held down, and the shoulders go to the game */
+    const uint32_t shoulders = BIT(BTN_L1) | BIT(BTN_R1) | BIT(BTN_L2) | BIT(BTN_R2);
+    bool chord = touch && __builtin_popcount(all & shoulders) >= 2;
+    bool fast = touch && !chord && (all & BIT(BTN_R2)), back = touch && !chord && (all & BIT(BTN_L2));
     speed_changed = fast || back;
-    if (fast || back)
+    if (fast || back || chord)
         touch_used = true; /* a combo, not Select or the menu */
     /* touchpad + Square: screenshot; + Triangle / Circle: timer; + R1: next disc */
     static uint32_t combo_all_prev;
     uint32_t newly = touch ? all & ~combo_all_prev : 0;
     combo_all_prev = all;
     const uint32_t combo_keys = BIT(BTN_SQUARE) | BIT(BTN_TRIANGLE) | BIT(BTN_CIRCLE) | BIT(BTN_R1);
-    if (touch && (all & combo_keys))
+    if (touch && !chord && (all & combo_keys))
         touch_used = true;
     if (newly & BIT(BTN_SQUARE))
     {
@@ -1170,7 +1181,7 @@ static void game_screen(PadState *pads)
         timer.shown = false;
         app_toast("Timer reset");
     }
-    if ((newly & BIT(BTN_R1)) && host_disc_count() > 1)
+    if ((newly & BIT(BTN_R1)) && !chord && !(all & BIT(BTN_L1)) && host_disc_count() > 1)
     {
         int next = (host_disc_index() + 1) % host_disc_count();
         if (host_disc_select(next))
@@ -1208,8 +1219,10 @@ static void game_screen(PadState *pads)
         if (fast || back)
             pads[i].buttons &= ~(BIT(BTN_L2) | BIT(BTN_R2));
         if (touch) /* the combo buttons go to SwanStationPS5, not the game */
-            pads[i].buttons &= ~combo_keys;
+            pads[i].buttons &= ~(chord ? combo_keys & ~BIT(BTN_R1) : combo_keys);
         pads[i].buttons = map_buttons(pads[i].buttons & ~BIT(BTN_MENU));
+        if (i == 0 && chord)
+            pads[0].buttons |= BIT(BTN_SELECT);
         if (i == 0 && select_frames > 0)
         {
             pads[0].buttons |= BIT(BTN_SELECT);

@@ -657,30 +657,49 @@ void plat_pad_triggers(int port, PlatTrigger l2, PlatTrigger r2)
     static int last_h[SwanStationPS5_MAX_PADS] = {-2, -2, -2, -2};
     int h = pad_handle(i);
     if (h < 0)
+    {
+        static bool said;
+        if (!said && (l2.mode || r2.mode))
+        {
+            said = true;
+            SwanStationPS5_log("pad: no scePad handle for port %d (pad %d, user %d, handle 0x%08x)", port + 1, i,
+                      i >= 0 ? pad_uid[i] : -1, i >= 0 ? (unsigned)pad_h[i] : 0u);
+        }
         return;
+    }
     if (last_h[i] == h && !memcmp(&last[i][0], &l2, sizeof(l2)) && !memcmp(&last[i][1], &r2, sizeof(r2)))
         return;
     last_h[i] = h;
     last[i][0] = l2;
     last[i][1] = r2;
-    Ps5TriggerParam param;
-    memset(&param, 0, sizeof(param));
-    param.mask = 3;
+    /* one call per trigger, so a refusal says which effect it was */
     const PlatTrigger *t[2] = {&l2, &r2};
+    static unsigned logged_modes;
     for (int k = 0; k < 2; ++k)
     {
+        Ps5TriggerParam param;
+        memset(&param, 0, sizeof(param));
+        param.mask = (uint8_t)(1 << k);
         param.command[k].mode = t[k]->mode;
-        param.command[k].data[0] = t[k]->a;
-        param.command[k].data[1] = t[k]->b;
-        param.command[k].data[2] = t[k]->c;
-        param.command[k].data[3] = t[k]->d;
-    }
-    int err = scePadSetTriggerEffect(h, &param);
-    static bool logged;
-    if (err && !logged)
-    {
-        SwanStationPS5_log("pad: trigger effect failed (0x%08x)", (unsigned)err);
-        logged = true;
+        memcpy(param.command[k].data, t[k]->data, sizeof(t[k]->data));
+        int err = scePadSetTriggerEffect(h, &param);
+        if (t[k]->mode)
+            SwanStationPS5_log("pad: trigger %s mode %u -> 0x%08x (handle %d)", k ? "R2" : "L2", (unsigned)t[k]->mode,
+                      (unsigned)err, h);
+        if (err)
+        {
+            /* a refused effect leaves the trigger as it was: put it back to normal */
+            Ps5TriggerParam off;
+            memset(&off, 0, sizeof(off));
+            off.mask = param.mask;
+            scePadSetTriggerEffect(h, &off);
+        }
+        if (err && !(logged_modes & (1u << (t[k]->mode & 15))))
+        {
+            logged_modes |= 1u << (t[k]->mode & 15);
+            SwanStationPS5_log("pad: trigger effect %s mode %u (%u %u %u %u) failed (0x%08x)", k ? "R2" : "L2",
+                      (unsigned)t[k]->mode, t[k]->data[0], t[k]->data[1], t[k]->data[2], t[k]->data[3], (unsigned)err);
+        }
     }
 }
 

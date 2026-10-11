@@ -132,6 +132,7 @@ static bool speculative;      /* run-ahead's look-ahead frames: run, drawn, not 
 
 static char patches_dir[SwanStationPS5_PATH_MAX];
 static bool multitap;
+static bool osd_wanted; /* Settings > Display OSD Messages: show the core's messages as notices */
 
 
 static struct retro_memory_descriptor memory_descriptors[32];
@@ -213,7 +214,15 @@ static void apply_swanstation_options(const Settings *s)
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         int v = s->ss_opt[i];
-        set_option(SS_OPTS[i].key, SS_OPTS[i].values[v >= 0 && v < SS_OPTS[i].count ? v : SS_OPTS[i].def]);
+        const char *value = SS_OPTS[i].values[v >= 0 && v < SS_OPTS[i].count ? v : SS_OPTS[i].def];
+        if (!strcmp(SS_OPTS[i].key, "swanstation_Display_ShowOSDMessages"))
+        {
+            /* the core always says its messages (the light bar follows the analog mode by them); whether they are
+             * shown is decided here */
+            osd_wanted = !strcmp(value, "true");
+            value = "true";
+        }
+        set_option(SS_OPTS[i].key, value);
     }
     set_option("swanstation_CPU_FastmemMode", "LUT");
     /* controls: Settings > Controls decides these, not the core's own rows */
@@ -388,6 +397,13 @@ static int gun_device;           /* 0 a pad, 1 GunCon, 2 Justifier in port 1 */
 void host_set_gun(int device)
 {
     gun_device = device;
+}
+
+static bool analog_on[4]; /* each controller's mode, from the core's messages ("Controller 1 switched to analog mode.") */
+
+bool host_analog_mode(int port)
+{
+    return port >= 0 && port < 4 && analog_on[port];
 }
 
 static int special_device; /* 0 pads, 1 NeGcon in every port, 2 a mouse in port 1 */
@@ -675,13 +691,22 @@ static bool RETRO_CALLCONV environment(unsigned cmd, void *data)
         /* the core's on-screen messages (its "Display OSD Messages" option decides whether it sends them) */
         const char *msg = ((const struct retro_message *)data)->msg;
         SwanStationPS5_log("core message: %s", msg);
+        /* the DualShock's mode, for the light bar: the core says it whenever it changes (also when the game does it) */
+        unsigned who;
+        if (msg && sscanf(msg, "Controller %u ", &who) == 1 && who >= 1 && who <= 4)
+        {
+            if (strstr(msg, "analog mode"))
+                analog_on[who - 1] = true;
+            else if (strstr(msg, "digital mode"))
+                analog_on[who - 1] = false;
+        }
         /* a libcrypt game refused for want of an SBI file: host_load says it (once, in the interface's language);
          * the core's own two errors ("You are attempting..." and "System failed to boot") stay out */
         if (msg && strstr(msg, "libcrypt protected game without an SBI file"))
             sbi_missing = true;
         if (sbi_missing && msg && (strstr(msg, "libcrypt protected game") || strstr(msg, "System failed to boot")))
             return true;
-        if (msg && msg[0])
+        if (msg && msg[0] && (osd_wanted || !strncmp(msg, "ERROR: ", 7)))
         {
             char shown[512];
             osd_translate(msg, shown, sizeof(shown), 0);
@@ -1025,6 +1050,10 @@ const char *host_core_name(void)
     return core->name;
 }
 
+static void apply_devices(const Settings *settings);
+static void apply_devices_for(bool analog);
+static bool devices_analog;   /* the Controller setting the devices were last chosen with */
+
 bool host_load(const char *game_path, const char *serial, const Paths *paths, const Settings *settings,
                char *error, size_t error_size)
 {
@@ -1042,6 +1071,7 @@ bool host_load(const char *game_path, const char *serial, const Paths *paths, co
     pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
     rumble_scale = settings->vibration * 0.25f;
     rumble_feel = settings->rumble_feel;
+    memset(analog_on, 0, sizeof(analog_on)); /* a DualShock starts in digital mode */
     memset(rumble_strong, 0, sizeof(rumble_strong));
     memset(rumble_weak, 0, sizeof(rumble_weak));
     session_renderer = settings->renderer;
@@ -1058,6 +1088,10 @@ bool host_load(const char *game_path, const char *serial, const Paths *paths, co
     STEP("retro_init");
     core->init();
 
+    /* the controllers go in before the game boots: it asks what is plugged in only at the start, so a
+     * NeGcon put in afterwards isn't noticed until the pad is changed again */
+    multitap = settings->multitap;
+    apply_devices(settings);
     STEP("retro_load_game");
     disc_restore(game_path);
     struct retro_game_info info = {game_path, NULL, 0, NULL};
@@ -1082,26 +1116,7 @@ bool host_load(const char *game_path, const char *serial, const Paths *paths, co
 #endif
     STEP("retro_get_system_av_info");
     core->get_system_av_info(&av_info);
-    /* DualShock starts in digital mode, so it is also safe for digital-only games. */
-    unsigned device = settings->analog ? RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, (core == &SWANSTATION ? 0 : 1))
-                                       : RETRO_DEVICE_JOYPAD;
-    multitap = settings->multitap;
-    for (unsigned port = 0; port < (multitap ? 4u : 2u); ++port)
-        core->set_controller_port_device(port, device);
-    /* NeGcon (analog subclass 3) in every port, or a mouse in port 1 */
-    if (special_device == 1)
-        for (unsigned port = 0; port < (multitap ? 4u : 2u); ++port)
-            core->set_controller_port_device(port, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 3));
-    if (special_device == 2)
-        core->set_controller_port_device(0, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_MOUSE, 0));
-    if (special_device)
-        SwanStationPS5_log("host: %s", special_device == 1 ? "NeGcon in each port" : "a mouse in port 1");
-    /* a light gun in port 1: GunCon is subclass 0, the Justifier 1, in both cores */
-    if (gun_device)
-    {
-        core->set_controller_port_device(0, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_LIGHTGUN, gun_device - 1));
-        SwanStationPS5_log("host: port 1 is a %s", gun_device == 1 ? "GunCon" : "Justifier");
-    }
+    apply_devices(settings); /* again, in case loading changed them */
     loaded = true;
     state_size = 0;
     card_load();
@@ -1174,6 +1189,43 @@ void host_reset(void)
 {
     if (loaded)
         core->reset();
+}
+
+/* Which controller is in each port: the DualShock or digital pad, then a NeGcon, a mouse or a light gun
+ * over it. Also while a game runs: the core builds the controllers again on the next frame. */
+static void apply_devices_for(bool analog)
+{
+    devices_analog = analog;
+    /* DualShock starts in digital mode, so it is also safe for digital-only games. */
+    unsigned device = analog ? RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, (core == &SWANSTATION ? 0 : 1))
+                                       : RETRO_DEVICE_JOYPAD;
+    for (unsigned port = 0; port < (multitap ? 4u : 2u); ++port)
+        core->set_controller_port_device(port, device);
+    /* NeGcon Rumble (analog subclass 3) in every port, or a mouse in port 1 */
+    if (special_device == 1)
+        for (unsigned port = 0; port < (multitap ? 4u : 2u); ++port)
+            core->set_controller_port_device(port, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 3));
+    if (special_device == 2)
+        core->set_controller_port_device(0, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_MOUSE, 0));
+    if (special_device)
+        SwanStationPS5_log("host: %s", special_device == 1 ? "NeGcon in each port" : "a mouse in port 1");
+    /* a light gun in port 1: GunCon is subclass 0, the Justifier 1, in both cores */
+    if (gun_device)
+    {
+        core->set_controller_port_device(0, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_LIGHTGUN, gun_device - 1));
+        SwanStationPS5_log("host: port 1 is a %s", gun_device == 1 ? "GunCon" : "Justifier");
+    }
+}
+
+static void apply_devices(const Settings *settings)
+{
+    apply_devices_for(settings->analog);
+}
+
+void host_apply_devices(const Settings *settings)
+{
+    if (loaded)
+        apply_devices(settings);
 }
 
 void host_apply_settings(const Settings *settings)

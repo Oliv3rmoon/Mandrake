@@ -23,6 +23,8 @@ void host_set_pads(const PadState pads[SwanStationPS5_MAX_PADS]);
 void host_set_gun(int device);
 /* Other controllers for the next host_load: 0 pads, 1 NeGcon in every port, 2 a mouse in port 1. */
 void host_set_special(int device);
+bool host_analog_mode(int port); /* the controller in this port is in analog mode (the core said so) */
+void host_apply_devices(const Settings *settings); /* the controller types, while a game runs */
 /* Known fixes for the next host_load (GDB_* from gamedb.h): settings the game breaks with. */
 void host_set_fixes(unsigned flags);
 /* How hard the game is rumbling this player's controller now, 0..1. */

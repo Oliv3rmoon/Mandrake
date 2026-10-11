@@ -16,7 +16,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.1.6"
+#define SwanStationPS5_VERSION "1.1.7"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -133,11 +133,11 @@ typedef struct
     bool ra_popups;       /* achievement unlock banners while playing */
     bool ra_tracker;      /* the progress card when a counted achievement moves */
     int ra_popup_style;   /* 0 banner, 1 compact, 2 big trophy */
-    int lightbar;         /* 0 left to the system, 1 player colours, 2 the game's cover colour */
+    int lightbar;         /* 0 left to the system, 1 player colours, 2 the game's cover colour, 3 red in analog mode / off in digital */
     int stick_deadzone;   /* 0 off, 1..4: 5, 10, 15, 20 % of the stick's travel ignored */
     int stick_response;   /* 0 normal, 1 precise (slow near the centre), 2 quick */
-    bool trigger_effects; /* DualSense: pedal feel in racing games, a trigger click for light guns */
-    bool racing_triggers; /* racing games: R2 is the gas (Cross), L2 the brake (Square) */
+    int trigger_effects;  /* DualSense triggers: 0 off, 1 automatic (pedal / gun click), then one feel for every game: click, light click, firm, buzz */
+    bool racing_triggers; /* R2 and Cross swap places, and L2 and Square (off by default) */
     int rumble_feel;      /* 0 classic, 1 soft, 2 punchy, 3 punchy and in the triggers */
     int lightgun;         /* 0 automatic (known gun games), 1 off, 2 on */
     int overclock;        /* 0 off, 1 a little, 2 a lot */

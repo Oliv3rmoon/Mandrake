@@ -8,6 +8,7 @@
  * the same atlases from a Noto Sans JP subset (see i18n.c).
  */
 #include "text.h"
+#include "draw.h"
 
 #include "../i18n.h"
 
@@ -341,19 +342,58 @@ static const stbtt_packedchar *atlas_glyph(const Atlas *a, int cp, const stbtt_p
     return &a->chars[*index];
 }
 
+/* Button names in braces, {R2} or {Cross}, are drawn as the pad's glyphs in the middle of the text. */
+static int glyph_tag(const char *s, int *len)
+{
+    static const struct
+    {
+        const char *name;
+        int glyph;
+    } TAGS[] = {{"Cross", GLYPH_CROSS},   {"Circle", GLYPH_CIRCLE}, {"Square", GLYPH_SQUARE},
+                {"Triangle", GLYPH_TRIANGLE}, {"Up", GLYPH_UP},       {"Down", GLYPH_DOWN},
+                {"Left", GLYPH_LEFT},     {"Right", GLYPH_RIGHT},   {"L1", GLYPH_L1},
+                {"R1", GLYPH_R1},         {"L2", GLYPH_L2},         {"R2", GLYPH_R2},
+                {"L3", GLYPH_L3},         {"R3", GLYPH_R3},         {"Options", GLYPH_START},
+                {"Select", GLYPH_SELECT}, {"Touchpad", GLYPH_TOUCHPAD}};
+    if (*s != '{')
+        return -1;
+    for (size_t i = 0; i < sizeof(TAGS) / sizeof(TAGS[0]); ++i)
+    {
+        size_t n = strlen(TAGS[i].name);
+        if (!strncmp(s + 1, TAGS[i].name, n) && s[1 + n] == '}')
+        {
+            *len = (int)n + 2;
+            return TAGS[i].glyph;
+        }
+    }
+    return -1;
+}
+
+static float tag_size(float size)
+{
+    return size * 0.95f;
+}
+
 float text_width(float size, int weight, const char *s)
 {
     Atlas *a = get_atlas(weight, size);
     if (!a)
         return 0.0f;
-    float scale = size / (float)a->px, w = 0.0f;
+    float scale = size / (float)a->px, w = 0.0f, extra = 0.0f;
     while (*s)
     {
+        int len, tag = glyph_tag(s, &len);
+        if (tag >= 0)
+        {
+            extra += pad_glyph_width((enum PadGlyph)tag, tag_size(size)) + size * 0.12f;
+            s += len;
+            continue;
+        }
         const stbtt_packedchar *base;
         int index;
         w += atlas_glyph(a, next_cp(&s), &base, &index)->xadvance;
     }
-    return w * scale;
+    return w * scale + extra;
 }
 
 void text_draw(float x, float y, float size, int weight, uint32_t argb, int align, const char *s)
@@ -368,16 +408,25 @@ void text_draw(float x, float y, float size, int weight, uint32_t argb, int alig
     }
     /* One blit per glyph: the software renderer's copy path is far cheaper
      * than textured triangles. */
-    float scale = size / (float)a->px, pen = 0.0f;
+    float scale = size / (float)a->px, pen = 0.0f, extra = 0.0f;
     while (*s)
     {
+        int len, tag = glyph_tag(s, &len);
+        if (tag >= 0)
+        {
+            float gs = tag_size(size), gw = pad_glyph_width((enum PadGlyph)tag, gs);
+            draw_pad_glyph((enum PadGlyph)tag, x + pen * scale + extra + gw * 0.5f, y + size * 0.55f, gs);
+            extra += gw + size * 0.12f;
+            s += len;
+            continue;
+        }
         int cp = next_cp(&s);
         const stbtt_packedchar *base;
         int index;
         const stbtt_packedchar *g = atlas_glyph(a, cp, &base, &index);
         if (g->x1 > g->x0 && g->y1 > g->y0)
             plat_draw_texture_region(a->texture, g->x0, g->y0, g->x1 - g->x0, g->y1 - g->y0,
-                                     x + (pen + g->xoff) * scale, y + (a->ascent + g->yoff) * scale,
+                                     x + (pen + g->xoff) * scale + extra, y + (a->ascent + g->yoff) * scale,
                                      (g->xoff2 - g->xoff) * scale, (g->yoff2 - g->yoff) * scale,
                                      argb);
         pen += g->xadvance;

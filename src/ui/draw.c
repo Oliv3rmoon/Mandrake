@@ -317,6 +317,14 @@ float pad_glyph_width(enum PadGlyph glyph, float size)
     return size;
 }
 
+/* How opaque the pad glyphs are drawn: a notice fading out fades its pictures with it. */
+static float glyph_alpha = 1.0f;
+
+void draw_set_glyph_alpha(float alpha)
+{
+    glyph_alpha = alpha < 0.0f ? 0.0f : alpha > 1.0f ? 1.0f : alpha;
+}
+
 float draw_pad_glyph(enum PadGlyph glyph, float cx, float cy, float size)
 {
     float r = size * 0.36f, t = size * 0.11f;
@@ -326,30 +334,30 @@ float draw_pad_glyph(enum PadGlyph glyph, float cx, float cy, float size)
     {
         /* shoulder buttons and OPTIONS/SELECT: a labelled chip */
         float h = size * 0.92f;
-        draw_rrect(cx - w * 0.5f, cy - h * 0.5f, w, h, h * 0.3f, TH_ROW_SELECTED);
-        text_draw(cx, cy - size * 0.6f * 0.62f, size * 0.6f, FONT_BOLD, TH_TEXT, ALIGN_CENTER,
+        draw_rrect(cx - w * 0.5f, cy - h * 0.5f, w, h, h * 0.3f, argb_alpha(TH_ROW_SELECTED, glyph_alpha));
+        text_draw(cx, cy - size * 0.6f * 0.62f, size * 0.6f, FONT_BOLD, argb_alpha(TH_TEXT, glyph_alpha), ALIGN_CENTER,
                   label);
         return w;
     }
     switch (glyph)
     {
     case GLYPH_CROSS:
-        draw_line(cx - r, cy - r, cx + r, cy + r, t, 0xff9fc0ffu);
-        draw_line(cx + r, cy - r, cx - r, cy + r, t, 0xff9fc0ffu);
+        draw_line(cx - r, cy - r, cx + r, cy + r, t, argb_alpha(0xff9fc0ffu, glyph_alpha));
+        draw_line(cx + r, cy - r, cx - r, cy + r, t, argb_alpha(0xff9fc0ffu, glyph_alpha));
         break;
     case GLYPH_CIRCLE:
         draw_rrect_outline(cx - r - t * 0.5f, cy - r - t * 0.5f, 2 * r + t, 2 * r + t, r + t * 0.5f,
-                           t, 0xffff8f8fu);
+                           t, argb_alpha(0xffff8f8fu, glyph_alpha));
         break;
     case GLYPH_SQUARE:
-        draw_rrect_outline(cx - r, cy - r, 2 * r, 2 * r, t, t, 0xfff3a0d0u);
+        draw_rrect_outline(cx - r, cy - r, 2 * r, 2 * r, t, t, argb_alpha(0xfff3a0d0u, glyph_alpha));
         break;
     case GLYPH_TRIANGLE:
     {
         float top = cy - r * 1.05f, bottom = cy + r * 0.75f;
-        draw_line(cx, top, cx + r, bottom, t, 0xff5fd3a8u);
-        draw_line(cx + r, bottom, cx - r, bottom, t, 0xff5fd3a8u);
-        draw_line(cx - r, bottom, cx, top, t, 0xff5fd3a8u);
+        draw_line(cx, top, cx + r, bottom, t, argb_alpha(0xff5fd3a8u, glyph_alpha));
+        draw_line(cx + r, bottom, cx - r, bottom, t, argb_alpha(0xff5fd3a8u, glyph_alpha));
+        draw_line(cx - r, bottom, cx, top, t, argb_alpha(0xff5fd3a8u, glyph_alpha));
         break;
     }
     case GLYPH_UP:
@@ -360,19 +368,19 @@ float draw_pad_glyph(enum PadGlyph glyph, float cx, float cy, float size)
         static const int icons[] = {ICON_CHEVRON_UP, ICON_CHEVRON_DOWN, ICON_CHEVRON_LEFT,
                                     ICON_CHEVRON_RIGHT};
         float h = size * 0.92f;
-        draw_rrect(cx - h * 0.5f, cy - h * 0.5f, h, h, h * 0.22f, TH_ROW_SELECTED);
-        icon_draw(icons[glyph - GLYPH_UP], cx - h * 0.4f, cy - h * 0.4f, h * 0.8f, TH_TEXT);
+        draw_rrect(cx - h * 0.5f, cy - h * 0.5f, h, h, h * 0.22f, argb_alpha(TH_ROW_SELECTED, glyph_alpha));
+        icon_draw(icons[glyph - GLYPH_UP], cx - h * 0.4f, cy - h * 0.4f, h * 0.8f, argb_alpha(TH_TEXT, glyph_alpha));
         break;
     }
     case GLYPH_TOUCHPAD:
     {
         float h = size * 0.8f;
         draw_rrect_outline(cx - w * 0.5f, cy - h * 0.5f, w, h, h * 0.25f, size * 0.08f,
-                           TH_TEXT_SOFT);
+                           argb_alpha(TH_TEXT_SOFT, glyph_alpha));
         break;
     }
     case GLYPH_NONE:
-        draw_rect(cx - r, cy - t * 0.5f, 2 * r, t, TH_TEXT_DIM);
+        draw_rect(cx - r, cy - t * 0.5f, 2 * r, t, argb_alpha(TH_TEXT_DIM, glyph_alpha));
         break;
     default:
         break;

@@ -42,6 +42,8 @@ void draw_ring(float cx, float cy, float radius, float thickness, uint32_t argb)
 void draw_glow(float x, float y, float w, float h, float spread, uint32_t argb);
 /* Draws the glyph centred on cx, cy; returns its width (wider for L1, OPTIONS...). */
 float draw_pad_glyph(enum PadGlyph glyph, float cx, float cy, float size);
+/* Fades the glyphs drawn from now on (1 = opaque); put it back to 1 afterwards. */
+void draw_set_glyph_alpha(float alpha);
 /* Width draw_pad_glyph will use. */
 float pad_glyph_width(enum PadGlyph glyph, float size);
 /* "[glyph] label" button hint; returns the width used. */

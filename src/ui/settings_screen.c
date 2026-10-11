@@ -5,6 +5,7 @@
  */
 #include "../app.h"
 #include "../config.h"
+#include "../controls.h"
 #include "../core/host.h"
 #include "../i18n.h"
 #include "../profiles.h"
@@ -130,10 +131,11 @@ static const char *const SHADERS[] = {"Off", "LCD3x", "CRT Royale", "CRT Basic",
                                       "NTSC 320px S-Video", "NTSC 320px Composite", "NTSC 256px S-Video",
                                       "NTSC 256px Composite"};
 static const char *const POPUP_STYLES[] = {"Banner", "Compact", "Big trophy"};
-static const char *const LIGHTBARS[] = {"System", "Player colours", "Game cover colour"};
+static const char *const LIGHTBARS[] = {"System", "Player colours", "Game cover colour", "Analog mode"};
 static const char *const PLAYERS[] = {"1 or 2", "Up to 4 (multitap)"};
 static const char *const DEADZONES[] = {"Off", "5%", "10%", "15%", "20%"};
 static const char *const RESPONSES[] = {"Normal", "Precise", "Quick"};
+static const char *const TRIGGER_FEELS[] = {"Off", "Automatic", "Click", "Light click", "Firm", "Buzz"};
 static const char *const RUMBLE_FEELS[] = {"Classic", "Soft", "Punchy", "Punchy, in the triggers too"};
 static const char *const LIGHTGUNS[] = {"Automatic", "Off", "On"};
 static const char *const __attribute__((unused)) OVERCLOCKS[] = {"Off", "A little", "A lot"};
@@ -206,16 +208,16 @@ static const Row GRAPHICS[] = {
 
 static const Row CONTROLS[] = {
     {"Controller", "Controller", "DualShock gives games the analog sticks; some old games want the digital pad.",
-     K_CHOICE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(analog), PADS, 2, 0},
+     K_CHOICE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(analog), PADS, 2, 0},
     {NULL, "Left stick as D-pad", "Lets the left stick move in games that only read the D-pad.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(stick_dpad), STICK_MODES, 3, 0},
     {NULL, "Vibration", "Passes the game's rumble to your controller.", K_CHOICE, APPLY_NOW, SP_NONE,
      false, INT_FIELD(vibration), VIBRATIONS, 5, 0},
-    {NULL, "Light bar", "The controller's light: as the system sets it, blue/red/green/pink by player, or the colour of the game's cover.",
-     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(lightbar), LIGHTBARS, 3, 0},
+    {NULL, "Light bar", "The controller's light: as the system sets it, blue/red/green/pink by player, the colour of the game's cover, or red in analog mode and off in digital.",
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(lightbar), LIGHTBARS, 4, 0},
     {NULL, "Players", "Up to 4 with a multitap, for games that support it: each PS5 controller is a player.",
      K_CHOICE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(multitap), PLAYERS, 2, 0},
-    {NULL, "Player order", "Choose which controller is player 1, 2, 3 and 4: press Cross on each in turn. Kept until SwanStationPS5 closes.",
+    {NULL, "Player order", "Choose which controller is player 1, 2, 3 and 4: press {Cross} on each in turn. Kept until SwanStationPS5 closes.",
      K_ACTION, APPLY_NOW, SP_PLAYERS, true, NO_FIELD, NULL, 0, 0},
     {"Sticks", "Dead zone", "Ignores small movements near the centre: raise it if a worn stick drifts on its own.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(stick_deadzone), DEADZONES, 5, 0},
@@ -223,17 +225,17 @@ static const Row CONTROLS[] = {
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(stick_response), RESPONSES, 3, 0},
     {"DualSense", "Rumble feel", "Classic as the game sends it; Soft is gentler; Punchy makes light hits easier to feel, and can shake the triggers too.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(rumble_feel), RUMBLE_FEELS, 4, 0},
-    {NULL, "Trigger effects", "The adaptive triggers: R2 firms up like a gas pedal in racing games and clicks like a trigger with a light gun.",
-     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(trigger_effects), OFF_ON, 2, 0},
-    {NULL, "Gas and brake on R2 / L2", "In racing games where Cross is the gas and Square the brake (Gran Turismo, Ridge Racer...), R2 and L2 press them.",
+    {NULL, "Trigger effects", "The adaptive triggers. Automatic: {R2} firms up like a gas pedal in racing games (when the NeGcon or the {R2} / {L2} swap is on) and clicks with a light gun. The others give {L2} and {R2} that feel in every game.",
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(trigger_effects), TRIGGER_FEELS, 6, 0},
+    {NULL, "Swap {R2} / {L2} with {Cross} / {Square}", "In every game, {R2} and {Cross} swap places, and so do {L2} and {Square}. Handy in racing games where {Cross} is the gas and {Square} the brake (Gran Turismo, Ridge Racer...): the triggers accelerate and brake.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(racing_triggers), OFF_ON, 2, 0},
-    {NULL, "NeGcon for racing games", "Racing games made for Namco's NeGcon get analog gas and brake: how far you press R2 and L2 counts, and the left stick steers.",
-     K_TOGGLE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(negcon), OFF_ON, 2, 0},
-    {NULL, "Touchpad as a mouse", "Games made for the PlayStation Mouse (Discworld, Lemmings...): slide a finger on the touchpad to move the pointer; R2 or Cross clicks, L2 or Circle right-clicks.",
-     K_TOGGLE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(touch_mouse), OFF_ON, 2, 0},
-    {NULL, "Light gun", "GunCon and Justifier games: point the controller at the screen to aim (motion sensor), R2 fires, L2 reloads, R3 re-centres. Automatic turns it on for known gun games.",
-     K_CHOICE, APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(lightgun), LIGHTGUNS, 3, 0},
-    {"Buttons", "Touchpad shortcuts", "Hold the touchpad and press: R2 fast forward, L2 rewind (turn Rewind on in System), Square screenshot, Triangle start/pause the timer, Circle reset it, R1 next disc.",
+    {NULL, "NeGcon in compatible games", "Racing games made for Namco's NeGcon get analog gas and brake: how far you press {R2} and {L2} counts, and the left stick steers.",
+     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(negcon), OFF_ON, 2, 0},
+    {NULL, "Touchpad as a mouse", "Games made for the PlayStation Mouse (Discworld, Lemmings...): slide a finger on the {Touchpad} to move the pointer; {R2} or {Cross} clicks, {L2} or {Circle} right-clicks.",
+     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(touch_mouse), OFF_ON, 2, 0},
+    {NULL, "Light gun", "GunCon and Justifier games: point the controller at the screen to aim (motion sensor), {R2} fires, {L2} reloads, {R3} re-centres. Automatic turns it on for known gun games.",
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(lightgun), LIGHTGUNS, 3, 0},
+    {"Buttons", "Touchpad shortcuts", "Hold the {Touchpad} and press: {R2} fast forward, {L2} rewind (turn Rewind on in System), {Square} screenshot, {Triangle} start/pause the timer, {Circle} reset it, {R1} next disc.",
      K_INFO, APPLY_NOW, SP_HOTKEYS, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Button mapping", "Choose what each button of your controller presses.", K_ACTION,
      APPLY_NOW, SP_REMAP, false, NO_FIELD, NULL, 0, 0},
@@ -272,7 +274,7 @@ static const Row LIBRARY[] = {
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(cover_download), OFF_ON, 2, 0},
     {NULL, "Background", "Classic theme: Dark keeps the screen deep navy; Cover colour tints it with the selected game.",
      K_CHOICE, APPLY_NOW, SP_NONE, true, INT_FIELD(background), BACKGROUNDS, 2, 0},
-    {NULL, "Sort by", "The order of games on the shelf (OPTIONS on the shelf changes it too).", K_CHOICE,
+    {NULL, "Sort by", "The order of games on the shelf ({Options} on the shelf changes it too).", K_CHOICE,
      APPLY_NOW, SP_NONE, true, INT_FIELD(sort_mode), SORTS, 4, 0},
     {"Games", "Your library", "How much you've played: games, hours, achievements and your most played.", K_ACTION,
      APPLY_NOW, SP_STATS, true, NO_FIELD, NULL, 0, 0},
@@ -299,7 +301,7 @@ static const Row SYSTEM[] = {
      K_TOGGLE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(game_fixes), OFF_ON, 2, 0},
     {"Playing", "Quick resume", "Saves when you leave a game, so the shelf can offer Continue.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(quick_resume), OFF_ON, 2, 0},
-    {NULL, "Rewind", "Keeps the last 8 seconds so you can go back (touchpad + L2). Uses about 200 MB of memory.",
+    {NULL, "Rewind", "Keeps the last 8 seconds so you can go back ({Touchpad} + {L2}). Uses about 200 MB of memory.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(rewind), OFF_ON, 2, 0},
     {NULL, "Run-ahead", "Answers your buttons 1 or 2 frames sooner, for fighting games and platformers. It runs extra frames: at high internal resolutions some games may slow down. It is not used while Double frames is on.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(run_ahead), RUN_AHEADS, 3, 0},
@@ -656,7 +658,10 @@ static void write_value(const Row *r, int v)
     if (r->special == SP_SOUND)
         sfx_configure(app.global.ui_sound, (app.global.ui_volume + 1) * 25);
     if (app.game)
+    {
         host_apply_settings(&app.settings);
+        controls_reconfigure(app.game, &app.settings);
+    }
 }
 
 static const char *value_label(const Row *r, char *buf, size_t size)
@@ -675,7 +680,7 @@ static const char *value_label(const Row *r, char *buf, size_t size)
     case SP_GAMES: snprintf(buf, size, "%d", app.library.count); return buf;
     case SP_DATA: return app.paths.root;
     case SP_CREDITS: return "AngelXex";
-    case SP_HOTKEYS: return tr("Touchpad + R2 / L2");
+    case SP_HOTKEYS: return tr("{Touchpad} + {R2} / {L2}");
     case SP_USBFOLDER: return app.global.usb_folder[0] ? app.global.usb_folder : tr("Off");
     case SP_UPDATE:
         switch (update_state())
@@ -772,7 +777,7 @@ static void set_map(int button, int to)
         app.settings.button_map[button] = (int8_t)to;
 }
 
-static const char *const PRESETS[] = {"Default", "Swap Cross and Circle", "Swap shoulders and triggers"};
+static const char *const PRESETS[] = {"Default", "Swap {Cross} and {Circle}", "Swap shoulders and triggers"};
 
 static void apply_preset(int preset)
 {
@@ -807,7 +812,7 @@ static void draw_controller(float cx, float cy, int highlight)
     draw_circle(cx + 250, cy + 140, 86, body);
     draw_rrect(cx - 354, cy - 60, 708, 170, 60, body);
     draw_rrect(cx - 110, cy - 118, 220, 110, 18, TH_BG_DEEP); /* touchpad */
-    text_draw(cx, cy - 80, 18, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, tr("Touchpad: tap = Select, hold = menu"));
+    text_draw(cx, cy - 80, 18, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, tr("{Touchpad}: tap = {Select}, hold = menu"));
     for (int s = -1; s <= 1; s += 2)
     {
         draw_circle(cx + s * 110, cy + 110, 46, TH_BG);
@@ -974,7 +979,7 @@ static void players_page(uint32_t pressed)
                 if (current[k] == S.order[i])
                     who = plat_pad_name(k);
         text_draw_fit(x + 100, y + 66, 22, FONT_REGULAR, next ? TH_FOCUS : TH_TEXT_SOFT, ALIGN_LEFT, w - 140,
-                      done ? (who ? who : tr("Controller")) : next ? tr("Press Cross on this player's controller") : "");
+                      done ? (who ? who : tr("Controller")) : next ? tr("Press {Cross} on this player's controller") : "");
     }
     static const int glyphs[] = {GLYPH_CROSS, GLYPH_SQUARE, GLYPH_CIRCLE};
     static const char *const labels[] = {"Choose", "Console's order", "Back"};
@@ -1702,6 +1707,7 @@ void settings_screen(uint32_t pressed)
         app.game_has_own = false;
         app.settings = app.global;
         host_apply_settings(&app.settings);
+        controls_reconfigure(app.game, &app.settings);
         S.game_scope = false;
         app_toast("This game uses the settings for all games again");
     }

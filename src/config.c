@@ -36,13 +36,14 @@ void config_defaults(Settings *s)
     s->ra_popups = true;
     s->hd_textures = true;
     s->ra_tracker = true;
-    s->trigger_effects = true;
+    s->trigger_effects = 1;
+    s->lightbar = 3; /* red in analog mode, off in digital */
     s->brightness = 1;
     s->game_fixes = true;
     s->disc_animation = true;
-    s->negcon = true;
+    s->negcon = false;
     s->touch_mouse = true;
-    s->racing_triggers = true;
+    s->racing_triggers = false;
     for (int i = 0; i < 16; ++i)
         s->button_map[i] = (int8_t)i;
     for (int i = 0; i < SS_OPT_COUNT; ++i)
@@ -157,13 +158,16 @@ static bool config_apply(Settings *s, const char *path)
         else if (strcmp(key, "ra_popup_style") == 0)
             s->ra_popup_style = atoi(value) % 3;
         else if (strcmp(key, "lightbar") == 0)
-            s->lightbar = atoi(value) % 3;
+            s->lightbar = atoi(value) % 4;
         else if (strcmp(key, "stick_deadzone") == 0)
             s->stick_deadzone = atoi(value) % 5;
         else if (strcmp(key, "stick_response") == 0)
             s->stick_response = atoi(value) % 3;
         else if (strcmp(key, "trigger_effects") == 0)
-            s->trigger_effects = as_bool(value);
+            {
+            int v = atoi(value);
+            s->trigger_effects = v >= 0 && v <= 5 ? v : 1;
+        }
         else if (strcmp(key, "racing_triggers") == 0)
             s->racing_triggers = as_bool(value);
         else if (strcmp(key, "rumble_feel") == 0)

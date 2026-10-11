@@ -216,6 +216,16 @@ void controls_stop(void)
     memset(&C, 0, sizeof(C));
 }
 
+void controls_reconfigure(const Game *g, const Settings *s)
+{
+    int gun = controls_gun_for(g, s), special = controls_special_for(g, s);
+    controls_stop();
+    controls_start(g, s);
+    host_set_gun(gun);
+    host_set_special(special);
+    host_apply_devices(s);
+}
+
 bool controls_gun_active(void)
 {
     return C.gun != 0;
@@ -329,6 +339,19 @@ static void update_gun(PadState *p, float dt)
 
 /* ---------------------------------------------------------------- each frame */
 
+/* Settings > Controls > Trigger effects: 2.. is one feel for both triggers in every game */
+static PlatTrigger trigger_feel(int choice)
+{
+    switch (choice)
+    {
+    case 2: return (PlatTrigger){TRIGGER_WEAPON, {3, 5, 8}};                   /* click: resists, then gives */
+    case 3: return (PlatTrigger){TRIGGER_WEAPON, {4, 6, 3}};                   /* light click */
+    case 4: return (PlatTrigger){TRIGGER_FEEDBACK, {1, 7}};                    /* firm all the way */
+    case 5: return (PlatTrigger){TRIGGER_VIBRATION, {1, 5, 40}};               /* buzz */
+    }
+    return (PlatTrigger){0};
+}
+
 static void update_triggers(int port, const Settings *s)
 {
     PlatTrigger l2 = {0}, r2 = {0};
@@ -336,18 +359,20 @@ static void update_triggers(int port, const Settings *s)
     if (s->vibration && s->rumble_feel == 3 && rumble > 0.05f)
     {
         /* the game's rumble in the triggers too */
-        PlatTrigger v = {TRIGGER_VIBRATION, 2, (uint8_t)(1 + rumble * 7.0f), (uint8_t)(30 + rumble * 120.0f), 0};
+        PlatTrigger v = {TRIGGER_VIBRATION, {2, (uint8_t)(1 + rumble * 7.0f), (uint8_t)(30 + rumble * 120.0f)}};
         l2 = r2 = v;
     }
-    else if (s->trigger_effects && C.gun && port == 0)
+    else if (s->trigger_effects >= 2)
+        l2 = r2 = trigger_feel(s->trigger_effects);
+    else if (s->trigger_effects == 1 && C.gun && port == 0)
     {
-        PlatTrigger click = {TRIGGER_WEAPON, 3, 6, 6, 0}; /* a gun's trigger: resists, then gives */
+        PlatTrigger click = {TRIGGER_WEAPON, {3, 6, 6}}; /* a gun's trigger: resists, then gives */
         r2 = click;
     }
-    else if (s->trigger_effects && C.pedal)
+    else if (s->trigger_effects == 1 && C.pedal && (C.special == 1 || s->racing_triggers))
     {
-        PlatTrigger pedal = {TRIGGER_SLOPE, 1, 9, 2, 6};  /* firmer the further it goes */
-        PlatTrigger brake = {TRIGGER_FEEDBACK, 2, 6, 0, 0};
+        PlatTrigger pedal = {TRIGGER_FEEDBACK, {1, 5}};  /* firm from early on */
+        PlatTrigger brake = {TRIGGER_FEEDBACK, {2, 6}};
         r2 = pedal;
         l2 = brake;
     }
@@ -363,13 +388,14 @@ void controls_apply(PadState pads[SwanStationPS5_MAX_PADS], const Settings *s, f
             continue;
         shape_stick(&p->lx, &p->ly, s->stick_deadzone, s->stick_response);
         shape_stick(&p->rx, &p->ry, s->stick_deadzone, s->stick_response);
-        /* with a NeGcon the triggers are analog already: no digital remap */
-        if (C.racing && s->racing_triggers && C.special != 1 && !(C.gun && i == 0))
+        /* in every game when it's on; with a NeGcon the triggers are analog already: no digital remap */
+        if (s->racing_triggers && C.special != 1 && !(C.gun && i == 0))
         {
-            if (p->buttons & BIT(BTN_R2))
-                p->buttons = (p->buttons & ~BIT(BTN_R2)) | BIT(BTN_CROSS);
-            if (p->buttons & BIT(BTN_L2))
-                p->buttons = (p->buttons & ~BIT(BTN_L2)) | BIT(BTN_SQUARE);
+            /* a swap: R2 presses Cross and Cross presses R2, L2 and Square the same */
+            uint32_t b = p->buttons, swapped = b & ~(BIT(BTN_R2) | BIT(BTN_CROSS) | BIT(BTN_L2) | BIT(BTN_SQUARE));
+            swapped |= (b & BIT(BTN_R2) ? BIT(BTN_CROSS) : 0) | (b & BIT(BTN_CROSS) ? BIT(BTN_R2) : 0);
+            swapped |= (b & BIT(BTN_L2) ? BIT(BTN_SQUARE) : 0) | (b & BIT(BTN_SQUARE) ? BIT(BTN_L2) : 0);
+            p->buttons = swapped;
         }
         if (C.gun && i == 0)
             update_gun(p, dt);
