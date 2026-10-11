@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "core/host.h"
+#include "core/swanstation_options.h"
 #include "bezels.h"
 #include "controls.h"
 #include "gamedb.h"
@@ -160,12 +161,29 @@ void app_draw_toast(void)
     float left = (float)(toast_until - now) / 1e6f;
     float a = left < 0.3f ? left / 0.3f : 1.0f;
     float rise = shown < 0.15f ? (1.0f - shown / 0.15f) * 24.0f : 0.0f;
-    float w = toast_runs(toast, 0, 0, 0, false) + 96, h = 64;
-    float x = (plat_width() - w) * 0.5f, y = plat_height() - 190 + rise;
-    draw_rrect(x, y, w, h, h * 0.5f, argb_alpha(TH_PILL_A(0xf0), a));
-    icon_draw(ICON_INFO_CIRCLE, x + 22, y + 18, 28, argb_alpha(TH_FOCUS, a));
+    /* a line break in the message makes a second line */
+    char first[sizeof(toast)];
+    const char *second = strchr(toast, '\n');
+    size_t first_len = second ? (size_t)(second - toast) : strlen(toast);
+    memcpy(first, toast, first_len);
+    first[first_len] = '\0';
+    if (second)
+        ++second;
+    const float line_gap = 36;
+    float w = toast_runs(first, 0, 0, 0, false), h = second ? 64 + line_gap : 64;
+    if (second)
+    {
+        float w2 = toast_runs(second, 0, 0, 0, false);
+        w = w2 > w ? w2 : w;
+    }
+    w += 96;
+    float x = (plat_width() - w) * 0.5f, y = plat_height() - 190 - (second ? line_gap : 0) + rise;
+    draw_rrect(x, y, w, h, h * 0.5f > 32 ? 32 : h * 0.5f, argb_alpha(TH_PILL_A(0xf0), a));
+    icon_draw(ICON_INFO_CIRCLE, x + 22, y + h * 0.5f - 14, 28, argb_alpha(TH_FOCUS, a));
     draw_set_glyph_alpha(a); /* the pictures of the buttons fade with the text */
-    toast_runs(toast, x + 62, y + 17, a, true);
+    toast_runs(first, x + 62, y + 17, a, true);
+    if (second)
+        toast_runs(second, x + 62, y + 17 + line_gap, a, true);
     draw_set_glyph_alpha(1.0f);
 }
 
@@ -999,7 +1017,31 @@ void app_start_game(int index, bool resume)
         app_toast_for("BIOS not found, SCPH1001.BIN is recommended due to the low compatibility of OpenBios.", 10.0f);
     if (app.settings.renderer == 1)
         app_toast_for("Rendering on the CPU, using the GPU is recommended.", 5.0f);
-    app_toast_for("Press {L3} + {R3} to open the game menu...", 5.0f);
+    {
+        char hint[200];
+        snprintf(hint, sizeof(hint), "%s", tr("Press {L3} + {R3} to open the game menu."));
+        /* a DualShock: how to press its ANALOG button (the core's combo, Settings > Controls) */
+        if (app.settings.analog && !controls_special_for(g, &app.settings) && !controls_gun_active())
+        {
+            static const char *const COMBOS[] = {
+                "{L1} + {R1} + {L3} + {R3}", "{L1} + {L2} + {R1} + {R2} + {Options} + {Touchpad}",
+                "{L1} + {R1} + {Touchpad}", "{L1} + {R1} + {Options}", "{L1} + {R1} + {L3}", "{L1} + {R1} + {R3}",
+                "{L2} + {R2} + {Touchpad}", "{L2} + {R2} + {Options}", "{L2} + {R2} + {L3}", "{L2} + {R2} + {R3}",
+                "{L3} + {R3}"};
+            int combo = 2; /* L1 + R1 + Select, the core's own default */
+            for (int i = 0; i < SS_OPT_COUNT; ++i)
+                if (!strcmp(SS_OPTS[i].key, "swanstation_Controller_AnalogCombo"))
+                {
+                    int v = app.settings.ss_opt[i];
+                    combo = v >= 0 && v < 11 ? v : SS_OPTS[i].def;
+                }
+            size_t n = strlen(hint);
+            snprintf(hint + n, sizeof(hint) - n, "\n");
+            n = strlen(hint);
+            snprintf(hint + n, sizeof(hint) - n, tr("%s for the ANALOG button."), COMBOS[combo]);
+        }
+        app_toast_for(hint, 5.0f);
+    }
     plat_audio_open(host_sample_rate());
     plat_audio_clear();
     ra_game_loaded(g->path);
@@ -1602,6 +1644,10 @@ int main(void)
         ps5_crash_step(screen_names[app.screen]);
         static enum Screen last_screen = SCREEN_LIBRARY;
         enum Screen this_screen = app.screen;
+        /* the lights the app sets (player colours, cover colour, analog mode) are only on inside a game */
+        if (!app.game && app.settings.lightbar != 0)
+            for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
+                plat_set_lightbar(i, 0x000000);
         switch (app.screen)
         {
         case SCREEN_LIBRARY: shelf_screen(pressed); break;
