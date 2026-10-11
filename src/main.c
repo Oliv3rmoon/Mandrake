@@ -1019,7 +1019,7 @@ void app_start_game(int index, bool resume)
         app_toast_for("Rendering on the CPU, using the GPU is recommended.", 5.0f);
     {
         char hint[200];
-        snprintf(hint, sizeof(hint), "%s", tr("Press {L3} + {R3} to open the game menu."));
+        snprintf(hint, sizeof(hint), "%s", tr("Hold the {Touchpad} for 1 second to open the game menu."));
         /* a DualShock: how to press its ANALOG button (the core's combo, Settings > Controls) */
         if (app.settings.analog && !controls_special_for(g, &app.settings) && !controls_gun_active())
         {
@@ -1040,7 +1040,7 @@ void app_start_game(int index, bool resume)
             n = strlen(hint);
             snprintf(hint + n, sizeof(hint) - n, tr("%s for the ANALOG button."), COMBOS[combo]);
         }
-        app_toast_for(hint, 5.0f);
+        app_toast_for(hint, 8.0f);
     }
     plat_audio_open(host_sample_rate());
     plat_audio_clear();
@@ -1174,36 +1174,40 @@ static void game_screen(PadState *pads)
     held_from_menu &= held_now;
     for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
         pads[i].buttons &= ~held_from_menu;
-    static uint32_t combo_prev;
-    uint32_t combo = pads[0].buttons & (BIT(BTN_L3) | BIT(BTN_R3));
-    bool combo_hit = combo == (BIT(BTN_L3) | BIT(BTN_R3)) && combo_prev != combo;
-    combo_prev = combo;
 
     /* Touchpad: a tap is the PS1's Select (the PS5 SDL driver has no Create
-     * button); the menu is L3 + R3. */
-    static uint64_t touch_since;
-    static bool touch_used;
-    static int select_frames;
-    bool touch = (pads[0].buttons | pads[1].buttons) & BIT(BTN_MENU);
+     * button); the menu is the touchpad held for 1 second. */
+    static uint64_t touch_since[SwanStationPS5_MAX_PADS];
+    static bool touch_used[SwanStationPS5_MAX_PADS];
+    static int select_frames[SwanStationPS5_MAX_PADS];
+    bool touch_of[SwanStationPS5_MAX_PADS], chord_of[SwanStationPS5_MAX_PADS];
+    bool touch = false, chord = false;
     uint64_t t_now = plat_ticks_us();
-    bool open_menu = combo_hit;
-    /* touchpad held + R2: fast forward; + L2: rewind */
-    uint32_t all = pads[0].buttons | pads[1].buttons;
+    bool open_menu = false;
+    /* touchpad held + R2: fast forward; + L2: rewind. The shortcuts are player 1's; on the other
+     * pads the touchpad is just that pad's Select */
+    uint32_t all = pads[0].buttons;
     /* touchpad + two shoulder buttons: the DualShock's analog mode combo (L1 + R1 + Select...): the
      * touchpad is the Select held down, and the shoulders go to the game */
     const uint32_t shoulders = BIT(BTN_L1) | BIT(BTN_R1) | BIT(BTN_L2) | BIT(BTN_R2);
-    bool chord = touch && __builtin_popcount(all & shoulders) >= 2;
+    for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
+    {
+        touch_of[i] = pads[i].buttons & BIT(BTN_MENU);
+        chord_of[i] = touch_of[i] && __builtin_popcount(pads[i].buttons & shoulders) >= 2;
+    }
+    touch = touch_of[0];
+    chord = chord_of[0];
     bool fast = touch && !chord && (all & BIT(BTN_R2)), back = touch && !chord && (all & BIT(BTN_L2));
     speed_changed = fast || back;
-    if (fast || back || chord)
-        touch_used = true; /* a combo, not Select or the menu */
+    if (touch && (fast || back || chord))
+        touch_used[0] = true; /* a combo, not Select or the menu */
     /* touchpad + Square: screenshot; + Triangle / Circle: timer; + R1: next disc */
     static uint32_t combo_all_prev;
     uint32_t newly = touch ? all & ~combo_all_prev : 0;
     combo_all_prev = all;
     const uint32_t combo_keys = BIT(BTN_SQUARE) | BIT(BTN_TRIANGLE) | BIT(BTN_CIRCLE) | BIT(BTN_R1);
     if (touch && !chord && (all & combo_keys))
-        touch_used = true;
+        touch_used[0] = true;
     if (newly & BIT(BTN_SQUARE))
     {
         bool ok = play_screenshot();
@@ -1234,21 +1238,31 @@ static void game_screen(PadState *pads)
             sfx_play(SFX_SELECT);
         }
     }
-    if (touch)
+    /* The touchpad is also the shortcuts' key, so Select waits this long to be sure no shortcut
+     * follows; after it, holding the touchpad holds Select until a shortcut is used. */
+    const uint64_t select_hold_us = 0, tap_us = 150000;
+    for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
     {
-        if (!touch_since)
-            touch_since = t_now;
-        else if (!touch_used && t_now - touch_since > 500000)
+        if (touch_of[i])
         {
-            touch_used = true; /* held for a while: not a tap, not Select */
+            if (!touch_since[i])
+                touch_since[i] = t_now;
+        }
+        else
+        {
+            /* a quick tap: Select for ~100 ms, long enough for every game to see it (a longer
+             * touch has been held as Select while it lasted, below) */
+            if (touch_since[i] && !touch_used[i] && t_now - touch_since[i] <= tap_us)
+                select_frames[i] = 6;
+            touch_since[i] = 0;
+            touch_used[i] = false;
         }
     }
-    else
+    /* player 1's touchpad held for 1 second, with no shortcut used: the SwanStationPS5 menu */
+    if (touch_of[0] && !touch_used[0] && t_now - touch_since[0] >= 1000000)
     {
-        if (touch_since && !touch_used)
-            select_frames = 6; /* ~100 ms: long enough for every game to see it */
-        touch_since = 0;
-        touch_used = false;
+        open_menu = true;
+        touch_used[0] = true; /* not a Select when it is let go */
     }
     if (open_menu)
     {
@@ -1258,17 +1272,19 @@ static void game_screen(PadState *pads)
     }
     for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
     {
-        if (fast || back)
+        if (i == 0 && (fast || back))
             pads[i].buttons &= ~(BIT(BTN_L2) | BIT(BTN_R2));
-        if (touch) /* the combo buttons go to SwanStationPS5, not the game */
+        if (i == 0 && touch) /* the combo buttons go to SwanStationPS5, not the game */
             pads[i].buttons &= ~(chord ? combo_keys & ~BIT(BTN_R1) : combo_keys);
         pads[i].buttons = map_buttons(pads[i].buttons & ~BIT(BTN_MENU));
-        if (i == 0 && chord)
-            pads[0].buttons |= BIT(BTN_SELECT);
-        if (i == 0 && select_frames > 0)
+        if (chord_of[i])
+            pads[i].buttons |= BIT(BTN_SELECT);
+        if (touch_of[i] && !touch_used[i] && t_now - touch_since[i] >= select_hold_us)
+            pads[i].buttons |= BIT(BTN_SELECT);
+        if (select_frames[i] > 0)
         {
-            pads[0].buttons |= BIT(BTN_SELECT);
-            --select_frames;
+            pads[i].buttons |= BIT(BTN_SELECT);
+            --select_frames[i];
         }
         /* A digital pad has no sticks: let the left stick drive the D-pad. With a
          * DualShock, Auto leaves that to the core (only while the game keeps it in
