@@ -1,8 +1,8 @@
 # SwanStationPS5 - cloud build: the PS5 app folder.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Download the result from the run's page: Artifacts > SwanStationPS5-PPSA98510.
-# Unzip it and copy the PPSA98510 folder to /data/homebrew/ on the PS5.
+# Download the result from the run's page: Artifacts > PPSA98510 (PPSA98510.zip,
+# the same zip the releases carry).
 
 name: Build SwanStationPS5
 
@@ -69,11 +69,13 @@ jobs:
           name: SwanStationPS5-symbols
           path: SwanStationPS5-symbols.txt
 
-      - name: Upload the app folder
+      # The same PPSA98510.zip that tools/make_release.py packs for a release.
+      - name: Pack PPSA98510.zip
+        run: python3 tools/make_release.py --skip-build
+
+      - name: Upload PPSA98510.zip
         uses: actions/upload-artifact@v4
         with:
-          name: SwanStationPS5-PPSA98510
-          path: |
-            dist/
-            !dist/*.zip
+          name: PPSA98510
+          path: PPSA98510.zip
           if-no-files-found: error
