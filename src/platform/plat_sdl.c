@@ -6,6 +6,7 @@
  * test build, so emulator behaviour can be debugged on a PC first.
  */
 #include "platform.h"
+#include "../i18n.h"
 
 #include "xbr.h"
 
@@ -1276,6 +1277,24 @@ void plat_clock(char *out, size_t size)
         snprintf(out, size, "%d:%02d %s", hour % 12 ? hour % 12 : 12, minute, hour < 12 ? "AM" : "PM");
 }
 
+int plat_system_language(void)
+{
+#if defined(__PROSPERO__)
+    int lang = 1;
+    if (sceSystemServiceParamGetInt(1, &lang) != 0) /* LANG */
+        return LANG_EN;
+    switch (lang)
+    {
+    case 0: return LANG_JA;
+    case 2: case 22: return LANG_FR; /* French, Canadian French */
+    case 3: case 20: return LANG_ES; /* Spanish, Latin American Spanish: the one Spanish is Latin American */
+    case 7: case 17: return LANG_PT; /* Portuguese, Brazilian Portuguese */
+    default: break;
+    }
+#endif
+    return LANG_EN;
+}
+
 void plat_upload_game_gpu(int width, int height)
 {
     game_gpu = true;
@@ -1417,22 +1436,8 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
     /* Crop black edges: the share of the picture's height cut at the top and
      * at the bottom (8 or 16 of the PS1's 240 lines) */
     const float crop = (settings->crop_edges > 0 && settings->crop_edges < 3 ? settings->crop_edges * 8 : 0) / 240.0f;
-    int columns = game_src_w; /* the same for the width (internal resolution) */
-    while (columns > 768)
-        columns /= 2;
 
-    float aspect;
-    switch (settings->aspect)
-    {
-    case ASPECT_4_3: aspect = 4.0f / 3.0f; break;
-    case ASPECT_16_9: aspect = 16.0f / 9.0f; break;
-    case ASPECT_16_10: aspect = 16.0f / 10.0f; break;
-    case ASPECT_PIXEL:
-        aspect = (float)columns / (float)lines;
-        break;
-    case ASPECT_STRETCH: aspect = (float)out_w / out_h; break;
-    default: aspect = display_aspect > 0.0f ? display_aspect : 4.0f / 3.0f; break;
-    }
+    float aspect = display_aspect > 0.0f ? display_aspect : 4.0f / 3.0f;
 
     int dh = out_h, dw = (int)(out_h * aspect + 0.5f);
     if (dw > out_w)
@@ -1446,12 +1451,12 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
         if (k < 1)
             k = 1;
         dh = lines * k;
-        dw = settings->aspect == ASPECT_STRETCH ? out_w : (int)(dh * aspect + 0.5f);
+        dw = (int)(dh * aspect + 0.5f);
         if (dw > out_w)
             dw = out_w;
     }
 
-    if (settings->border == 2 && settings->aspect != ASPECT_STRETCH)
+    if (settings->border == 2)
     {
         /* TV frame: leave room for the TV around the picture */
         dw = dw * 86 / 100;

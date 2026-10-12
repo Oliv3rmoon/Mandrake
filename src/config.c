@@ -4,6 +4,9 @@
  */
 #include "config.h"
 
+#include "i18n.h"
+#include "platform/platform.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,9 +14,9 @@
 void config_defaults(Settings *s)
 {
     memset(s, 0, sizeof(*s));
-    s->aspect = ASPECT_AUTO;
+    s->language = plat_system_language(); /* until the ini says otherwise: the console's */
     s->smooth = false; /* sharp pixels; "Smooth final scaling" is opt-in */
-    s->internal_res = 3; /* 4x (1 native, 2 2x, 3 4x, 4 8x, 5 16x) */
+    s->internal_res = 4; /* 8x (1 native, 2 2x, 3 4x, 4 8x, 5 16x) */
     s->upscale = 2;
     s->upscale_filter = UPSCALE_XBR;
     s->region = REGION_AUTO;
@@ -45,6 +48,7 @@ void config_defaults(Settings *s)
     s->racing_triggers = false;
     for (int i = 0; i < 16; ++i)
         s->button_map[i] = (int8_t)i;
+    s->aspect_before_wide = -1;
     for (int i = 0; i < SS_OPT_COUNT; ++i)
         s->ss_opt[i] = SS_OPTS[i].def;
 }
@@ -71,7 +75,16 @@ static bool config_apply(Settings *s, const char *path)
         *eq = '\0';
         char *key = line, *value = eq + 1;
         value[strcspn(value, "\r\n")] = '\0';
-        if (strncmp(key, "swanstation_", 12) == 0)
+        if (strcmp(key, "aspect_before_widescreen") == 0)
+        {
+            /* the aspect ratio the widescreen hack replaced with 16:9, by value */
+            for (int i = 0; i < SS_OPT_COUNT; ++i)
+                if (strcmp(SS_OPTS[i].key, "swanstation_Display_AspectRatio") == 0)
+                    for (int v = 0; v < SS_OPTS[i].count; ++v)
+                        if (strcmp(value, SS_OPTS[i].values[v]) == 0)
+                            s->aspect_before_wide = v;
+        }
+        else if (strncmp(key, "swanstation_", 12) == 0)
         {
             /* a SwanStation core option, by name and value (so reordering the table keeps saved files valid) */
             for (int i = 0; i < SS_OPT_COUNT; ++i)
@@ -80,8 +93,6 @@ static bool config_apply(Settings *s, const char *path)
                         if (strcmp(value, SS_OPTS[i].values[v]) == 0)
                             s->ss_opt[i] = v;
         }
-        else if (strcmp(key, "aspect") == 0)
-            s->aspect = atoi(value) % ASPECT_COUNT;
         else if (strcmp(key, "smooth") == 0)
             s->smooth = as_bool(value);
         else if (strcmp(key, "show_fps") == 0)
@@ -272,11 +283,13 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
     *out = *global;
     /* the file only lists the core options that differ from their default, so the rest are the default
      * and not whatever the console-wide settings hold */
+    out->aspect_before_wide = -1;
     for (int i = 0; i < SS_OPT_COUNT; ++i)
         out->ss_opt[i] = SS_OPTS[i].def;
     if (!config_apply(out, path))
     {
         memcpy(out->ss_opt, global->ss_opt, sizeof(out->ss_opt));
+        out->aspect_before_wide = global->aspect_before_wide;
         return false;
     }
     /* these always follow the console-wide settings */
@@ -365,12 +378,12 @@ bool config_save(const Settings *s, const char *path)
         return false;
     fprintf(f,
             "# SwanStationPS5 settings\n"
-            "aspect=%d\nsmooth=%d\nshow_fps=%d\nregion=%d\n"
+            "smooth=%d\nshow_fps=%d\nregion=%d\n"
             "dithering=%d\ncd_fast=%d\nanalog=%d\nstate_slot=%d\nlast_game=%d\n"
             "cover_style=%d\ncover_download=%d\nui_sound=%d\nui_volume=%d\n"
             "integer_scale=%d\ninternal_res=%d\nupscale=%d\nupscale_filter=%d\nstick_dpad=%d\nlanguage=%d\n"
             "vibration=%d\nsort_mode=%d\nshelf_category=%d\nbackground=%d\n",
-            s->aspect, s->smooth, s->show_fps, s->region, s->dithering,
+            s->smooth, s->show_fps, s->region, s->dithering,
             s->cd_fast, s->analog, s->state_slot, s->last_game, s->cover_style,
             s->cover_download, s->ui_sound, s->ui_volume, s->integer_scale, s->internal_res, s->upscale,
             s->upscale_filter, s->stick_dpad, s->language, s->vibration,
@@ -400,6 +413,9 @@ bool config_save(const Settings *s, const char *path)
         if (v >= 0 && v < SS_OPTS[i].count && v != SS_OPTS[i].def) /* only what differs from the default */
             fprintf(f, "%s=%s\n", SS_OPTS[i].key, SS_OPTS[i].values[v]);
     }
+    for (int i = 0; i < SS_OPT_COUNT && s->aspect_before_wide >= 0; ++i)
+        if (strcmp(SS_OPTS[i].key, "swanstation_Display_AspectRatio") == 0 && s->aspect_before_wide < SS_OPTS[i].count)
+            fprintf(f, "aspect_before_widescreen=%s\n", SS_OPTS[i].values[s->aspect_before_wide]);
     fprintf(f, "button_map=");
     for (int i = 0; i < 16; ++i)
         fprintf(f, i ? ",%d" : "%d", s->button_map[i]);

@@ -108,8 +108,6 @@ static const char *row_help(const Row *r)
 #define NO_FIELD -1, false
 
 static const char *const OFF_ON[] = {"Off", "On"};
-static const char *const ASPECTS[] = {"Core", "4:3", "16:9", "16:10", "1:1 pixels",
-                                      "Stretch to screen"};
 static const char *const RENDERERS[] = {"GPU (Recommended)", "CPU"};
 static const char *const OUTPUTS[] = {"1080p", "1440p", "4K"};
 static const char *const INTERNAL[] = {"Native", "2x", "4x", "8x", "16x"};
@@ -158,9 +156,7 @@ static const Row DISPLAY[] = {
     {NULL, "Upscale", "Enlarges the picture before it is scaled to the screen.", K_CHOICE, APPLY_NOW,
      SP_NONE, false, INT_FIELD(upscale), UPSCALE, 4, 1},
     */
-    {"Picture", "Aspect ratio", "The shape of the picture. Pair 16:9 with a widescreen cheat.", K_CHOICE,
-     APPLY_NOW, SP_NONE, false, INT_FIELD(aspect), ASPECTS, 6, 0},
-    {NULL, "Shader", "Sharp bilinear keeps pixels crisp without shimmer. CRT Basic adds scanlines, an RGB grille and glow. LCD3x looks like a handheld's LCD. CRT Royale is a detailed CRT with bloom and a phosphor mask (heavy). NTSC recreates the analog TV signal: Composite shows the colour fringes of old consoles, S-Video is cleaner; pick 320px or 256px to match the game's width (heavy).",
+    {"Picture", "Shader", "Sharp bilinear keeps pixels crisp without shimmer. CRT Basic adds scanlines, an RGB grille and glow. LCD3x looks like a handheld's LCD. CRT Royale is a detailed CRT with bloom and a phosphor mask (heavy). NTSC recreates the analog TV signal: Composite shows the colour fringes of old consoles, S-Video is cleaner; pick 320px or 256px to match the game's width (heavy).",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(shader), SHADERS, 9, 0},
     {NULL, "AMD FidelityFX Super Resolution",
      "Scales the picture to your screen before the shader, following the edges of the image, and sharpens it (AMD FSR 1).",
@@ -382,25 +378,112 @@ static bool ss_needs_reload(const char *key)
     return false;
 }
 
+/* The core's aspect ratio is the only one: it goes first in the Picture group, as "Aspect ratio", with the
+ * widescreen hack under it, not with the rest of the core's display and enhancement options. */
+static bool is_aspect_option(int i)
+{
+    return strcmp(SS_OPTS[i].key, "swanstation_Display_AspectRatio") == 0;
+}
+
+static bool is_custom_aspect_option(int i)
+{
+    return strcmp(SS_OPTS[i].key, "swanstation_Display_CustomAspectRatioNumerator") == 0 ||
+           strcmp(SS_OPTS[i].key, "swanstation_Display_CustomAspectRatioDenominator") == 0;
+}
+
+static bool is_widescreen_option(int i)
+{
+    return strcmp(SS_OPTS[i].key, "swanstation_GPU_WidescreenHack") == 0;
+}
+
 static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, const int *categories, int ncat)
 {
     static char groups[SSC_COUNT][48];
-    int extra = 0;
+    int extra = 0, aspect = -1, wide = -1, custom[2] = {-1, -1};
+    for (int i = 0; i < SS_OPT_COUNT; ++i)
+    {
+        if (base == DISPLAY && is_aspect_option(i))
+            aspect = i;
+        if (base == DISPLAY && is_widescreen_option(i))
+            wide = i;
+        if (base == DISPLAY && is_custom_aspect_option(i))
+            custom[custom[0] < 0 ? 0 : 1] = i;
+    }
     for (int c = 0; c < ncat; ++c)
         for (int i = 0; i < SS_OPT_COUNT; ++i)
             extra += SS_OPTS[i].category == categories[c];
-    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra));
+    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 4));
     if (!rows)
         return;
-    memcpy(rows, base, sizeof(Row) * (size_t)base_count);
-    int n = base_count;
+    int n = 0;
+    if (aspect >= 0)
+    {
+        Row r = {"Picture",
+                 "Aspect ratio",
+                 "The shape of the picture. Pair 16:9 with a widescreen cheat. With Custom, set the ratio with the numerator and denominator under Screen fit.",
+                 K_CHOICE,
+                 APPLY_NOW,
+                 SP_NONE,
+                 false,
+                 (int)(offsetof(Settings, ss_opt) + (size_t)aspect * sizeof(int)),
+                 false,
+                 SS_OPTS[aspect].labels,
+                 SS_OPTS[aspect].count,
+                 0};
+        rows[n++] = r;
+        if (wide >= 0)
+        {
+            r.group = NULL;
+            r.name = SS_OPTS[wide].label;
+            r.help = "Increases the field of view from 4:3 to the chosen aspect ratio in 3D games. It only has an effect with an aspect ratio wider than 4:3, such as 16:9. For 2D games, or games which use pre-rendered backgrounds, this enhancement will not work as expected.";
+            r.offset = (int)(offsetof(Settings, ss_opt) + (size_t)wide * sizeof(int));
+            r.labels = SS_OPTS[wide].labels;
+            r.count = SS_OPTS[wide].count;
+            rows[n++] = r;
+        }
+    }
+    memcpy(rows + n, base, sizeof(Row) * (size_t)base_count);
+    if (aspect >= 0)
+        rows[n].group = NULL; /* "Picture" is now on the aspect row */
+    n += base_count;
+    /* the custom aspect ratio goes above "Integer scaling", opening the "Screen fit" group */
+    if (custom[0] >= 0 && custom[1] >= 0)
+    {
+        for (int k = 0; k < n; ++k)
+        {
+            if (strcmp(rows[k].name, "Integer scaling") != 0)
+                continue;
+            memmove(rows + k + 2, rows + k, sizeof(Row) * (size_t)(n - k));
+            rows[k + 2].group = NULL;
+            for (int j = 0; j < 2; ++j)
+            {
+                int i = custom[j];
+                Row r = {j == 0 ? "Screen fit" : NULL,
+                         SS_OPTS[i].label,
+                         SS_OPTS[i].help,
+                         K_CHOICE,
+                         APPLY_NOW,
+                         SP_NONE,
+                         false,
+                         (int)(offsetof(Settings, ss_opt) + (size_t)i * sizeof(int)),
+                         false,
+                         SS_OPTS[i].labels,
+                         SS_OPTS[i].count,
+                         0};
+                rows[k + j] = r;
+            }
+            n += 2;
+            break;
+        }
+    }
     for (int c = 0; c < ncat; ++c)
     {
         bool first = true;
         snprintf(groups[categories[c]], sizeof(groups[0]), "%s (Core)", SS_CATEGORY_NAMES[categories[c]]);
         for (int i = 0; i < SS_OPT_COUNT; ++i)
         {
-            if (SS_OPTS[i].category != categories[c] || n >= MAX_ROWS)
+            if (SS_OPTS[i].category != categories[c] || n >= MAX_ROWS || is_aspect_option(i) || is_widescreen_option(i) ||
+                (base == DISPLAY && custom[0] >= 0 && is_custom_aspect_option(i)))
                 continue;
             Row r = {first ? groups[categories[c]] : NULL,
                      SS_OPTS[i].label,
@@ -551,6 +634,39 @@ static void hdtex_set(Settings *t, bool on)
     }
 }
 
+/* Turning the widescreen hack on sets the aspect ratio to 16:9 (remembering the one it had); turning it off puts
+ * that one back, or 4:3 when it is not known */
+static void widescreen_follow(Settings *t, const Row *r, int before)
+{
+    int w = ss_index("swanstation_GPU_WidescreenHack"), a = ss_index("swanstation_Display_AspectRatio");
+    if (w < 0 || a < 0 || r->offset != (int)(offsetof(Settings, ss_opt) + (size_t)w * sizeof(int)))
+        return;
+    if (t->ss_opt[w] == before) /* the hack did not change (Triangle on a default, the same value again) */
+        return;
+    bool on = t->ss_opt[w] == ss_true_index(w);
+    int v43 = -1, v169 = -1;
+    for (int v = 0; v < SS_OPTS[a].count; ++v)
+    {
+        if (strcmp(SS_OPTS[a].values[v], "4:3") == 0)
+            v43 = v;
+        if (strcmp(SS_OPTS[a].values[v], "16:9") == 0)
+            v169 = v;
+    }
+    if (v43 < 0 || v169 < 0)
+        return;
+    if (on)
+    {
+        if (t->aspect_before_wide < 0) /* what it was, even when it was already 16:9 */
+            t->aspect_before_wide = t->ss_opt[a];
+        t->ss_opt[a] = v169;
+    }
+    else
+    {
+        t->ss_opt[a] = t->aspect_before_wide >= 0 ? t->aspect_before_wide : v43;
+        t->aspect_before_wide = -1;
+    }
+}
+
 static int read_value(const Row *r)
 {
     switch (r->special)
@@ -601,6 +717,7 @@ static void write_value(const Row *r, int v)
         return;
     Settings *t = target(r);
     char *base = (char *)t + r->offset;
+    int was_t = r->is_bool ? 0 : *(int *)base, was_eff = r->is_bool ? 0 : *(int *)((char *)&app.settings + r->offset);
     if (r->is_bool)
         *(bool *)base = v != 0;
     else
@@ -614,6 +731,9 @@ static void write_value(const Row *r, int v)
         else
             *(int *)eff = v + r->base;
     }
+    widescreen_follow(t, r, was_t);
+    if (t == &app.global && (!app.game || !app.game_has_own || r->global_only))
+        widescreen_follow(&app.settings, r, was_eff);
     if (r->special == SP_LANGUAGE)
         i18n_set(app.global.language);
     if (r->special == SP_THEME)

@@ -16,7 +16,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.2.0"
+#define SwanStationPS5_VERSION "1.2.1"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -61,17 +61,6 @@ typedef struct
     int16_t mouse_dx, mouse_dy;
 } PadState;
 
-enum AspectMode
-{
-    ASPECT_AUTO = 0, /* what the game/core reports (normally 4:3) */
-    ASPECT_4_3,
-    ASPECT_16_9,     /* pair with a widescreen cheat for true widescreen */
-    ASPECT_16_10,
-    ASPECT_PIXEL,    /* 1:1 square pixels */
-    ASPECT_STRETCH,  /* fill the whole screen */
-    ASPECT_COUNT
-};
-
 enum UpscaleFilter
 {
     UPSCALE_SHARP = 0, /* nearest-neighbour prescale: crisp pixels */
@@ -90,7 +79,6 @@ enum RegionMode
 
 typedef struct
 {
-    int aspect;       /* enum AspectMode */
     bool integer_scale; /* whole-number scale factors only */
     bool smooth;      /* bilinear for the final scale to the screen */
     int renderer;     /* SwanStation: 0 Vulkan (the GPU), 1 Software (the CPU) */
@@ -165,6 +153,7 @@ typedef struct
     int output_res;       /* the screen output: 0 1080p, 1 1440p, 2 4K */
     char usb_folder[48];  /* a folder name looked for on USB drives: /mnt/usb0/<name> and /mnt/usb1/<name> (empty: none) */
     bool framegen;        /* frame interpolation: a frame between two of the game's (120 Hz screen, from the next start) */
+    int aspect_before_wide; /* the aspect ratio (index) the widescreen hack replaced with 16:9, or -1; saved by value */
     int ss_opt[SS_OPT_COUNT]; /* SwanStation's own core options: the chosen value's index in SS_OPTS[i].values */
 } Settings;
 

@@ -682,16 +682,13 @@ void app_draw_game(uint8_t dim)
     else if (!pixels && fresh && w > 0)
         plat_upload_game_gpu(w, h); /* the core rendered through Vulkan */
     Settings view = app.settings;
-    if (play_widescreen_active())
-        view.aspect = ASPECT_16_9;
     if (bezel_shown(&view))
         view.border = 0; /* the bezel's window is the full-height 4:3 picture */
 
     /* around the picture: black, the current background, or a TV */
     int gx, gy, gw, gh;
     plat_game_rect(&gx, &gy, &gw, &gh);
-    /* Stretch fills the screen: no border or TV around it */
-    if (view.border && !bezel_shown(&view) && view.aspect != ASPECT_STRETCH && gw > 0 && gw < plat_width() - 8)
+    if (view.border && !bezel_shown(&view) && gw > 0 && gw < plat_width() - 8)
     {
         float k = dim / 255.0f;
         if (view.border == 1)
@@ -718,7 +715,7 @@ void app_draw_game(uint8_t dim)
         double speed = app.fps > 1.0f && core_hz > 1.0 ? app.fps * 100.0 / core_hz : 100.0;
         plat_set_framegen(app.settings.framegen, core_hz, speed, !speed_changed);
     }
-    plat_draw_game(&view, host_aspect(), dim);
+    plat_draw_game(&view, play_widescreen_active() ? 16.0f / 9.0f : host_aspect(), dim);
     bezel_draw(&view, dim);
     if (app.screen == SCREEN_GAME)
         draw_timer();
