@@ -56,17 +56,6 @@ jobs:
       - name: Check system module imports
         run: python3 tools/check-imports.py dist/PPSA98510/eboot.bin
 
-      # Crash reports in SwanStationPS5.log give addresses as offsets from main();
-      # this map turns them into function names.
-      - name: Write the symbol map
-        run: llvm-nm-18 -n --defined-only build/llvm-pie.elf > SwanStationPS5-symbols.txt
-
-      - name: Upload the symbol map
-        uses: actions/upload-artifact@v4
-        with:
-          name: SwanStationPS5-symbols
-          path: SwanStationPS5-symbols.txt
-
       # The same PPSA98510.zip that tools/make_release.py packs for a release.
       - name: Pack PPSA98510.zip
         run: python3 tools/make_release.py --skip-build
