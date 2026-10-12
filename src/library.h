@@ -18,6 +18,12 @@ typedef struct
     int discs;
 } Game;
 
+/* The console's BIOS booted with no disc (Settings > About > Start BIOS): a Game with no path */
+static inline bool game_is_bios(const Game *g)
+{
+    return g && !g->path[0];
+}
+
 typedef struct
 {
     Game *games;

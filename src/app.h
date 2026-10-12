@@ -71,6 +71,8 @@ void app_restart_covers(void);
 int app_nav_pad(void);
 /* resume: continue from the quick-resume save */
 void app_start_game(int index, bool resume);
+/* Boots the console's BIOS with no disc (Settings > About > Start BIOS) */
+void app_start_bios(void);
 void app_stop_game(void);
 /* Path of a game's own settings file. */
 void app_game_config_path(char *out, size_t size, const Game *g);

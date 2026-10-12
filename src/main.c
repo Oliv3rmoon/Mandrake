@@ -1086,19 +1086,54 @@ void app_start_game(int index, bool resume)
     app.screen = SCREEN_GAME;
 }
 
+void app_start_bios(void)
+{
+    static Game bios;
+    memset(&bios, 0, sizeof(bios));
+    str_copy(bios.title, sizeof(bios.title), "BIOS");
+    str_copy(bios.id, sizeof(bios.id), "bios");
+    app_close_shelf_settings(); /* the settings in effect are the global ones, not those of the game under the cursor */
+    char error[480];
+    app.game_has_own = false;
+    app.settings = app.global;
+    play_rewind_reset();
+    controls_start(&bios, &app.settings);
+    app.play_seconds = 0;
+    host_set_gun(0);
+    host_set_special(0);
+    host_set_fixes(0);
+    SwanStationPS5_log("start: BIOS with no disc");
+    if (!host_load("", "", &app.paths, &app.settings, error, sizeof(error)))
+    {
+        controls_stop();
+        app_toast(error);
+        return;
+    }
+    app.game = &bios;
+    app.game_index = -1;
+    if (!bios_file_present())
+        app_toast_for("BIOS not found, SCPH1001.BIN is recommended due to the low compatibility of OpenBios.", 10.0f);
+    plat_audio_open(host_sample_rate());
+    plat_audio_clear();
+    cheats_clear(&app.cheats);
+    app_toast_for("Hold the {Touchpad} for 1 second to open the game menu.", 8.0f);
+    app.screen = SCREEN_GAME;
+}
+
 void app_stop_game(void)
 {
     play_save_resume(false);
     play_rewind_reset();
     int unlocked, total;
-    GameStats *st = app.game ? stats_get(app.game->id) : NULL;
+    GameStats *st = app.game && !game_is_bios(app.game) ? stats_get(app.game->id) : NULL;
     if (st && ra_game_progress(&unlocked, &total))
     {
         st->ach_unlocked = unlocked;
         st->ach_total = total;
     }
     stats_save();
-    ra_game_unloaded();
+    if (!game_is_bios(app.game))
+        ra_game_unloaded();
     controls_stop();
     host_unload();
     plat_audio_open(UI_RATE);
@@ -1508,7 +1543,7 @@ static void count_play_time(void)
     seconds += app.dt;
     if (seconds < 1.0f)
         return;
-    GameStats *st = stats_get(app.game->id);
+    GameStats *st = game_is_bios(app.game) ? NULL : stats_get(app.game->id);
     if (st)
         st->seconds += (uint32_t)seconds;
     seconds -= (float)(uint32_t)seconds;
@@ -1595,16 +1630,22 @@ int main(void)
     extern int ps5_klog_capture_stderr(const char *prefix);
     ps5_klog_capture_stderr("");
 #endif
-    /* a second games folder on the extended storage, only when it is mounted */
-    struct stat ext;
-    if (stat("/mnt/ext1", &ext) != 0 || !S_ISDIR(ext.st_mode))
-        SwanStationPS5_log("games folder /mnt/ext1/SwanStationPS5/games: /mnt/ext1 is not available");
-    else if (stat("/mnt/ext1/SwanStationPS5/games", &ext) == 0)
-        SwanStationPS5_log("games folder /mnt/ext1/SwanStationPS5/games: already exists");
-    else if (make_dirs("/mnt/ext1/SwanStationPS5/games"))
-        SwanStationPS5_log("games folder /mnt/ext1/SwanStationPS5/games: created successfully");
-    else
-        SwanStationPS5_log("games folder /mnt/ext1/SwanStationPS5/games: could not be created (%s)", strerror(errno));
+    /* a second games folder on each extended storage, only when it is mounted */
+    static const char *const ext_drives[] = {"/mnt/ext0", "/mnt/ext1"};
+    for (int i = 0; i < 2; ++i)
+    {
+        struct stat ext;
+        char games[64];
+        snprintf(games, sizeof(games), "%s/SwanStationPS5/games", ext_drives[i]);
+        if (stat(ext_drives[i], &ext) != 0 || !S_ISDIR(ext.st_mode))
+            SwanStationPS5_log("games folder %s: %s is not available", games, ext_drives[i]);
+        else if (stat(games, &ext) == 0)
+            SwanStationPS5_log("games folder %s: already exists", games);
+        else if (make_dirs(games))
+            SwanStationPS5_log("games folder %s: created successfully", games);
+        else
+            SwanStationPS5_log("games folder %s: could not be created (%s)", games, strerror(errno));
+    }
     SwanStationPS5_log("SwanStationPS5 %s starting, data root %s", SwanStationPS5_VERSION, app.paths.root);
     SwanStationPS5_log("screen: %s", plat_screen_info());
 #if defined(__PROSPERO__)

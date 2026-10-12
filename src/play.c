@@ -259,7 +259,7 @@ static bool save_state_to(const char *path, bool background);
 
 void play_save_resume(bool background)
 {
-    if (!app.game || !app.settings.quick_resume || ra_hardcore())
+    if (!app.game || game_is_bios(app.game) || !app.settings.quick_resume || ra_hardcore())
         return;
     char path[SwanStationPS5_PATH_MAX];
     play_resume_path(app.game, path, sizeof(path));
@@ -300,7 +300,7 @@ int play_auto_list(int slots[AUTO_SLOTS], long ages[AUTO_SLOTS])
 
 bool play_save_auto(void)
 {
-    if (!app.game || ra_hardcore())
+    if (!app.game || game_is_bios(app.game) || ra_hardcore())
         return false;
     int slots[AUTO_SLOTS];
     long ages[AUTO_SLOTS];

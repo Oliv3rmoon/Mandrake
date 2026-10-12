@@ -893,6 +893,8 @@ static int card_check;
 static void card_prepare(const char *serial, const char *game_path)
 {
     card_path[0] = '\0';
+    if (!game_path[0])
+        return; /* the BIOS with no disc: no card of a game to load or write back */
     char name[200], path[SwanStationPS5_PATH_MAX];
     if (serial[0])
         snprintf(name, sizeof(name), "%s_1.mcd", serial);
@@ -952,6 +954,9 @@ static char disc_path[SwanStationPS5_PATH_MAX];
 static void disc_prepare(const char *serial, const char *game_path)
 {
     char name[200];
+    disc_path[0] = '\0';
+    if (!game_path[0])
+        return;
     if (serial[0])
         snprintf(name, sizeof(name), "%.150s", serial);
     else
