@@ -37,6 +37,7 @@ typedef struct
     Library library;
     CheatList cheats;
     const Game *game;         /* running game, NULL on the shelf */
+    const Game *settings_game; /* the shelf's game whose own settings Settings edits (opened from the shelf), else NULL */
     int game_index;           /* its library index */
     enum Screen screen;
     enum Screen settings_return;
@@ -76,6 +77,10 @@ void app_game_config_path(char *out, size_t size, const Game *g);
 /* Saves SwanStationPS5.ini and, when it has them, the running game's own settings. */
 void app_save_settings(void);
 void app_open_settings(enum Screen back_to);
+/* Settings from the shelf, with `game` (the one under the cursor) to choose "This game" for. */
+void app_open_shelf_settings(const Game *game);
+/* Back from Settings to the shelf: the shelf's game no longer has its settings loaded. */
+void app_close_shelf_settings(void);
 
 /* Screens: each handles input and draws one frame. */
 void shelf_screen(uint32_t pressed);

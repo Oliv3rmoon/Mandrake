@@ -379,6 +379,14 @@ void app_restart_covers(void)
 
 void app_rescan(void)
 {
+    if (app.settings_game)
+    {
+        /* the games are listed again: the shelf's game may not be the same pointer (or there) any more */
+        app_save_settings();
+        app.settings_game = NULL;
+        app.game_has_own = false;
+        app.settings = app.global;
+    }
     /* The games folder, then on each drive both <drive>/<name> and <drive>/<name>/games, for our
      * folder name and for the PSXS5 one. */
     static const char *const drives[] = {"/mnt/usb0", "/mnt/usb1", "/mnt/ext0", "/mnt/ext1"};
@@ -440,12 +448,13 @@ void app_game_config_path(char *out, size_t size, const Game *g)
 void app_save_settings(void)
 {
     config_save(&app.global, app.paths.config);
-    if (app.game && app.game_has_own)
+    const Game *own_game = app.game ? app.game : app.settings_game;
+    if (own_game && app.game_has_own)
     {
         char path[SwanStationPS5_PATH_MAX], dir[SwanStationPS5_PATH_MAX];
         path_join(dir, sizeof(dir), app.paths.user, "game-settings");
         make_dirs(dir);
-        app_game_config_path(path, sizeof(path), app.game);
+        app_game_config_path(path, sizeof(path), own_game);
         config_save(&app.settings, path);
     }
     if (app.global.cover_style != covers_style_loaded ||
@@ -1099,6 +1108,28 @@ void app_stop_game(void)
     app.game_has_own = false;
     app.settings = app.global;
     app.screen = SCREEN_LIBRARY;
+}
+
+/* Settings from the shelf: the game under the cursor can have its own, as from the game's menu */
+void app_open_shelf_settings(const Game *game)
+{
+    app.settings_game = game;
+    if (game)
+    {
+        char own[SwanStationPS5_PATH_MAX];
+        app_game_config_path(own, sizeof(own), game);
+        app.game_has_own = config_load_game(&app.settings, &app.global, own);
+    }
+    app_open_settings(SCREEN_LIBRARY);
+}
+
+void app_close_shelf_settings(void)
+{
+    if (app.game || !app.settings_game)
+        return;
+    app.settings_game = NULL;
+    app.game_has_own = false;
+    app.settings = app.global;
 }
 
 void app_open_settings(enum Screen back_to)

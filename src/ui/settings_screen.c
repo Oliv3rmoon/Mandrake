@@ -558,13 +558,19 @@ static struct
     float switch_t[16];
 } S;
 
+/* The game whose own settings the "This game" side edits: the running one, or the shelf's (Settings opened from the shelf) */
+static const Game *scope_game(void)
+{
+    return app.game ? app.game : app.settings_game;
+}
+
 void settings_opened(void)
 {
     S.cursor = -1;
     S.remap = false;
     S.players = false;
     S.who = false;
-    S.game_scope = app.game != NULL && app.game_has_own;
+    S.game_scope = scope_game() != NULL && app.game_has_own;
     S.tab_x = 0;
     S.sel_y = -1;
     S.scroll = 0;
@@ -595,7 +601,7 @@ static void first_selectable(void)
 /* The settings a row edits: this game's own, or the console-wide ones. */
 static Settings *target(const Row *r)
 {
-    return (!r->global_only && S.game_scope && app.game) ? &app.settings : &app.global;
+    return (!r->global_only && S.game_scope && scope_game()) ? &app.settings : &app.global;
 }
 
 /* "Load HD textures" is the two core options "Enable VRAM Write Texture Replacement" and "Preload Texture
@@ -693,7 +699,7 @@ static void write_value(const Row *r, int v)
     {
         Settings *t = target(r);
         hdtex_set(t, v != 0);
-        if (t == &app.global && (!app.game || !app.game_has_own))
+        if (t == &app.global && (!scope_game() || !app.game_has_own))
             hdtex_set(&app.settings, v != 0);
         if (app.game)
             host_apply_settings(&app.settings);
@@ -726,7 +732,7 @@ static void write_value(const Row *r, int v)
     else
         *(int *)base = v + r->base;
     /* console-wide edits reach the running game unless it has its own settings */
-    if (t == &app.global && (!app.game || !app.game_has_own || r->global_only))
+    if (t == &app.global && (!scope_game() || !app.game_has_own || r->global_only))
     {
         char *eff = (char *)&app.settings + r->offset;
         if (r->is_bool)
@@ -735,7 +741,7 @@ static void write_value(const Row *r, int v)
             *(int *)eff = v + r->base;
     }
     widescreen_follow(t, r, was_t);
-    if (t == &app.global && (!app.game || !app.game_has_own || r->global_only))
+    if (t == &app.global && (!scope_game() || !app.game_has_own || r->global_only))
         widescreen_follow(&app.settings, r, was_eff);
     if (r->special == SP_LANGUAGE)
         i18n_set(app.global.language);
@@ -857,13 +863,13 @@ static int ps1_index(int button)
 
 static Settings *map_target(void)
 {
-    return (S.game_scope && app.game) ? &app.settings : &app.global;
+    return (S.game_scope && scope_game()) ? &app.settings : &app.global;
 }
 
 static void set_map(int button, int to)
 {
     map_target()->button_map[button] = (int8_t)to;
-    if (map_target() == &app.global && (!app.game || !app.game_has_own))
+    if (map_target() == &app.global && (!scope_game() || !app.game_has_own))
         app.settings.button_map[button] = (int8_t)to;
 }
 
@@ -1383,7 +1389,7 @@ static void draw_help(const Row *r)
         icon_draw(r->apply == APPLY_NOW ? ICON_CHECK : ICON_CLOCK, x + 32, top + 684, 28, TH_FOCUS);
         text_draw(x + 72, top + 686, 22, FONT_REGULAR, TH_FOCUS, ALIGN_LEFT, tr(notes[r->apply]));
     }
-    if (r->global_only && S.game_scope && app.game)
+    if (r->global_only && S.game_scope && scope_game())
     {
         icon_draw(ICON_WORLD, x + 32, top + 646, 28, TH_TEXT_DIM);
         text_draw(x + 72, top + 648, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_LEFT, tr("Same for every game"));
@@ -1396,14 +1402,14 @@ static void draw_header(void)
 {
     text_draw(TH_MARGIN, 40, 44, FONT_BOLD, TH_TEXT, ALIGN_LEFT, tr(S.remap ? "Button mapping" : "Settings"));
     char sub[200];
-    if (app.game)
-        snprintf(sub, sizeof(sub), "%s  \xc2\xb7  %s", shelf_game_title(app.game),
+    if (scope_game())
+        snprintf(sub, sizeof(sub), "%s  \xc2\xb7  %s", shelf_game_title(scope_game()),
                  tr(S.game_scope ? "This game" : "All games"));
     else
         str_copy(sub, sizeof(sub), tr("Applies to every game"));
     text_draw_fit(TH_MARGIN + 2, 100, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_LEFT, 1000, sub);
 
-    if (!app.game)
+    if (!scope_game())
         return;
     /* scope switch, top right */
     const char *a = tr("This game"), *b = tr("All games");
@@ -1534,7 +1540,7 @@ static void draw_rows(void)
         if (ry > bottom || ry + row_h < top - 60)
             continue;
         bool sel = i == S.cursor;
-        bool dimmed = r->global_only && S.game_scope && app.game;
+        bool dimmed = r->global_only && S.game_scope && scope_game();
         text_draw(x + 30, ry + 21, 28, FONT_REGULAR, (dimmed && !sel) ? TH_TEXT_DIM : TH_TEXT, ALIGN_LEFT,
                   tr(row_name(r)));
         if (dimmed)
@@ -1694,7 +1700,7 @@ static void activate(const Row *r)
 
 static void set_scope(bool game)
 {
-    if (!app.game || game == S.game_scope)
+    if (!scope_game() || game == S.game_scope)
         return;
     if (game && !app.game_has_own)
     {
@@ -1787,22 +1793,26 @@ void settings_screen(uint32_t pressed)
             sfx_play(SFX_CLICK);
         }
     }
-    if ((pressed & BIT(BTN_SQUARE)) && app.game && app.game_has_own)
+    if ((pressed & BIT(BTN_SQUARE)) && scope_game() && app.game_has_own)
     {
         /* back to the console-wide settings for this game */
         char path[SwanStationPS5_PATH_MAX];
-        app_game_config_path(path, sizeof(path), app.game);
+        app_game_config_path(path, sizeof(path), scope_game());
         remove(path);
         app.game_has_own = false;
         app.settings = app.global;
-        host_apply_settings(&app.settings);
-        controls_reconfigure(app.game, &app.settings);
+        if (app.game)
+        {
+            host_apply_settings(&app.settings);
+            controls_reconfigure(app.game, &app.settings);
+        }
         S.game_scope = false;
         app_toast("This game uses the settings for all games again");
     }
     if (pressed & BIT(BTN_CIRCLE))
     {
         app_save_settings();
+        app_close_shelf_settings();
         sfx_play(SFX_BACK);
         app.screen = app.settings_return;
         return;
@@ -1810,7 +1820,7 @@ void settings_screen(uint32_t pressed)
 
     draw_rows();
     draw_help(r);
-    if (app.game && app.game_has_own && S.game_scope)
+    if (scope_game() && app.game_has_own && S.game_scope)
     {
         static const int glyphs[] = {GLYPH_CROSS, GLYPH_CIRCLE, GLYPH_TRIANGLE, GLYPH_SQUARE};
         static const char *const labels[] = {"Change", "Back", "Default", "Use all-games settings"};

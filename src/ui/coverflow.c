@@ -1558,7 +1558,8 @@ void shelf_screen(uint32_t pressed)
         {
             sfx_play(SFX_SELECT);
             config_save(&app.global, app.paths.config);
-            app_open_settings(SCREEN_LIBRARY);
+            /* with the game under the cursor, so Settings can be for "This game" or "All games" */
+            app_open_shelf_settings(game >= 0 ? &app.library.games[game] : NULL);
         }
     }
 
