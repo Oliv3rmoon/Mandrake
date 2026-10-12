@@ -634,10 +634,16 @@ static void draw_details(const Game *g, float t)
         icon_draw(ICON_INFO_CIRCLE, x + 40, ty + 2, 24, argb_alpha(TH_GOLD, t));
         text_draw_fit(x + 76, ty, 19, FONT_REGULAR, argb_alpha(TH_TEXT_SOFT, t), ALIGN_LEFT, w - 116, tips[i]);
     }
+    const char *pick = tr("Choose a cover");
     if (t > 0.5f)
         draw_pad_glyph(GLYPH_SQUARE, x + 54, y + h - 46, 28);
-    text_draw(x + 78, y + h - 58, 22, FONT_REGULAR, argb_alpha(TH_TEXT, t), ALIGN_LEFT,
-              tr("Choose a cover"));
+    text_draw(x + 78, y + h - 58, 22, FONT_REGULAR, argb_alpha(TH_TEXT, t), ALIGN_LEFT, pick);
+    /* beside it, on its right: Triangle held deletes the game's files */
+    const float next = x + 78 + text_width(22, FONT_REGULAR, pick) + 56; /* where the next button's glyph goes */
+    if (t > 0.5f)
+        draw_pad_glyph(GLYPH_TRIANGLE, next + 14, y + h - 46, 28);
+    text_draw_fit(next + 38, y + h - 58, 22, FONT_REGULAR, argb_alpha(TH_TEXT, t), ALIGN_LEFT,
+                  x + w - 24 - (next + 38), tr("Delete (hold)"));
 }
 
 /* Category chips along the top; the highlight slides between them. */
@@ -1772,11 +1778,11 @@ void shelf_screen(uint32_t pressed)
     const int glyphs[] = {GLYPH_CROSS, GLYPH_TRIANGLE, GLYPH_SQUARE, GLYPH_L3,
                           GLYPH_R3, GLYPH_TOUCHPAD};
     const char *const labels[] = {"Play", "Details", "Settings", "Reload", "Favorite", "M.Card"};
-    /* in Details: Play, Choose a cover, and next to it (on its right) Delete, held */
-    const int details_glyphs[] = {GLYPH_CROSS, GLYPH_SQUARE, GLYPH_TRIANGLE};
-    const char *const details_labels[] = {"Play", "Choose a cover", "Delete (hold)"};
+    /* in Details: only Play down here; Choose a cover and Delete (held) are in the panel itself */
+    const int details_glyphs[] = {GLYPH_CROSS};
+    const char *const details_labels[] = {"Play"};
     if (S.details && S.view_count)
-        app_draw_hints(details_glyphs, details_labels, 3, NULL);
+        app_draw_hints(details_glyphs, details_labels, 1, NULL);
     else
         app_draw_hints(glyphs, labels, S.view_count ? 6 : 1, NULL);
     if (S.view_count)
