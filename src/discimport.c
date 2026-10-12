@@ -48,7 +48,7 @@ static struct
     char title[96], serial[16], key[24];
     uint8_t *cover_px;
     int cover_w, cover_h;
-    SDL_atomic_t cover_ready;
+    SDL_atomic_t cover_ready, cover_gen;
     struct PlatTexture *cover_tex;
 } J;
 
@@ -108,6 +108,13 @@ bool discimport_check_stall(void)
     if (changed)
         P("no progress for %d s: given up", STALL_MS / 1000);
     return changed == SDL_TRUE;
+}
+
+void discimport_cancel(void)
+{
+    SDL_AtomicSet(&J.abort, 1);
+    if (SDL_AtomicCAS(&J.state, DI_RUNNING, DI_CANCELLED))
+        P("cancelled by the player");
 }
 
 int discimport_bad(void)
@@ -301,6 +308,32 @@ static int parse_toc(const uint8_t *toc, uint32_t toc_got, Track *tracks, uint32
     return ntracks;
 }
 
+typedef struct
+{
+    int gen;
+    char serial[16], title[96];
+} CoverJob;
+
+static int cover_thread(void *arg)
+{
+    CoverJob *job = arg;
+    int w = 0, h = 0;
+    uint8_t *px = job->serial[0] ? covers_for_serial(job->serial, &w, &h) : NULL;
+    if (!px)
+        px = covers_title_card(job->title, &w, &h);
+    if (px && SDL_AtomicGet(&J.cover_gen) == job->gen) /* still the same import */
+    {
+        J.cover_px = px;
+        J.cover_w = w;
+        J.cover_h = h;
+        SDL_AtomicSet(&J.cover_ready, 1);
+    }
+    else
+        free(px);
+    free(job);
+    return 0;
+}
+
 static void finish(DiscImportState result)
 {
     SDL_AtomicSet(&J.permille, result == DI_OK || result == DI_OK_INCOMPLETE ? 1000 : 0);
@@ -386,11 +419,21 @@ static void import_run(void)
     SDL_AtomicSet(&J.named, 1);
     touch();
     P("disc: '%s', serial '%s', label '%s', folder '%s'", title, serial, label, folder);
-    if (serial[0]) /* the cover for the card on screen; it also stays in the cache for the shelf */
     {
-        J.cover_px = covers_for_serial(serial, &J.cover_w, &J.cover_h);
-        SDL_AtomicSet(&J.cover_ready, J.cover_px ? 1 : 0);
-        touch();
+        /* the cover for the card on screen, fetched meanwhile (it also stays in the cache for the shelf); a card with
+         * the title when there is none */
+        CoverJob *job = malloc(sizeof(*job));
+        if (job)
+        {
+            job->gen = SDL_AtomicGet(&J.cover_gen);
+            str_copy(job->serial, sizeof(job->serial), serial);
+            str_copy(job->title, sizeof(job->title), title);
+            SDL_Thread *t = SDL_CreateThread(cover_thread, "disc-cover", job);
+            if (t)
+                SDL_DetachThread(t);
+            else
+                free(job);
+        }
     }
 
     char dir[SwanStationPS5_PATH_MAX], bin[SwanStationPS5_PATH_MAX], cue[SwanStationPS5_PATH_MAX],
@@ -543,6 +586,8 @@ static void import_run(void)
         }
     }
     cdscsi_close(&pass);
+    if (result == DI_OK && SDL_AtomicGet(&J.abort)) /* asked to stop just as it finished: nothing is kept */
+        result = DI_STALLED;
     if (fb && fclose(fb) != 0 && result == DI_OK)
         result = DI_WRITE_FAILED;
     if (fc && fclose(fc) != 0 && result == DI_OK)
@@ -585,6 +630,7 @@ bool discimport_start(const char *games_dir)
     J.title[0] = '\0';
     J.serial[0] = '\0';
     J.key[0] = '\0';
+    SDL_AtomicAdd(&J.cover_gen, 1); /* a cover still being fetched for an earlier import is dropped */
     cover_free();
     free(J.cover_px);
     J.cover_px = NULL;

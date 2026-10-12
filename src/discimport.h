@@ -21,7 +21,8 @@ typedef enum
     DI_UNREADABLE,  /* too many sectors could not be read */
     DI_DRIVE_LOST,  /* the disc was taken out or the drive unplugged halfway */
     DI_WRITE_FAILED, /* the games folder could not be written */
-    DI_STALLED      /* nothing was read for 30 seconds: stopped (discimport_check_stall) */
+    DI_STALLED,     /* nothing was read for 30 seconds: stopped (discimport_check_stall) */
+    DI_CANCELLED    /* the player held O: stopped (discimport_cancel) */
 } DiscImportState;
 
 /* Who a disc is: read from its first data track. serial is empty for a disc without SYSTEM.CNF (homebrew). */
@@ -45,6 +46,9 @@ const char *discimport_title(void);
 /* Call every frame while it runs: true (once) if it made no progress for 30 seconds and was given up. The state is
  * then DI_STALLED, whatever the thread is still blocked on; it deletes its partial files when it comes back. */
 bool discimport_check_stall(void);
+/* Stops the import now (the player asked): the state becomes DI_CANCELLED at once, and the thread deletes its partial
+ * files when the drive hands it back. The same disc does not start it again until it is taken out and put back. */
+void discimport_cancel(void);
 /* How many sectors could not be read (zeros in the image). */
 int discimport_bad(void);
 /* At start: removes what an interrupted import left (*.part in the games folder's subfolders). */

@@ -1013,17 +1013,45 @@ static int find_game_by_key(const char *key)
     return -1;
 }
 
+#define CANCEL_HOLD 2.0f /* seconds O is held to cancel an import, as to close the app */
+static float cancel_hold;
+
 static bool import_input(uint32_t *pressed)
 {
     DiscImportState s = discimport_state();
     if (s == DI_IDLE)
         return false;
+    uint32_t was_pressed = *pressed;
     *pressed = 0;
     if (s == DI_RUNNING)
     {
         discimport_check_stall(); /* no progress for 30 seconds: it is given up and the next frame says why */
+        /* O: a tap only says how to cancel; holding it (like closing the app) cancels */
+        static bool armed;
+        const bool circle = (app.pads[app_nav_pad()].buttons & BIT(BTN_CIRCLE)) != 0;
+        if (was_pressed & BIT(BTN_CIRCLE))
+        {
+            armed = true;
+            app_toast("Hold {Circle} to cancel the import");
+        }
+        if (circle && armed)
+        {
+            cancel_hold += app.dt;
+            if (cancel_hold >= CANCEL_HOLD)
+            {
+                cancel_hold = 0.0f;
+                armed = false;
+                discimport_cancel();
+            }
+        }
+        else
+        {
+            cancel_hold = 0.0f;
+            armed = false;
+        }
         return true;
     }
+    cancel_hold = 0.0f;
     char msg[160], key[24];
     str_copy(key, sizeof(key), discimport_key());
     disc_mark_handled(key); /* whatever happened, the same disc does not start it again by itself */
@@ -1044,6 +1072,12 @@ static bool import_input(uint32_t *pressed)
         app_rescan();
         break;
     default: break;
+    }
+    if (s == DI_CANCELLED)
+    {
+        discimport_ack();
+        app_toast("Import cancelled");
+        return true;
     }
     if (s != DI_OK && s != DI_OK_INCOMPLETE && s != DI_ALREADY)
     {
@@ -1106,24 +1140,26 @@ static void import_draw(void)
     const char *msg = tr("Importing the disc... do not remove it");
     const char *title = discimport_title();
     PlatTexture *cover = (PlatTexture *)discimport_cover();
-    float cw = 0, ch = 200;
-    if (cover)
-    {
-        int tw, th;
-        plat_texture_size(cover, &tw, &th);
-        cw = fminf(ch * (float)tw / (float)th, 280.0f);
-    }
+    bool slot = title[0] != '\0'; /* the cover's place is kept from the moment the disc is known */
+    float ch = 200, cw = ch;
     float text_w = fmaxf(text_width(26, FONT_REGULAR, msg), text_width(26, FONT_REGULAR, title)) + 120;
-    float w = text_w + (cover ? cw + 32 : 0) + 64, h = cover ? ch + 64 : 124;
+    float w = text_w + (slot ? cw + 32 : 0) + 64, h = slot ? ch + 64 : 124;
     float x = (plat_width() - w) * 0.5f, y = plat_height() - h - 140;
     float p = discimport_permille() / 1000.0f;
     char pct[16];
     snprintf(pct, sizeof(pct), "%d%%", discimport_permille() / 10);
     draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
     float tx = x + 32;
-    if (cover)
+    if (slot)
     {
-        plat_draw_texture(cover, x + 32, y + 32, cw, ch, 0xffffffffu, true);
+        draw_rrect(x + 32, y + 32, cw, ch, TH_RADIUS_SMALL, TH_DIVIDER);
+        if (cover)
+        {
+            int tw, th;
+            plat_texture_size(cover, &tw, &th);
+            float k = fminf(cw / (float)tw, ch / (float)th), dw = tw * k, dh = th * k;
+            plat_draw_texture(cover, x + 32 + (cw - dw) * 0.5f, y + 32 + (ch - dh) * 0.5f, dw, dh, 0xffffffffu, true);
+        }
         tx = x + 32 + cw + 32;
     }
     float tw_area = x + w - 32 - tx, mid = tx + tw_area * 0.5f, ty = y + (h - 124) * 0.5f;
@@ -1134,6 +1170,18 @@ static void import_draw(void)
     draw_rrect(tx, ty + 92, bar_w, 12, 6, TH_DIVIDER);
     draw_rrect(tx, ty + 92, fmaxf(12.0f, bar_w * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
     text_draw(tx + tw_area, ty + 82, 26, FONT_REGULAR, TH_TEXT, ALIGN_RIGHT, pct);
+    if (cancel_hold > 0.3f)
+    {
+        /* O held: a bar fills up to the cancel, as when closing the app */
+        const char *cmsg = tr("Keep holding to cancel the import...");
+        float cwid = text_width(26, FONT_REGULAR, cmsg) + 96, chgt = 84;
+        float cx = (plat_width() - cwid) * 0.5f, cy = y - chgt - 24;
+        draw_rrect(cx, cy, cwid, chgt, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
+        text_draw(plat_width() * 0.5f, cy + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, cmsg);
+        draw_rrect(cx + 32, cy + 56, cwid - 64, 12, 6, TH_DIVIDER);
+        draw_rrect(cx + 32, cy + 56, fmaxf(12.0f, (cwid - 64) * fminf(cancel_hold / CANCEL_HOLD, 1.0f)), 12, 6,
+                   TH_DANGER);
+    }
 }
 
 void app_import_disc(void)
