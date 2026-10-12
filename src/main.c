@@ -1100,8 +1100,8 @@ static bool import_input(uint32_t *pressed)
     if (launch) /* a disc put in on the shelf: the game starts by itself once it is in */
     {
         int game = find_game_by_key(key);
-        if (game >= 0)
-            shelf_play_game(game);
+        if (game >= 0 && !shelf_play_game(game))
+            SwanStationPS5_log("disc: the imported game could not be started from the shelf");
     }
     return true;
 }
@@ -1127,7 +1127,8 @@ static void disc_auto_frame(void)
     SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, starting it" : "importing it");
     if (game >= 0)
     {
-        shelf_play_game(game);
+        if (!shelf_play_game(game))
+            SwanStationPS5_log("disc: the game could not be started from the shelf");
         return;
     }
     auto_launch = discimport_start(app.paths.games);

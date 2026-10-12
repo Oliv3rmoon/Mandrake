@@ -96,7 +96,7 @@ static struct
 } S;
 
 static const char *const CATEGORY_NAMES[CAT_COUNT] = {
-    "All games", "Recently played", "Favorites", "Multi-disc", "USA", "Europe", "Japan", "2+ players", "Hidden"};
+    "All games", "Recently played", "Favorites", "Multi-disc", "USA", "Europe", "Japan", "2+ players"};
 static const char *const SORT_NAMES[SORT_COUNT] = {"Title", "Recently played", "Most played",
                                                    "Region"};
 
@@ -128,11 +128,8 @@ const char *shelf_region_name(const char *serial)
 static bool in_category(const Game *g, int category)
 {
     GameStats *st = stats_get(g->id);
-    if (st && st->hidden) /* hidden games are only under Hidden */
-        return category == CAT_HIDDEN;
     switch (category)
     {
-    case CAT_HIDDEN: return false;
     case CAT_RECENT: return st && st->last_played > 0;
     case CAT_FAVORITES: return st && st->favorite;
     case CAT_MULTI_DISC: return g->discs > 1;
@@ -1288,15 +1285,17 @@ bool shelf_play_game(int library_index)
 {
     if (library_index < 0 || library_index >= app.library.count || !shelf_idle())
         return false;
+    /* a disc put in is a request to play it: if the game is not in the category on screen, the shelf shows all */
+    if (!in_category(&app.library.games[library_index], app.global.shelf_category))
+    {
+        app.global.shelf_category = CAT_ALL;
+        app.settings.shelf_category = CAT_ALL;
+    }
     shelf_select_game(library_index);
     if (selected_game() != library_index)
     {
-        /* hidden, or outside the category on screen: the shelf shows everything and tries again */
-        app.global.shelf_category = CAT_ALL;
-        app.settings.shelf_category = CAT_ALL;
-        shelf_select_game(library_index);
-        if (selected_game() != library_index)
-            return false;
+        SwanStationPS5_log("shelf: game %d cannot be shown in category %d", library_index, app.global.shelf_category);
+        return false;
     }
     play_game(library_index, false);
     return true;
@@ -1406,24 +1405,6 @@ void shelf_screen(uint32_t pressed)
                 sfx_play(SFX_SELECT);
                 if (app.global.shelf_category == CAT_FAVORITES)
                     build_view(game);
-            }
-        }
-        if ((pressed & BIT(BTN_L3)) && S.details && game >= 0)
-        {
-            /* hide / show again: the cursor stays where the game was */
-            GameStats *st = stats_get(app.library.games[game].id);
-            if (st)
-            {
-                st->hidden = !st->hidden;
-                stats_save();
-                app_toast(st->hidden ? "Hidden: find it under Hidden" : "Back on the shelf");
-                sfx_play(SFX_SELECT);
-                S.details = false;
-                int keep_pos = S.cursor;
-                build_view(-1);
-                S.cursor = keep_pos < S.view_count ? keep_pos : (S.view_count ? S.view_count - 1 : 0);
-                S.pos = (float)S.cursor;
-                game = selected_game();
             }
         }
         if ((pressed & BIT(BTN_L3)) && !S.details)
@@ -1790,11 +1771,14 @@ void shelf_screen(uint32_t pressed)
     }
     const int glyphs[] = {GLYPH_CROSS, GLYPH_TRIANGLE, GLYPH_SQUARE, GLYPH_L3,
                           GLYPH_R3, GLYPH_TOUCHPAD};
-    GameStats *hint_st = game >= 0 ? stats_get(app.library.games[game].id) : NULL;
-    const char *const labels[] = {"Play", S.details ? "Delete (hold)" : "Details", S.details ? "Choose a cover" : "Settings",
-                                  S.details ? (hint_st && hint_st->hidden ? "Unhide" : "Hide") : "Reload",
-                                  "Favorite", "M.Card"};
-    app_draw_hints(glyphs, labels, S.view_count ? (!S.details ? 6 : 4) : 1, NULL);
+    const char *const labels[] = {"Play", "Details", "Settings", "Reload", "Favorite", "M.Card"};
+    /* in Details: Play, Choose a cover, and next to it (on its right) Delete, held */
+    const int details_glyphs[] = {GLYPH_CROSS, GLYPH_SQUARE, GLYPH_TRIANGLE};
+    const char *const details_labels[] = {"Play", "Choose a cover", "Delete (hold)"};
+    if (S.details && S.view_count)
+        app_draw_hints(details_glyphs, details_labels, 3, NULL);
+    else
+        app_draw_hints(glyphs, labels, S.view_count ? 6 : 1, NULL);
     if (S.view_count)
     {
         char sort[64];

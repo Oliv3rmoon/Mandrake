@@ -217,7 +217,7 @@ The log shows the result: `storage: unlocked`, or `storage: sandboxed (...)` wit
 | D-pad or left stick | Browse the games |
 | L1 / R1 | Category (All games, Recently played, Favorites...) |
 | Cross | Play |
-| Triangle | Game details (L3 there hides the game) |
+| Triangle | Game details (hold Triangle there to delete the game's files) |
 | Square | Settings |
 | R3 | Favorite |
 | Touchpad | Memory cards |
