@@ -1038,7 +1038,7 @@ static bool import_input(uint32_t *pressed)
         if (was_pressed & BIT(BTN_CIRCLE))
         {
             armed = true;
-            app_toast("Hold {Circle} to cancel the import.");
+            app_toast("Hold {Circle} to cancel the installation.");
         }
         if (circle && armed)
         {
@@ -1066,11 +1066,11 @@ static bool import_input(uint32_t *pressed)
     switch (s)
     {
     case DI_OK:
-        snprintf(msg, sizeof(msg), tr("Imported: %s"), discimport_title());
+        snprintf(msg, sizeof(msg), tr("Installed: %s"), discimport_title());
         app_rescan();
         break;
     case DI_OK_INCOMPLETE:
-        snprintf(msg, sizeof(msg), tr("Imported with %d unreadable sectors: %s"), discimport_bad(), discimport_title());
+        snprintf(msg, sizeof(msg), tr("Installed with %d unreadable sectors: %s"), discimport_bad(), discimport_title());
         app_rescan();
         break;
     case DI_ALREADY:
@@ -1082,7 +1082,7 @@ static bool import_input(uint32_t *pressed)
     if (s == DI_CANCELLED)
     {
         discimport_ack();
-        app_toast("Import cancelled.");
+        app_toast("Installation cancelled.");
         return true;
     }
     if (s != DI_OK && s != DI_OK_INCOMPLETE && s != DI_ALREADY)
@@ -1091,11 +1091,11 @@ static bool import_input(uint32_t *pressed)
         static const char *const WHY[] = {
             [DI_NO_DRIVE] = "No CD drive was found. Plug the USB CD drive into the console and try again.",
             [DI_NO_DISC] = "The CD drive has no disc ready. Put in a disc, wait for it to spin up and try again.",
-            [DI_NOT_PS1] = "This disc is not a PS1 game: its first track is not data or it has no readable volume. Nothing was imported.",
-            [DI_UNREADABLE] = "The disc has too many sectors that cannot be read, so the import was stopped and what was copied was deleted. Clean the disc or try another copy.",
-            [DI_DRIVE_LOST] = "The disc or the drive was removed during the import. What was copied was deleted.",
+            [DI_NOT_PS1] = "This disc is not a PS1 game: its first track is not data or it has no readable volume. Nothing was installed.",
+            [DI_UNREADABLE] = "The disc has too many sectors that cannot be read, so the installation was stopped and what was copied was deleted. Clean the disc or try another copy.",
+            [DI_DRIVE_LOST] = "The disc or the drive was removed during the installation. What was copied was deleted.",
             [DI_WRITE_FAILED] = "The game could not be written to the games folder. Check that there is free space and try again.",
-            [DI_STALLED] = "The import was stopped: the CD drive did not read anything for 30 seconds. The disc may be dirty, scratched or badly burned. Clean it and try again; what was copied was deleted.",
+            [DI_STALLED] = "The installation was stopped: the CD drive did not read anything for 30 seconds. The disc may be dirty, scratched or badly burned. Clean it and try again; what was copied was deleted.",
         };
         discimport_ack();
         app_message_box(WHY[s]);
@@ -1181,7 +1181,7 @@ static void import_draw(void)
     if (cancel_hold > 0.3f)
     {
         /* O held: a bar fills up to the cancel, as when closing the app */
-        const char *cmsg = tr("Keep holding to cancel the import...");
+        const char *cmsg = tr("Keep holding to cancel the installation...");
         float cwid = text_width(26, FONT_REGULAR, cmsg) + 96, chgt = 84;
         float cx = (plat_width() - cwid) * 0.5f, cy = y - chgt - 24;
         draw_rrect(cx, cy, cwid, chgt, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
@@ -1196,7 +1196,7 @@ void app_import_disc(void)
 {
     if (app.game)
     {
-        app_toast("Close the game to import a disc.");
+        app_toast("Close the game to install a disc.");
         return;
     }
     auto_launch = false; /* from Settings: it only imports */
