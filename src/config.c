@@ -30,7 +30,6 @@ void config_defaults(Settings *s)
     s->vibration = 4;
     s->quick_resume = true;
     s->update_check = true;
-    s->disc_auto = true;
     snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/usb0/psx and /mnt/usb1/psx */
     s->bezel = false; /* the game's artwork frame, when there is one */
     s->theme = 1; /* Neon Arcade (THEME_NEON in ui/theme.h) */
@@ -247,8 +246,6 @@ static bool config_apply(Settings *s, const char *path)
             s->remote = as_bool(value);
         else if (strcmp(key, "update_check") == 0)
             s->update_check = as_bool(value);
-        else if (strcmp(key, "disc_auto") == 0)
-            s->disc_auto = as_bool(value);
         else if (strcmp(key, "background") == 0)
             s->background = atoi(value) % 2;
         else if (strcmp(key, "shelf_category") == 0)
@@ -307,7 +304,6 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
     out->background = global->background;
     out->remote = global->remote;
     out->update_check = global->update_check;
-    out->disc_auto = global->disc_auto;
     snprintf(out->usb_folder, sizeof(out->usb_folder), "%s", global->usb_folder);
     out->output_res = global->output_res;
     out->quick_resume = global->quick_resume;
@@ -392,9 +388,9 @@ bool config_save(const Settings *s, const char *path)
             s->cover_download, s->ui_sound, s->ui_volume, s->integer_scale, s->internal_res, s->upscale,
             s->upscale_filter, s->stick_dpad, s->language, s->vibration,
             s->sort_mode, s->shelf_category, s->background);
-    fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\ndisc_auto=%d\n",
+    fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\n",
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
-            s->update_check, s->disc_auto);
+            s->update_check);
     fprintf(f, "renderer=%d\noutput_res=%d\nusb_folder=%s\n", s->renderer, s->output_res, s->usb_folder);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,

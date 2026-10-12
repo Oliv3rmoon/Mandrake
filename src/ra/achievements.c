@@ -486,10 +486,9 @@ static void RC_CCONV on_game_loaded(int result, const char *error, rc_client_t *
     (void)userdata;
     if (result != RC_OK)
     {
-        if (result == RC_NO_GAME_LOADED) /* "Unknown game": this dump's hash isn't in any set */
-            post("RetroAchievements", tr("This version of the game isn't supported. A Redump dump of your disc usually is."));
-        else
-            SwanStationPS5_log("ra: no achievements loaded: %s", error ? error : "?");
+        /* "Unknown game" (RC_NO_GAME_LOADED): this dump's hash is in no set, as with a homebrew or a copy that is not a
+         * Redump one. Nothing is shown: only the games RetroAchievements knows get a notice. */
+        SwanStationPS5_log("ra: no achievements loaded: %s", error ? error : "?");
         return;
     }
     const rc_client_game_t *g = rc_client_get_game_info(c);

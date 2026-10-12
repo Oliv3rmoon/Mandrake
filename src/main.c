@@ -1177,7 +1177,7 @@ static void disc_auto_frame(void)
         removed_seen = discwatch_removed();
         handled_count = 0;
     }
-    bool free_for_disc = app.global.disc_auto && app.screen == SCREEN_LIBRARY && !app.game && shelf_idle() &&
+    bool free_for_disc = app.screen == SCREEN_LIBRARY && !app.game && shelf_idle() &&
                          discimport_state() == DI_IDLE && !box_open && !SC.active;
     discwatch_set_active(free_for_disc);
     DiscId id;
@@ -1246,17 +1246,6 @@ static void import_draw(void)
         draw_rrect(cx + 32, cy + 56, fmaxf(12.0f, (cwid - 64) * fminf(cancel_hold / CANCEL_HOLD, 1.0f)), 12, 6,
                    TH_DANGER);
     }
-}
-
-void app_import_disc(void)
-{
-    if (app.game)
-    {
-        app_toast("Close the game to install a disc.");
-        return;
-    }
-    auto_launch = false; /* from Settings: it only imports */
-    discimport_start(app.paths.games);
 }
 
 void app_start_game(int index, bool resume)
