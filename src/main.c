@@ -599,6 +599,9 @@ static void question_draw(void)
 
 /* ---------------------------------------------------------------- achievements banner */
 
+static bool opened_by_daemon;  /* the disc daemon started the app (payload/discd.c leaves <root>/daemon-launch) */
+static uint64_t app_started_us;
+
 /* Top right, one message at a time: slides in, holds, fades. */
 /* A small card bottom right while a counted achievement moves. */
 static void draw_tracker(void)
@@ -641,7 +644,9 @@ static void draw_achievement(void)
             return;
         }
         shown_at = now;
-        sfx_play(SFX_SELECT);
+        /* opened by the disc daemon for a disc put in: no sound for the first seconds (signed in, game loaded...) */
+        if (!(opened_by_daemon && now - app_started_us < 25000000u))
+            sfx_play(SFX_SELECT);
     }
     float t = (float)(now - shown_at) / 1e6f, total = length / 1e6f;
     float in = t < 0.25f ? t / 0.25f : 1.0f, out = total - t < 0.4f ? (total - t) / 0.4f : 1.0f;
@@ -1167,9 +1172,53 @@ static bool import_input(uint32_t *pressed)
     return true;
 }
 
+/* The disc daemon (payload/discd.c) and the app share the drive: the app writes the time into <root>/app-alive every
+ * couple of seconds, so the daemon leaves the drive to it; and the daemon writes <root>/disc-busy while it installs a
+ * disc without the app, so the app leaves it alone and keeps its hands off the half-written files. */
+static bool stamp_is_fresh(const char *name, int within)
+{
+    char path[SwanStationPS5_PATH_MAX];
+    path_join(path, sizeof(path), app.paths.root, name);
+    FILE *f = fopen(path, "r");
+    long long t = 0;
+    if (!f)
+        return false;
+    int got = fscanf(f, "%lld", &t);
+    fclose(f);
+    long long now = (long long)time(NULL);
+    return got == 1 && now >= t && now - t <= within;
+}
+
+static bool daemon_installing(void)
+{
+    return stamp_is_fresh("disc-busy", 10);
+}
+
+static void write_alive_stamp(void)
+{
+    static uint64_t last_us;
+    uint64_t now = plat_ticks_us();
+    if (last_us && now - last_us < 2000000)
+        return;
+    last_us = now;
+    char path[SwanStationPS5_PATH_MAX];
+    path_join(path, sizeof(path), app.paths.root, "app-alive");
+    FILE *f = fopen(path, "w");
+    if (f)
+    {
+        fprintf(f, "%lld\n", (long long)time(NULL));
+        fclose(f);
+    }
+}
+
 /* Every frame: on the shelf, a disc newly put in the USB CD drive is started (or imported first, then started) */
 static void disc_auto_frame(void)
 {
+    write_alive_stamp();
+    const bool daemon_busy = daemon_installing();
+    discwatch_pause(daemon_busy); /* the daemon is at the drive */
+    if (daemon_busy)
+        return;
     /* a disc taken out forgets that it was started: put back, it starts again. One left in does not start twice. */
     static int removed_seen;
     if (discwatch_removed() != removed_seen)
@@ -1917,7 +1966,17 @@ int main(void)
         else
             SwanStationPS5_log("games folder %s: could not be created (%s)", games, strerror(errno));
     }
-    discimport_cleanup(app.paths.games);
+    if (!stamp_is_fresh("disc-busy", 10)) /* the daemon may be writing a game right now */
+        discimport_cleanup(app.paths.games);
+    app_started_us = plat_ticks_us();
+    if (stamp_is_fresh("daemon-launch", 90))
+    {
+        opened_by_daemon = true;
+        char marker[SwanStationPS5_PATH_MAX];
+        path_join(marker, sizeof(marker), app.paths.root, "daemon-launch");
+        remove(marker);
+        SwanStationPS5_log("started by the disc daemon: no notice sounds for the first seconds");
+    }
     SwanStationPS5_log("SwanStationPS5 %s starting, data root %s", SwanStationPS5_VERSION, app.paths.root);
     SwanStationPS5_log("screen: %s", plat_screen_info());
 #if defined(__PROSPERO__)

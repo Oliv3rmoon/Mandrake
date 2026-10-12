@@ -1315,7 +1315,8 @@ static void play_game(int game, bool ask)
         S.resume = false;
         S.launch_t = 0.0001f;
     }
-    sfx_play(SFX_SELECT);
+    if (ask) /* a disc put in starts the game without the click: nobody pressed a button */
+        sfx_play(SFX_SELECT);
 }
 
 bool shelf_idle(void)
@@ -1340,6 +1341,9 @@ bool shelf_play_game(int library_index)
         return false;
     }
     play_game(library_index, false);
+    /* a disc is a request to play, not to watch the case open: the animation is skipped, so only its last frame
+     * (the "Loading your game..." one) is shown while the game loads */
+    S.launch_t = fmaxf(S.launch_t, launch_total() - 0.001f);
     return true;
 }
 

@@ -1,8 +1,10 @@
-# SwanStationPS5 - cloud build: the PS5 app folder.
+# SwanStationPS5 - cloud build: the PS5 app and the disc daemon payload.
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Download the result from the run's page: Artifacts > PPSA98510 (PPSA98510.zip,
-# the same zip the releases carry).
+# Download the results from the run's page, under Artifacts:
+#   PPSA98510                    PPSA98510.zip, the same zip the releases carry
+#   SwanStationPS5-DiscDaemon    SwanStationPS5-DiscDaemon.elf, the payload to send to the console's ELF loader
+#                                (port 9021); see payload/discd.c
 
 name: Build SwanStationPS5
 
@@ -48,6 +50,10 @@ jobs:
             .deps/lapy
           key: deps-${{ runner.os }}-${{ hashFiles('tools/setup-*-dependencies.sh', 'tools/build-lapy-helper.py') }}
 
+      # The payload first: it takes seconds, and if it fails nobody waits for the app to build to find out.
+      - name: Build the disc daemon payload
+        run: make disc-daemon
+
       - name: Build
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,4 +71,11 @@ jobs:
         with:
           name: PPSA98510
           path: PPSA98510.zip
+          if-no-files-found: error
+
+      - name: Upload the disc daemon payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwanStationPS5-DiscDaemon
+          path: dist/SwanStationPS5-DiscDaemon.elf
           if-no-files-found: error

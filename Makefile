@@ -209,7 +209,8 @@ self-update-example: $(RUNTIME) self-update-helper
 		APP_ROOT_FILES="$(SELF_UPDATE_HELPER) $(APP_ROOT_FILES)" \
 		bash tools/build.sh Folder
 
-deploy:
+# The disc daemon payload first (seconds; a mistake in it shows before the app's long build), then the app.
+deploy: disc-daemon
 	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
 	@bash tools/deploy.sh
 
@@ -243,6 +244,11 @@ clean:
 distclean: clean
 	@printf '%s\n' '==> [distclean] Removing downloaded dependency caches'
 	@rm -rf -- .deps
+
+.PHONY: disc-daemon
+# The disc daemon payload (payload/discd.c): dist/SwanStationPS5-DiscDaemon.elf, sent once to the console's ELF loader.
+disc-daemon:
+	@bash tools/build-disc-daemon.sh
 
 .PHONY: core
 # The core is rebuilt by its own Makefile; this only forwards to it.

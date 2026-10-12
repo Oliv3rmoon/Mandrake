@@ -43,7 +43,7 @@ typedef struct
 
 static struct
 {
-    SDL_atomic_t state, permille, named, bad, abort, alive, last_change;
+    SDL_atomic_t state, permille, named, bad, abort, alive, last_change, dumping;
     char games[SwanStationPS5_PATH_MAX];
     char title[96], serial[16], key[24];
     uint8_t *cover_px;
@@ -76,6 +76,11 @@ void discimport_ack(void)
 const char *discimport_serial(void)
 {
     return SDL_AtomicGet(&J.named) ? J.serial : "";
+}
+
+bool discimport_dumping(void)
+{
+    return SDL_AtomicGet(&J.dumping) != 0;
 }
 
 bool discimport_cover_none(void)
@@ -512,6 +517,7 @@ static void import_run(void)
     }
 
     /* the dump */
+    SDL_AtomicSet(&J.dumping, 1); /* only now is it a copy: not for a game that was already there */
     DiscImportState result = DI_OK;
     FILE *fb = fopen(bin_part, "wb"), *fc = fopen(cue_part, "wb");
     uint32_t first = tracks[0].lba, total = leadout - first, done = 0, bad = 0;
@@ -705,6 +711,7 @@ bool discimport_start(const char *games_dir)
     J.cover_px = NULL;
     SDL_AtomicSet(&J.cover_ready, 0);
     SDL_AtomicSet(&J.cover_none, 0);
+    SDL_AtomicSet(&J.dumping, 0);
     SDL_AtomicSet(&J.named, 0);
     SDL_AtomicSet(&J.permille, 0);
     SDL_AtomicSet(&J.bad, 0);
@@ -727,7 +734,7 @@ bool discimport_start(const char *games_dir)
 
 static struct
 {
-    SDL_atomic_t active, have, removed;
+    SDL_atomic_t active, have, removed, paused;
     DiscId pending;
     SDL_Thread *thread;
 } W;
@@ -770,9 +777,14 @@ static int watch_thread(void *unused)
     int gone[8] = {0}; /* polls in a row that found the drive empty after a disc */
     for (int u = 0; u < 8; ++u)
         need[u] = true; /* a disc already in when the app starts is news too */
+    bool first = true;
     for (;;)
     {
-        SDL_Delay(1200);
+        if (!first)
+            SDL_Delay(1200);
+        first = false; /* the first look is at once: a disc already in when the app opens starts without waiting */
+        if (SDL_AtomicGet(&W.paused))
+            continue; /* another program (the app, for the disc daemon) is looking at the drive */
         if (!cdscsi_trylock())
             continue; /* an import is running */
         cdscsi_set_quiet(true);
@@ -831,6 +843,7 @@ static int watch_thread(void *unused)
 
 void discwatch_set_active(bool active)
 {
+    SDL_AtomicSet(&W.active, active ? 1 : 0); /* before the thread exists: its first look at the drive counts */
     if (active && !W.thread)
     {
         W.thread = SDL_CreateThread(watch_thread, "disc-watch", NULL);
@@ -839,7 +852,11 @@ void discwatch_set_active(bool active)
         else
             W.thread = (SDL_Thread *)1; /* could not start: do not try every frame */
     }
-    SDL_AtomicSet(&W.active, active ? 1 : 0);
+}
+
+void discwatch_pause(bool paused)
+{
+    SDL_AtomicSet(&W.paused, paused ? 1 : 0);
 }
 
 int discwatch_removed(void)

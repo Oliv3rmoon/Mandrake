@@ -61,6 +61,8 @@ const char *discimport_serial(void);
 const char *discimport_key(void);
 struct PlatTexture;
 struct PlatTexture *discimport_cover(void);
+/* True once the disc is really being copied (it is named earlier, and may turn out to be installed already). */
+bool discimport_dumping(void);
 /* True once it is known that there is no cover for the disc (no serial, none online): show the shelf's own picture. */
 bool discimport_cover_none(void);
 
@@ -68,6 +70,9 @@ bool discimport_cover_none(void);
  * there before is read and reported once. discwatch_take() hands the report over (false when there is none). */
 void discwatch_set_active(bool active);
 bool discwatch_take(DiscId *out);
+/* While paused the watcher does not touch the drive at all (the disc daemon pauses it while the app is open, which
+ * watches the drive itself: two pollers would split the drive's "medium changed" notices between them). */
+void discwatch_pause(bool paused);
 /* How many times a disc was taken out of the drive since the app started (confirmed twice, so a drive that is
  * only busy does not count). It goes up while a game is running too. */
 int discwatch_removed(void);
