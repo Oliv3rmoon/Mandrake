@@ -817,6 +817,11 @@ static int watch_thread(void *unused)
             else if (ready > 0)
             {
                 gone[u] = 0;
+                /* ALLOW MEDIUM REMOVAL: if anyone (the system, when it recognised the disc) left the tray locked, the
+                 * drive's eject button does nothing; this frees it. Only while nothing is being installed: the watcher
+                 * does not poll then. */
+                static const uint8_t allow_removal[6] = {0x1e, 0, 0, 0, 0, 0};
+                cdscsi_cmd(&pass, allow_removal, 6, NULL, 0, 3000, NULL, NULL);
                 if (ready == 2) /* "the medium may have changed": the disc was swapped, even if the drive was never seen empty */
                 {
                     SDL_AtomicAdd(&W.removed, 1);
