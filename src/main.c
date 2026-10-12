@@ -1070,11 +1070,22 @@ static int disc_index_in_playlist(const Game *g, const char *key)
     return found;
 }
 
+/* The first game started in a session the disc daemon opened goes straight in: no animation, no click. Anything after
+ * that, or in a session the player opened, plays as usual. */
+static bool daemon_direct_boot(void)
+{
+    static bool used;
+    if (used || !opened_by_daemon || plat_ticks_us() - app_started_us > 90000000u)
+        return false;
+    used = true;
+    return true;
+}
+
 /* Starts the game on the disc that was put in */
 static void play_from_disc(int game, const char *key)
 {
     host_set_initial_disc(disc_index_in_playlist(&app.library.games[game], key));
-    if (!shelf_play_game(game))
+    if (!shelf_play_game(game, daemon_direct_boot()))
         SwanStationPS5_log("disc: the game could not be started from the shelf");
 }
 

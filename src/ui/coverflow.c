@@ -1292,8 +1292,8 @@ static void draw_launch_disc(int game, float d, float t)
 static bool start_black; /* the frame in which the game starts: all black, with the loading text */
 
 /* X on a game: offers Continue when it has a quick-resume save, else starts it. `ask` false (a disc put in the drive):
- * it starts at once, from the beginning, with no Continue box. */
-static void play_game(int game, bool ask)
+ * it starts from the beginning, with no Continue box. `silent`: without the click of the button press. */
+static void play_game(int game, bool ask, bool silent)
 {
     const Game *g = &app.library.games[game];
     S.details = false;
@@ -1315,7 +1315,7 @@ static void play_game(int game, bool ask)
         S.resume = false;
         S.launch_t = 0.0001f;
     }
-    if (ask) /* a disc put in starts the game without the click: nobody pressed a button */
+    if (!silent)
         sfx_play(SFX_SELECT);
 }
 
@@ -1324,7 +1324,7 @@ bool shelf_idle(void)
     return !S.dialog && S.launch_t <= 0.0f && !S.starting && !P.open;
 }
 
-bool shelf_play_game(int library_index)
+bool shelf_play_game(int library_index, bool direct)
 {
     if (library_index < 0 || library_index >= app.library.count || !shelf_idle())
         return false;
@@ -1340,10 +1340,13 @@ bool shelf_play_game(int library_index)
         SwanStationPS5_log("shelf: game %d cannot be shown in category %d", library_index, app.global.shelf_category);
         return false;
     }
-    play_game(library_index, false);
-    /* a disc is a request to play, not to watch the case open: the animation is skipped, so only its last frame
-     * (the "Loading your game..." one) is shown while the game loads */
-    S.launch_t = fmaxf(S.launch_t, launch_total() - 0.001f);
+    play_game(library_index, false, direct);
+    if (direct)
+    {
+        /* the disc daemon opened the app: nobody is watching the case open, so the animation is skipped and only its
+         * last frame (the "Loading your game..." one) is shown while the game loads */
+        S.launch_t = fmaxf(S.launch_t, launch_total() - 0.001f);
+    }
     return true;
 }
 
@@ -1519,7 +1522,7 @@ void shelf_screen(uint32_t pressed)
             sfx_play(SFX_BACK);
         }
         if ((pressed & BIT(BTN_CROSS)) && game >= 0)
-            play_game(game, true);
+            play_game(game, true, false);
         if ((pressed & BIT(BTN_SQUARE)) && S.details && game >= 0)
         {
             sfx_play(SFX_SELECT);
