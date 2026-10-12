@@ -52,6 +52,7 @@
 #define SIDE_YAW 0.45f   /* the jewel cases beside the selected one turn towards it (radians) */
 #define SIDE_SQUEEZE 1.0f /* the covers beside the selected one keep their width */
 #define LAUNCH_TIME 0.5f /* the fade to black */
+#define DELETE_HOLD 2.0f /* seconds Triangle is held in Details to delete the game's files */
 #define QUIT_HOLD 2.0f   /* seconds O is held on the shelf to close the app */
 #define DISC_TIME 0.95f  /* before it, with the disc animation: the disc slides out and spins up */
 #define CASE_DISC_TIME 2.4f /* the same with the 3D cases: the lid opens and the CD spins up on its tray */
@@ -79,7 +80,8 @@ static struct
     bool buzz_locked; /* it buzzed already: not again until the direction is let go (holding it auto-repeats) */
     float nudge, nudge_v; /* a knock to the left or right, as if the right stick had been flicked: on a spring */
     bool details;
-    float details_t, launch_t, quit_hold;
+    float details_t, launch_t, quit_hold, delete_hold;
+    bool delete_armed; /* Triangle was pressed with Details already open: not the press that opened it */
     bool starting; /* the launch is over: this frame shows "Loading", the next one loads */
     float chip_x, chip_w; /* animated category highlight */
     float tint[3];        /* animated background colour */
@@ -1447,10 +1449,42 @@ void shelf_screen(uint32_t pressed)
             memcards_open(SCREEN_LIBRARY);
             return;
         }
-        if (pressed & BIT(BTN_TRIANGLE) && game >= 0)
+        const bool details_was_open = S.details;
+        if ((pressed & BIT(BTN_TRIANGLE)) && game >= 0 && !S.details)
         {
-            S.details = !S.details;
-            sfx_play(S.details ? SFX_SELECT : SFX_BACK);
+            S.details = true;
+            sfx_play(SFX_SELECT);
+        }
+        /* in Details, holding Triangle deletes the game's files (to import the disc again); O closes Details */
+        {
+            const bool tri = (app.pads[app_nav_pad()].buttons & BIT(BTN_TRIANGLE)) != 0;
+            if (details_was_open && S.details && game >= 0 && (pressed & BIT(BTN_TRIANGLE)))
+            {
+                S.delete_armed = true;
+                app_toast("Hold {Triangle} to delete this game's files.");
+            }
+            if (S.details && game >= 0 && tri && S.delete_armed && !S.dialog)
+            {
+                S.delete_hold += app.dt;
+                if (S.delete_hold >= DELETE_HOLD)
+                {
+                    S.delete_hold = 0.0f;
+                    S.delete_armed = false;
+                    int removed = library_delete_game_files(&app.library.games[game]);
+                    if (removed)
+                        S.details = false; /* the game is gone; if nothing could be deleted, Details stays open */
+                    app_toast(removed ? "The game's files were deleted." : "The game's files could not be deleted.");
+                    if (removed)
+                        sfx_play(SFX_BACK);
+                    app_rescan(); /* always: the shelf shows what is on the disk now (an empty shelf, if it was the last) */
+                    return;
+                }
+            }
+            else if (!tri || !S.details)
+            {
+                S.delete_hold = 0.0f;
+                S.delete_armed = false;
+            }
         }
         if ((pressed & BIT(BTN_CIRCLE)) && S.details)
         {
@@ -1757,7 +1791,7 @@ void shelf_screen(uint32_t pressed)
     const int glyphs[] = {GLYPH_CROSS, GLYPH_TRIANGLE, GLYPH_SQUARE, GLYPH_L3,
                           GLYPH_R3, GLYPH_TOUCHPAD};
     GameStats *hint_st = game >= 0 ? stats_get(app.library.games[game].id) : NULL;
-    const char *const labels[] = {"Play", "Details", S.details ? "Choose a cover" : "Settings",
+    const char *const labels[] = {"Play", S.details ? "Delete (hold)" : "Details", S.details ? "Choose a cover" : "Settings",
                                   S.details ? (hint_st && hint_st->hidden ? "Unhide" : "Hide") : "Reload",
                                   "Favorite", "M.Card"};
     app_draw_hints(glyphs, labels, S.view_count ? (!S.details ? 6 : 4) : 1, NULL);
@@ -1838,6 +1872,17 @@ void shelf_screen(uint32_t pressed)
         if (loading > 0.0f)
             text_draw(CENTER_X, plat_height() - 120, 30, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, loading),
                       ALIGN_CENTER, tr("Loading your game..."));
+    }
+    if (S.delete_hold > 0.5f)
+    {
+        /* Triangle held in Details: a bar fills up to the deletion */
+        const char *msg = tr("Keep holding to delete this game's files...");
+        float w = text_width(26, FONT_REGULAR, msg) + 96, h = 84;
+        float x = (plat_width() - w) * 0.5f, y = plat_height() - 300;
+        draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
+        text_draw(CENTER_X, y + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
+        draw_rrect(x + 32, y + 56, w - 64, 12, 6, TH_DIVIDER);
+        draw_rrect(x + 32, y + 56, fmaxf(12.0f, (w - 64) * fminf(S.delete_hold / DELETE_HOLD, 1.0f)), 12, 6, TH_DANGER);
     }
     if (S.quit_hold > 0.5f)
     {

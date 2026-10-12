@@ -1032,7 +1032,7 @@ static bool import_input(uint32_t *pressed)
         if (was_pressed & BIT(BTN_CIRCLE))
         {
             armed = true;
-            app_toast("Hold {Circle} to cancel the import");
+            app_toast("Hold {Circle} to cancel the import.");
         }
         if (circle && armed)
         {
@@ -1076,7 +1076,7 @@ static bool import_input(uint32_t *pressed)
     if (s == DI_CANCELLED)
     {
         discimport_ack();
-        app_toast("Import cancelled");
+        app_toast("Import cancelled.");
         return true;
     }
     if (s != DI_OK && s != DI_OK_INCOMPLETE && s != DI_ALREADY)
@@ -1188,7 +1188,7 @@ void app_import_disc(void)
 {
     if (app.game)
     {
-        app_toast("Close the game to import a disc");
+        app_toast("Close the game to import a disc.");
         return;
     }
     auto_launch = false; /* from Settings: it only imports */

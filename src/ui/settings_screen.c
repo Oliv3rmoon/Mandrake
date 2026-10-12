@@ -1656,7 +1656,7 @@ static void activate(const Row *r)
     case SP_CDPROBE:
         sfx_play(SFX_SELECT);
         if (discprobe_start())
-            app_toast("Testing the CD drive: the result is in the log");
+            app_toast("Testing the CD drive: the result is in the log.");
         return;
     case SP_BIOS_START:
         sfx_play(SFX_SELECT);
