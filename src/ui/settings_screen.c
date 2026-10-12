@@ -116,7 +116,8 @@ static const __attribute__((unused)) char *const UPSCALE[] = {"Off", "2x", "3x",
 static const char *const FILTERS[] = {"Sharp pixels", "Smooth pixels (Scale2x)", "xBR (smoothest)"};
 static const char *const REGIONS[] = {"Auto", "NTSC (60 Hz)", "PAL (50 Hz)"};
 static const char *const PADS[] = {"Digital pad", "DualShock (analog)"};
-static const char *const COVER_STYLES[] = {"Flat", "3D box"};
+/* the pre-rendered 3D box covers are no longer used: the covers are always flat
+static const char *const COVER_STYLES[] = {"Flat", "3D box"}; */
 static const char *const SOUND_STYLES[] = {"Soft", "Wood", "Pop", "Chime", "Classic", "Off"};
 static const char *const VOLUMES[] = {"25%", "50%", "75%", "100%"};
 static const char *const VIBRATIONS[] = {"Off", "25%", "50%", "75%", "100%"};
@@ -262,8 +263,10 @@ static const Row ACHIEVEMENTS[] = {
 static const Row LIBRARY[] = {
     {"Shelf", "Theme", "The look of SwanStationPS5: colours, fonts and the shelf's background.", K_CHOICE, APPLY_NOW, SP_THEME,
      true, INT_FIELD(theme), THEME_NAMES, THEME_COUNT, 0},
+    /* the pre-rendered 3D box covers are no longer used: the covers are always flat
     {NULL, "Cover art", "Flat front covers, or 3D boxes.", K_CHOICE, APPLY_NOW, SP_NONE, true,
      INT_FIELD(cover_style), COVER_STYLES, 2, 0},
+    */
     {NULL, "Disc animation", "When a game starts, its disc slides out of the case and spins.", K_TOGGLE, APPLY_NOW,
      SP_NONE, true, BOOL_FIELD(disc_animation), OFF_ON, 2, 0},
     {NULL, "Download missing covers", "Fetches covers for new games over the internet.", K_TOGGLE,

@@ -168,7 +168,7 @@ enum StickDpad
 enum CoverStyle
 {
     COVER_FLAT = 0, /* front art, shown in perspective by SwanStationPS5 */
-    COVER_BOX3D,    /* pre-rendered 3D jewel case */
+    /* COVER_BOX3D,    pre-rendered 3D jewel case (no longer used) */
     COVER_STYLE_COUNT
 };
 

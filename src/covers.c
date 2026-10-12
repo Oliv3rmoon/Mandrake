@@ -76,16 +76,17 @@ static int downloading;
 
 void covers_url(char *out, size_t size, int cover_style, const char *serial)
 {
+    (void)cover_style;
     snprintf(out, size, "https://raw.githubusercontent.com/xlenore/psx-covers/main/covers/%s/%s.%s",
-             cover_style == COVER_BOX3D ? "3d" : "default", serial,
-             cover_style == COVER_BOX3D ? "png" : "jpg");
+             /* cover_style == COVER_BOX3D ? "3d" : */ "default", serial,
+             /* cover_style == COVER_BOX3D ? "png" : */ "jpg");
 }
 
 static void cache_path(char *out, size_t size, const char *serial)
 {
     char file[64];
-    snprintf(file, sizeof(file), "%s/%s.%s", style == COVER_BOX3D ? "3d" : "default", serial,
-             style == COVER_BOX3D ? "png" : "jpg");
+    snprintf(file, sizeof(file), "%s/%s.%s", /* style == COVER_BOX3D ? "3d" : */ "default", serial,
+             /* style == COVER_BOX3D ? "png" : */ "jpg");
     path_join(out, size, paths.covers, file);
 }
 

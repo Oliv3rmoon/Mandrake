@@ -51,7 +51,7 @@
 #define NUDGE_SPEED 4.2f /* the knock a left or right press gives the case, radians per second (a spring brings it back) */
 #define SIDE_YAW 0.45f   /* the jewel cases beside the selected one turn towards it (radians) */
 #define SIDE_SQUEEZE 1.0f /* the covers beside the selected one keep their width */
-#define LAUNCH_TIME 0.3f /* the fade to black */
+#define LAUNCH_TIME 0.5f /* the fade to black */
 #define QUIT_HOLD 2.0f   /* seconds O is held on the shelf to close the app */
 #define DISC_TIME 0.95f  /* before it, with the disc animation: the disc slides out and spins up */
 #define CASE_DISC_TIME 2.4f /* the same with the 3D cases: the lid opens and the CD spins up on its tray */
@@ -480,7 +480,7 @@ static void draw_cover_reflection(PlatTexture *tex, float x, float y, float w, f
 static bool shelf_cases(void)
 {
     return plat_gpu_ui_active() && theme.layout != LAYOUT_GRID && theme.layout != LAYOUT_SPINES &&
-           app.global.cover_style == COVER_FLAT && case3d_available();
+           /* app.global.cover_style == COVER_FLAT && */ case3d_available();
 }
 
 static void draw_case(PlatTexture *tex, const Game *g, float cx, float cy, float h, float yaw, float pitch,
@@ -520,7 +520,7 @@ static void draw_cover(PlatTexture *tex, const Game *g, float cx, float cy, floa
     }
     if (tex) /* flat covers are opaque: a plain copy is much cheaper than blending */
     {
-        plat_draw_texture(tex, x, y, w, h, tint, app.global.cover_style == COVER_BOX3D);
+        plat_draw_texture(tex, x, y, w, h, tint, false /* app.global.cover_style == COVER_BOX3D */);
         if (reflections_on()) /* every cover, with the GPU interface only */
             draw_cover_reflection(tex, x, y, w, h, tint);
     }
@@ -1363,6 +1363,8 @@ static bool slideshow(uint32_t pressed)
     return true;
 }
 
+static bool start_black; /* the frame in which the game starts: all black, with the loading text */
+
 void shelf_screen(uint32_t pressed)
 {
     if (app.storage_error[0])
@@ -1630,7 +1632,7 @@ void shelf_screen(uint32_t pressed)
             lift = 0.0f;
         else
             push = 0.0f;
-        if (S.dialog || S.details || P.open || S.launch_t > 0.0f || !shelf_cases() || moving)
+        if (S.dialog || P.open || S.launch_t > 0.0f || !shelf_cases() || moving)
             push = lift = 0.0f;
         /* with the left stick in use the right one is ignored, and what it had turned goes back fast: the knock of a press
          * is a way of its own, never mixed with a tilt */
@@ -1649,6 +1651,7 @@ void shelf_screen(uint32_t pressed)
         /* the last frame (disc and "Loading") stays on screen while the game loads */
         S.starting = false;
         S.launch_t = 0.0f;
+        start_black = true; /* this frame is still drawn: black, not the shelf for a moment */
         config_save(&app.global, app.paths.config);
         app_start_game(game, S.resume);
     }
@@ -1695,6 +1698,9 @@ void shelf_screen(uint32_t pressed)
         int first = (int)floorf(S.pos) - 6, last = (int)ceilf(S.pos) + 6;
         const int base = (int)floorf(S.pos + 0.5f);
         const bool cases_ = shelf_cases();
+        /* with the details panel open the other covers fade away and the chosen one slides to the left, clear of the panel */
+        const float det = 1.0f - (1.0f - S.details_t) * (1.0f - S.details_t);
+        const float det_shift = det * ((plat_width() - 668.0f) * 0.5f - CENTER_X);
         /* where the cover at (ring, side) stands: its centre, scale, width and the shade it is drawn with */
         struct Place
         {
@@ -1752,6 +1758,13 @@ void shelf_screen(uint32_t pressed)
                     continue;
                 bool selected = k == S.cursor;
                 bool clipped = false;
+                if (!selected && det > 0.0f)
+                {
+                    const uint32_t a = (uint32_t)(255.0f * (1.0f - det));
+                    if (a == 0)
+                        continue;
+                    me.tint = (me.tint & 0x00ffffffu) | (a << 24);
+                }
                 if (ring > 0)
                 {
                     struct Place nearer;
@@ -1777,18 +1790,19 @@ void shelf_screen(uint32_t pressed)
                     case3d_launch(o * o * (3.0f - 2.0f * o), 7.0f * u * u);
                 }
                 if (cases_)
-                    draw_case(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox, flow_y(),
+                    draw_case(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox + (selected ? det_shift : 0.0f), flow_y(),
                               COVER_H * me.scale, me.yaw, me.pitch, me.tint, selected && me.ad < 0.25f && launch < 0.5f);
                 else
-                    draw_cover(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox, flow_y(),
+                    draw_cover(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox + (selected ? det_shift : 0.0f), flow_y(),
                                COVER_H * me.scale, me.squeeze, me.tint, selected && me.ad < 0.25f && launch < 0.5f);
                 if (clipped)
                     plat_set_clip(0, 0, 0, 0);
             }
         #undef PLACE
         plat_profile("covers");
-        float text_a = (1.0f - launch) * (1.0f - S.title_fade / 0.35f * 0.8f);
-        draw_info(&app.library.games[game], text_a);
+        float text_a = (1.0f - launch) * (1.0f - S.title_fade / 0.35f * 0.8f) * (1.0f - det);
+        if (text_a > 0.0f) /* the title and the tags go while the details panel is open */
+            draw_info(&app.library.games[game], text_a);
         draw_details(&app.library.games[game], S.details_t);
         plat_profile("info");
     }
@@ -1892,14 +1906,20 @@ void shelf_screen(uint32_t pressed)
     }
 
     picker_draw();
+    if (start_black)
+    {
+        start_black = false;
+        draw_rect(0, 0, plat_width(), plat_height(), 0xff000000u);
+        text_draw(CENTER_X, plat_height() - 120, 30, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, tr("Loading your game..."));
+    }
     if (S.launch_t > 0.0f)
     {
         bool disc = app.global.disc_animation && game >= 0;
         /* with the disc, the shelf darkens behind it and the disc keeps spinning
          * while the game loads (no black gap); without it, a fade to black */
-        /* the 3D cases don't darken at all: the CD spins in the light until the game starts, with no fade to black */
-        if (!(disc && shelf_cases()))
-            draw_rect(0, 0, plat_width(), plat_height(), argb_alpha(0xff000000u, disc ? launch * 0.85f : launch));
+        /* the 3D cases keep the light on while the CD spins, then the whole screen fades to black before the game starts */
+        draw_rect(0, 0, plat_width(), plat_height(),
+                  argb_alpha(0xff000000u, disc && !shelf_cases() ? launch * 0.85f : launch));
         if (disc && !shelf_cases()) /* the 3D cases bring their own CD out */
             draw_launch_disc(game, fminf(S.launch_t / DISC_TIME, 1.0f), S.launch_t);
         /* with the 3D cases the text is there from the moment the case opens; otherwise it comes with the final fade */

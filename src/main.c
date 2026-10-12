@@ -1622,6 +1622,7 @@ int main(void)
     if (!app.storage_error[0])
         app_rescan();
     shelf_select_game(app.global.last_game);
+    SwanStationPS5_log("build: %s %s", __DATE__, __TIME__);
     plat_notify("SwanStationPS5 ready");
 
     bool quit = false;
