@@ -820,6 +820,65 @@ static void draw_disc_cover(PlatTexture *cover, uint32_t tint, float cx, float c
     plat_draw_mesh(cover, tris, n, NULL, 0);
 }
 
+/* The CD's metallic shine over its (paper-like) light: a specular highlight where the light bounces to the camera, a little
+ * stronger along the light's own axis (the tracks are brushed metal). Blended white (there is no additive blending); the
+ * highlight stays where the light puts it, the disc spinning does not move it. */
+#define GLOSS_ALPHA 0.30f /* the highlight at its brightest: the share of white over the disc */
+
+static void draw_disc_gloss(uint32_t tint, float cx, float cy, float scale)
+{
+    enum { SEG = 72, RINGS = 5 };
+    const uint32_t tint_a = tint >> 24;
+    if (tint_a == 0)
+        return;
+    float nx, ny, nz;
+    turn_point(0.0f, 0.0f, 1.0f, &nx, &ny, &nz);
+    const float lx = (LIGHT_SCREEN_X - draw_cx) / draw_scale, ly = LIGHT_HEIGHT, lz = LIGHT_DEPTH;
+    float ccx, ccy, ccz;
+    turn_point(DISC_CX, DISC_CY, DISC_TOP_Z, &ccx, &ccy, &ccz);
+    const float light_angle = atan2f(ly - ccy, lx - ccx);
+    static PlatVertex ring[RINGS][SEG + 1], tris[SEG * (RINGS - 1) * 6];
+    for (int i = 0; i <= SEG; ++i)
+    {
+        const float a = 6.2831853f * (float)i / SEG;
+        /* brushed: brighter along the light's axis than across it */
+        const float along = 0.7f + 0.3f * cosf(2.0f * (a - light_angle));
+        for (int r = 0; r < RINGS; ++r)
+        {
+            const float rad = DISC_HUB + (DISC_R - 0.3f - DISC_HUB) * (float)r / (RINGS - 1);
+            const float x = DISC_CX + cosf(a) * rad, y = DISC_CY + sinf(a) * rad;
+            float px, py, pz;
+            turn_point(x, y, DISC_TOP_Z - 0.012f, &px, &py, &pz);
+            const float persp = VIEW_DISTANCE / (VIEW_DISTANCE - pz);
+            /* half-way between the light and the camera */
+            float hx = (lx - px) / 1.0f, hy = ly - py, hz = lz - pz;
+            const float hl = sqrtf(hx * hx + hy * hy + hz * hz);
+            hx /= hl, hy /= hl, hz /= hl;
+            float vx = -px, vy = -py, vz = VIEW_DISTANCE - pz;
+            const float vl = sqrtf(vx * vx + vy * vy + vz * vz);
+            hx += vx / vl, hy += vy / vl, hz += vz / vl;
+            const float h2 = sqrtf(hx * hx + hy * hy + hz * hz);
+            const float nh = h2 > 1e-6f ? fmaxf((nx * hx + ny * hy + nz * hz) / h2, 0.0f) : 0.0f;
+            float k = powf(nh, 14.0f) * along * GLOSS_ALPHA;
+            k = k > GLOSS_ALPHA ? GLOSS_ALPHA : k;
+            const uint32_t ca = (uint32_t)(255.0f * k * tint_a / 255.0f);
+            ring[r][i] = (PlatVertex){cx + px * scale * persp, cy - py * scale * persp, 0.0f, 0.0f, ca << 24 | 0xffffffu};
+        }
+    }
+    int n = 0;
+    for (int i = 0; i < SEG; ++i)
+        for (int r = 0; r < RINGS - 1; ++r)
+        {
+            tris[n++] = ring[r][i];
+            tris[n++] = ring[r + 1][i];
+            tris[n++] = ring[r + 1][i + 1];
+            tris[n++] = ring[r][i];
+            tris[n++] = ring[r + 1][i + 1];
+            tris[n++] = ring[r][i + 1];
+        }
+    plat_draw_mesh(NULL, tris, n, NULL, 0);
+}
+
 #if 0 /* the disc shader (rainbow spokes), taken out */
 /* hue 0..1 (full saturation, a little washed out towards white) to RGB bytes */
 static uint32_t rainbow(float hue)
@@ -905,6 +964,7 @@ static void draw_disc(const Pt *pts, PlatTexture *cover, uint32_t tint, float cx
 {
     draw_part(PART_DISC_BOTTOM, pts, cover, tint, NULL);
     draw_disc_cover(cover, tint, cx, cy, scale);
+    draw_disc_gloss(tint, cx, cy, scale);
     draw_part(PART_DISC_TOP, pts, cover, tint, NULL);
 }
 
