@@ -7,9 +7,6 @@ name: Build RADV (Vulkan driver)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [v2-vulkan]
-    paths: ['.github/workflows/radv.yml']
 
 permissions:
   contents: read
