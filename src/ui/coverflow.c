@@ -537,6 +537,36 @@ static void draw_cover(PlatTexture *tex, const Game *g, float cx, float cy, floa
         draw_ach_badge(g, x + w, y + h, 20);
 }
 
+/* One sentence in at most two lines of width `maxw`: broken at a space or after a Japanese full stop, as late as fits.
+ * Returns how many lines (1 or 2); `b` is empty for one. */
+static int split_two_lines(float size, int weight, float maxw, const char *s, char *a, char *b, size_t n)
+{
+    str_copy(a, n, s);
+    b[0] = '\0';
+    if (text_width(size, weight, s) <= maxw)
+        return 1;
+    size_t best = 0, len = strlen(s);
+    char probe[256];
+    for (size_t i = 1; i < len && i < sizeof(probe) - 1; ++i)
+    {
+        bool at_space = s[i] == ' ';
+        bool after_stop = i >= 3 && (unsigned char)s[i - 3] == 0xe3 && (unsigned char)s[i - 2] == 0x80 &&
+                          (unsigned char)s[i - 1] == 0x82; /* the Japanese full stop */
+        if (!at_space && !after_stop)
+            continue;
+        memcpy(probe, s, i);
+        probe[i] = '\0';
+        if (text_width(size, weight, probe) <= maxw)
+            best = i;
+    }
+    if (!best)
+        return 1;
+    memcpy(a, s, best);
+    a[best] = '\0';
+    str_copy(b, n, s + best + (s[best] == ' ' ? 1 : 0));
+    return 2;
+}
+
 static void draw_details(const Game *g, float t)
 {
     if (t <= 0.0f)
@@ -1740,7 +1770,13 @@ void shelf_screen(uint32_t pressed)
     }
     else
     {
-        float w = 1200, h = 330, x = CENTER_X - w * 0.5f, y = 300;
+        float w = 1200, x = CENTER_X - w * 0.5f, y = 300;
+        /* the line about discs closes the card, a little bigger than the rest; two lines if it does not fit in one */
+        char tip1[256], tip2[256];
+        const int tip_lines = split_two_lines(28, FONT_REGULAR, w - 100,
+                                              tr("You can also plug in a USB disc drive and put in your own PS1 discs: they are copied to your shelf."),
+                                              tip1, tip2, sizeof(tip1));
+        float h = (app.sandboxed ? 396 : 374) + (tip_lines - 1) * 38;
         draw_rrect(x, y, w, h, TH_RADIUS, TH_CARD_SOFT);
         icon_draw(ICON_DISC, CENTER_X - 32, y + 30, 64, TH_FOCUS);
         text_draw(CENTER_X, y + 108, 36, FONT_BOLD, TH_TEXT, ALIGN_CENTER, tr("Your shelf is empty"));
@@ -1764,6 +1800,11 @@ void shelf_screen(uint32_t pressed)
         else
             text_draw(CENTER_X, y + 274, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER,
                       tr("On your PC:  python tools/SwanStationPS5_sync.py upload --host <PS5 IP>"));
+        /* and the other way, last: your own discs */
+        const float tip_y = y + (app.sandboxed ? 330 : 310);
+        text_draw_fit(CENTER_X, tip_y, 28, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, w - 80, tip1);
+        if (tip_lines > 1)
+            text_draw_fit(CENTER_X, tip_y + 38, 28, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, w - 80, tip2);
     }
 
     draw_header();

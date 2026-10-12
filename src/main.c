@@ -145,7 +145,13 @@ static float toast_runs(const char *s, float x, float y, float a, bool draw)
     return x - start;
 }
 
+/* The screens call app_draw_toast() as they always did; it draws nothing there: the main loop draws the toast once,
+ * after everything (the import card, the boxes), so it is never behind one. */
 void app_draw_toast(void)
+{
+}
+
+static void toast_render(void)
 {
     uint64_t now = plat_ticks_us();
     if (toast_queued && (!toast[0] || now > toast_until))
@@ -1138,39 +1144,40 @@ static void import_draw(void)
 {
     if (discimport_state() != DI_RUNNING)
         return;
-    const char *msg = tr("Importing the disc... do not remove it");
     const char *title = discimport_title();
+    char msg[200];
+    if (title[0])
+        snprintf(msg, sizeof(msg), tr("Installing %s..."), title);
+    else
+        str_copy(msg, sizeof(msg), tr("Installing..."));
     PlatTexture *cover = (PlatTexture *)discimport_cover();
-    bool slot = title[0] != '\0'; /* the cover's place is kept from the moment the disc is known */
-    float ch = 200, cw = ch;
-    float text_w = fmaxf(text_width(26, FONT_REGULAR, msg), text_width(26, FONT_REGULAR, title)) + 120;
-    float w = text_w + (slot ? cw + 32 : 0) + 64, h = slot ? ch + 64 : 124;
+    /* a fixed size, so the card does not change while the disc is identified and the cover arrives */
+    const float ch = 200, cw = ch, text_w = 760;
+    float w = text_w + cw + 32 + 64, h = ch + 64;
     float x = (plat_width() - w) * 0.5f, y = plat_height() - h - 140;
     float p = discimport_permille() / 1000.0f;
     char pct[16];
     snprintf(pct, sizeof(pct), "%d%%", discimport_permille() / 10);
     draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
-    float tx = x + 32;
-    if (slot)
+    draw_rrect(x + 32, y + 32, cw, ch, TH_RADIUS_SMALL, TH_DIVIDER);
+    if (cover)
     {
-        draw_rrect(x + 32, y + 32, cw, ch, TH_RADIUS_SMALL, TH_DIVIDER);
-        if (cover)
-        {
-            int tw, th;
-            plat_texture_size(cover, &tw, &th);
-            float k = fminf(cw / (float)tw, ch / (float)th), dw = tw * k, dh = th * k;
-            plat_draw_texture(cover, x + 32 + (cw - dw) * 0.5f, y + 32 + (ch - dh) * 0.5f, dw, dh, 0xffffffffu, true);
-        }
-        tx = x + 32 + cw + 32;
+        int tw, th;
+        plat_texture_size(cover, &tw, &th);
+        float k = fminf(cw / (float)tw, ch / (float)th), dw = tw * k, dh = th * k;
+        plat_draw_texture(cover, x + 32 + (cw - dw) * 0.5f, y + 32 + (ch - dh) * 0.5f, dw, dh, 0xffffffffu, true);
     }
-    float tw_area = x + w - 32 - tx, mid = tx + tw_area * 0.5f, ty = y + (h - 124) * 0.5f;
-    text_draw(mid, ty + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
-    if (title[0])
-        text_draw(mid, ty + 46, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, title);
+    const float tx = x + 32 + cw + 32, tw_area = x + w - 32 - tx;
+    text_draw_fit(tx, y + 44, 30, FONT_BOLD, TH_TEXT, ALIGN_LEFT, tw_area, msg);
     float bar_w = tw_area - 90;
-    draw_rrect(tx, ty + 92, bar_w, 12, 6, TH_DIVIDER);
-    draw_rrect(tx, ty + 92, fmaxf(12.0f, bar_w * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
-    text_draw(tx + tw_area, ty + 82, 26, FONT_REGULAR, TH_TEXT, ALIGN_RIGHT, pct);
+    draw_rrect(tx, y + 108, bar_w, 12, 6, TH_DIVIDER);
+    draw_rrect(tx, y + 108, fmaxf(12.0f, bar_w * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
+    text_draw(tx + tw_area, y + 94, 26, FONT_REGULAR, TH_TEXT, ALIGN_RIGHT, pct);
+    /* bottom right: how to cancel */
+    const char *cancel = tr("Cancel (hold)");
+    const float cancel_w = text_width(22, FONT_REGULAR, cancel);
+    text_draw(x + w - 32, y + h - 58, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_RIGHT, cancel);
+    draw_pad_glyph(GLYPH_CIRCLE, x + w - 32 - cancel_w - 26, y + h - 46, 28);
     if (cancel_hold > 0.3f)
     {
         /* O held: a bar fills up to the cancel, as when closing the app */
@@ -2000,6 +2007,7 @@ int main(void)
         import_draw();
         message_box_draw();
         question_draw();
+        toast_render();
         plat_end_frame();
     }
 
