@@ -61,6 +61,8 @@ const char *discimport_serial(void);
 const char *discimport_key(void);
 struct PlatTexture;
 struct PlatTexture *discimport_cover(void);
+/* How many sectors the copy has (0 until it begins). */
+int discimport_total_sectors(void);
 /* True once the disc is really being copied (it is named earlier, and may turn out to be installed already). */
 bool discimport_dumping(void);
 /* True once it is known that there is no cover for the disc (no serial, none online): show the shelf's own picture. */

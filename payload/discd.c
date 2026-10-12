@@ -16,6 +16,7 @@
 
 #include <dlfcn.h>
 #include <errno.h>
+#include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -57,6 +58,7 @@ enum Msg
     M_READY,
     M_INSTALLING,
     M_PROGRESS,
+    M_PROGRESS_ETA,
     M_INSTALLED,
     M_INSTALLED_BAD,
     M_ALREADY,
@@ -82,6 +84,10 @@ static const char *const TEXT[M_COUNT][5] = {
                       "%s をインストール中..."},
     [M_PROGRESS] = {"Installing %s: %d%%", "Installation de %s : %d%%", "A instalar %s: %d%%",
                     "Instalando %s: %d%%", "%s をインストール中: %d%%"},
+    /* title, percent, time left ("5 min 30 s") */
+    [M_PROGRESS_ETA] = {"Installing %s: %d%% - %s left...", "Installation de %s : %d%% - %s restant...",
+                        "A instalar %s: %d%% - %s restantes...", "Instalando %s: %d%% - %s restantes...",
+                        "%s をインストール中: %d%% - 残り %s..."},
     [M_INSTALLED] = {"%s is installed.", "%s est installé.", "%s está instalado.", "%s está instalado.",
                      "%s のインストールが完了しました。"},
     [M_INSTALLED_BAD] = {"%s is installed with %d unreadable sectors.",
@@ -191,6 +197,81 @@ static void notify(enum Msg m, ...)
     va_end(ap);
     int rc = sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
     say("notification (rc %d): %s", rc, req.message);
+}
+
+/* "5 min 30 s" (Japanese: "5分30秒"), rounded to 5 seconds */
+static void format_left(char *out, size_t size, long seconds)
+{
+    seconds = (seconds + 2) / 5 * 5;
+    if (seconds < 5)
+        seconds = 5;
+    long m = seconds / 60, sec = seconds % 60;
+    if (language == 4)
+    {
+        if (m)
+            snprintf(out, size, "%ld分%ld秒", m, sec);
+        else
+            snprintf(out, size, "%ld秒", sec);
+    }
+    else if (m)
+        snprintf(out, size, "%ld min %ld s", m, sec);
+    else
+        snprintf(out, size, "%ld s", sec);
+}
+
+/* The time left, from the speed just measured and the shape of a CD. A CD spins at fixed revolutions and its sectors
+ * run in a spiral of constant density, so the read speed at any point goes with the radius there, and the radius
+ * with how many sectors came before it: r(f)^2 = rin^2 + K f, f the fraction done. With the speed measured over the
+ * last stretch (at the stretch's middle), the rest takes (N r_mid / v) * (2 / K) * (r(1) - r(now)).
+ * A drive that does not speed up towards the edge gets the plain "same speed from here" estimate instead. */
+#define CD_R_IN 24.0f    /* mm, where the data starts */
+#define CD_R_OUT 58.0f   /* mm, the largest it gets */
+#define CD_CAPACITY 333000.0 /* sectors of a 74 minute disc, at that largest radius */
+
+typedef struct
+{
+    double prev_f;      /* where the last notification was (fraction), and when */
+    double prev_time;
+    double prev_rate;   /* the speed of that stretch, sectors/s, and the radius at its middle */
+    double prev_rmid;
+} Eta;
+
+static double cd_radius(double k, double f)
+{
+    return sqrt((double)CD_R_IN * CD_R_IN + k * f);
+}
+
+/* seconds left, or < 0 when there is nothing to base it on */
+static long eta_left(Eta *e, double f_now, double now, int total)
+{
+    long left = -1;
+    if (total > 0 && f_now > e->prev_f && now > e->prev_time && f_now < 1.0)
+    {
+        double dt = now - e->prev_time, rate = total * (f_now - e->prev_f) / dt;
+        double plain = (1.0 - f_now) * dt / (f_now - e->prev_f); /* the same speed for the rest */
+        double k = (total / CD_CAPACITY) * ((double)CD_R_OUT * CD_R_OUT - (double)CD_R_IN * CD_R_IN);
+        double rmid = cd_radius(k, (e->prev_f + f_now) * 0.5);
+        double modelled = (total * rmid / rate) * (2.0 / k) * (cd_radius(k, 1.0) - cd_radius(k, f_now));
+        /* does this drive speed up the way the model says? at least half of the speed-up the model expects between
+         * the two stretches (the noise of one stretch is a percent or two, the model's step is a few) */
+        bool speeds_up = true;
+        if (e->prev_rate > 0.0 && e->prev_rmid > 0.0)
+            speeds_up = rate / e->prev_rate >= 1.0 + 0.5 * (rmid / e->prev_rmid - 1.0);
+        double best = speeds_up && modelled > 0.0 && modelled < 3.0 * plain ? modelled : plain;
+        left = (long)best;
+        e->prev_rate = rate;
+        e->prev_rmid = rmid;
+    }
+    e->prev_f = f_now;
+    e->prev_time = now;
+    return left;
+}
+
+static double now_seconds(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
 /* ------------------------------------------------------------------ the app: alive, and started */
@@ -327,6 +408,7 @@ static void handle_disc(const DiscId *id)
     }
     bool announced = false;
     int next_step = kProgressStep;
+    Eta eta = {0};
     char title[96] = "";
     while (discimport_state() == DI_RUNNING)
     {
@@ -338,12 +420,21 @@ static void handle_disc(const DiscId *id)
         {
             announced = true;
             str_copy(title, sizeof(title), discimport_title());
+            eta.prev_time = now_seconds();
             notify(M_INSTALLING, title);
         }
         int pct = discimport_permille() / 10;
         if (announced && pct >= next_step)
         {
-            notify(M_PROGRESS, title, pct);
+            long left = eta_left(&eta, discimport_permille() / 1000.0, now_seconds(), discimport_total_sectors());
+            if (left >= 0)
+            {
+                char when[40];
+                format_left(when, sizeof(when), left);
+                notify(M_PROGRESS_ETA, title, pct, when);
+            }
+            else
+                notify(M_PROGRESS, title, pct);
             while (next_step <= pct)
                 next_step += kProgressStep;
         }

@@ -43,7 +43,7 @@ typedef struct
 
 static struct
 {
-    SDL_atomic_t state, permille, named, bad, abort, alive, last_change, dumping;
+    SDL_atomic_t state, permille, named, bad, abort, alive, last_change, dumping, total;
     char games[SwanStationPS5_PATH_MAX];
     char title[96], serial[16], key[24];
     uint8_t *cover_px;
@@ -76,6 +76,11 @@ void discimport_ack(void)
 const char *discimport_serial(void)
 {
     return SDL_AtomicGet(&J.named) ? J.serial : "";
+}
+
+int discimport_total_sectors(void)
+{
+    return SDL_AtomicGet(&J.total);
 }
 
 bool discimport_dumping(void)
@@ -518,6 +523,7 @@ static void import_run(void)
 
     /* the dump */
     SDL_AtomicSet(&J.dumping, 1); /* only now is it a copy: not for a game that was already there */
+    SDL_AtomicSet(&J.total, (int)(leadout - tracks[0].lba));
     DiscImportState result = DI_OK;
     FILE *fb = fopen(bin_part, "wb"), *fc = fopen(cue_part, "wb");
     uint32_t first = tracks[0].lba, total = leadout - first, done = 0, bad = 0;
