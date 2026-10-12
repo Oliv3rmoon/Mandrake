@@ -1268,8 +1268,6 @@ static const Entry ENTRIES[] = {
       "%d分プレイ中"}},
     {{"Playing for %d h %02d", "En jeu depuis %d h %02d", "A jogar há %d h %02d", "Jugando desde hace %d h %02d",
       "%d時間%02d分プレイ中"}},
-    {{"Press any button", "Appuyez sur un bouton", "Prima um botão", "Presiona cualquier botón",
-      "いずれかのボタンを押してください"}},
     {{"Your profile", "Votre profil", "O seu perfil", "Tu perfil",
       "あなたのプロフィール"}},
     {{"Your points, games mastered, what you unlocked lately and the games closest to mastery.", "Vos points, jeux maîtrisés, vos derniers déblocages et les jeux les plus proches de la maîtrise.", "Os seus pontos, jogos dominados, o que desbloqueou recentemente e os jogos mais perto de dominar.", "Tus puntos, juegos dominados, lo último que desbloqueaste y los juegos más cerca de dominar.",

@@ -39,6 +39,13 @@ void cdscsi_unlock(void)
     SDL_UnlockMutex(the_mutex());
 }
 
+static bool quiet_mode;
+
+void cdscsi_set_quiet(bool quiet)
+{
+    quiet_mode = quiet; /* only changed while holding the drive lock */
+}
+
 #if defined(__PROSPERO__)
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -48,7 +55,7 @@ void cdscsi_unlock(void)
 #include <cam/scsi/scsi_message.h>
 #include <cam/scsi/scsi_pass.h>
 
-#define P(...) SwanStationPS5_log("cdscsi: " __VA_ARGS__)
+#define P(...) (quiet_mode ? (void)0 : SwanStationPS5_log("cdscsi: " __VA_ARGS__))
 
 static int run(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len, uint32_t timeout_ms,
                uint32_t *sense, uint32_t *got, bool out)

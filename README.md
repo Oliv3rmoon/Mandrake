@@ -54,7 +54,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 - **Adaptive triggers.** R2 feels like a gas pedal in racing games, and R2 / L2 can be the gas and brake.
 - **Profiles.** Each person keeps their own memory cards, save states, settings, play time and RetroAchievements sign-in.
 - **Text guides and manuals.** Read a walkthrough `.txt` or a manual's pages from the in-game menu.
-- **Game art.** Title screens and gameplay pictures in Details, the game's own artwork around the picture, and an idle slideshow.
+- **Game art.** Title screens and gameplay pictures in Details, and the game's own artwork around the picture.
 - **Quick resume.** Leave a game and pick it up later: the shelf offers *Continue* (with a picture of where you were) or *Start over*.
 - **Rewind and fast forward.** Hold the touchpad and press L2 to go back a few seconds, or R2 to speed through cutscenes.
 - **Save states with pictures.** Ten slots per game, each showing a thumbnail and how long ago it was saved.

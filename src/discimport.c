@@ -371,7 +371,7 @@ static void import_run(void)
     {
         P("no ISO 9660 volume at sector 16 (sense %06x)", sense);
         cdscsi_close(&pass);
-        finish(sense == CDSENSE_NO_MEDIUM ? DI_DRIVE_LOST : DI_NOT_PS1);
+        finish(CDSENSE_IS_NO_MEDIUM(sense) ? DI_DRIVE_LOST : DI_NOT_PS1);
         return;
     }
     const char *serial = id.serial, *label = id.label, *title = id.title;
@@ -458,7 +458,7 @@ static void import_run(void)
             {
                 int rc = read_cd(&pass, lba, n, flags, raw, &sense);
                 ok = rc == 0;
-                if (rc == -2 || (rc == -3 && sense == CDSENSE_NO_MEDIUM))
+                if (rc == -2 || (rc == -3 && CDSENSE_IS_NO_MEDIUM(sense)))
                 {
                     P("the disc or the drive is gone at LBA %u", lba);
                     result = DI_DRIVE_LOST;
@@ -508,7 +508,7 @@ static void import_run(void)
                         SDL_AtomicSet(&J.bad, (int)++bad);
                         if (bad > MAX_BAD)
                             result = DI_UNREADABLE;
-                        if ((sense >> 16) != 3 && sense == CDSENSE_NO_MEDIUM)
+                        if (CDSENSE_IS_NO_MEDIUM(sense))
                             result = DI_DRIVE_LOST;
                     }
                     SDL_AtomicSet(&J.permille, (int)((uint64_t)(done + i) * 1000 / total));
@@ -627,7 +627,7 @@ static int unit_ready(const CdPass *pass)
         return 1;
     if ((sense >> 16) == 6) /* unit attention: the medium may have changed; ask again */
         return cdscsi_cmd(pass, tur, 6, NULL, 0, 3000, &sense, NULL) == 0 ? 2 : 0;
-    return sense == CDSENSE_NO_MEDIUM ? -1 : 0;
+    return CDSENSE_IS_NO_MEDIUM(sense) ? -1 : 0;
 }
 
 /* Reads who the disc in `pass` is, as a PS1 game would be; false if it is not one. */
@@ -659,6 +659,7 @@ static int watch_thread(void *unused)
         SDL_Delay(1200);
         if (!cdscsi_trylock())
             continue; /* an import is running */
+        cdscsi_set_quiet(true);
         for (unsigned u = 0; u < 8; ++u)
         {
             char dev[24];
@@ -682,6 +683,11 @@ static int watch_thread(void *unused)
             else if (ready > 0)
             {
                 gone[u] = 0;
+                if (ready == 2) /* "the medium may have changed": the disc was swapped, even if the drive was never seen empty */
+                {
+                    SDL_AtomicAdd(&W.removed, 1);
+                    P("watch: the disc in cd%u was changed", u);
+                }
                 if (!was_ready[u] || ready == 2)
                     need[u] = true;
                 was_ready[u] = true;
@@ -701,6 +707,7 @@ static int watch_thread(void *unused)
             }
             cdscsi_close(&pass);
         }
+        cdscsi_set_quiet(false);
         cdscsi_unlock();
     }
     return 0;

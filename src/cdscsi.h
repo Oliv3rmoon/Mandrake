@@ -35,8 +35,11 @@ int cdscsi_cmd_out(const CdPass *pass, const uint8_t *cdb, int cdb_len, void *bu
 void cdscsi_lock(void);
 bool cdscsi_trylock(void);
 void cdscsi_unlock(void);
+/* While quiet, nothing is written to the log (the insert watcher polls every second). */
+void cdscsi_set_quiet(bool quiet);
 
-#define CDSENSE_NO_MEDIUM 0x023a00 /* no disc in the drive */
+#define CDSENSE_NO_MEDIUM 0x023a00 /* no disc in the drive (the last byte says more: 02/3A/01 and /02 are the tray) */
+#define CDSENSE_IS_NO_MEDIUM(s) (((s) >> 8) == 0x023a)
 #define CDSENSE_BECOMING_READY 0x020400
 
 #endif

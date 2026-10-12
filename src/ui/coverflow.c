@@ -258,7 +258,6 @@ void shelf_init(int last_game)
     S.last_cursor_game = last_game;
     app.global.shelf_category = CAT_ALL; /* always starts on All, not on the category it was closed on */
     app.settings.shelf_category = CAT_ALL;
-    srand((unsigned)time(NULL)); /* the screensaver slideshow */
     S.tint[0] = 0x3a / 255.0f;
     S.tint[1] = 0x50 / 255.0f;
     S.tint[2] = 0xc8 / 255.0f;
@@ -1249,120 +1248,6 @@ static void draw_launch_disc(int game, float d, float t)
     plat_set_clip(0, 0, 0, 0);
 }
 
-/* ---------------------------------------------------------------- idle slideshow */
-
-/* After a minute without a button on the shelf: the library's games one by
- * one, full screen (a gameplay picture when there is one, else the cover),
- * slowly drifting. Any button brings the shelf back (and is used up). */
-#define IDLE_SECONDS 60.0f
-#define SLIDE_SECONDS 7.0f
-
-static struct
-{
-    float idle, t;
-    bool on;
-    int game;        /* library index */
-    float dir;       /* this slide's drift, -1 or 1 */
-} SS;
-
-static void slideshow_next(void)
-{
-    if (S.view_count <= 0)
-        return;
-    /* rather a game whose picture is already here (downloaded or loaded) */
-    int pick = S.view[rand() % S.view_count];
-    for (int tries = 0; tries < 16; ++tries)
-    {
-        int g = S.view[rand() % S.view_count];
-        if (g == SS.game && S.view_count > 1)
-            continue;
-        pick = g;
-        char path[SwanStationPS5_PATH_MAX], file[120];
-        snprintf(file, sizeof(file), "art/snaps/%.100s.png", app.library.games[g].id);
-        path_join(path, sizeof(path), app.paths.root, file);
-        FILE *f = fopen(path, "rb");
-        if (f || covers_get(g))
-        {
-            if (f)
-                fclose(f);
-            break;
-        }
-    }
-    SS.game = pick;
-    SS.t = 0;
-    SS.dir = (rand() & 1) ? 1.0f : -1.0f;
-    int one[1] = {pick};
-    covers_update_view(one, 1, 0); /* load this cover even far from the cursor */
-}
-
-/* True while the slideshow has the screen. */
-static bool slideshow(uint32_t pressed)
-{
-    if (pressed || S.launch_t > 0 || S.dialog || P.open)
-    {
-        bool was = SS.on;
-        SS.on = false;
-        SS.idle = 0;
-        if (was)
-            covers_update_view(S.view, S.view_count, S.cursor);
-        return was; /* the button that ends it does nothing else */
-    }
-    SS.idle += app.dt;
-    if (!SS.on)
-    {
-        if (SS.idle < IDLE_SECONDS || S.view_count <= 0)
-            return false;
-        SS.on = true;
-        SS.game = -1;
-        slideshow_next();
-    }
-    SS.t += app.dt;
-    if (SS.t > SLIDE_SECONDS)
-        slideshow_next();
-
-    const Game *g = &app.library.games[SS.game];
-    PlatTexture *pic = art_get(g, ART_SNAP);
-    bool snap = pic != NULL;
-    if (!pic)
-        pic = covers_get(SS.game);
-    float fade = fminf(fminf(SS.t / 0.8f, (SLIDE_SECONDS - SS.t) / 0.8f), 1.0f);
-    fade = fade < 0 ? 0 : fade;
-    float sw = (float)plat_width(), sh = (float)plat_height();
-    draw_rect(0, 0, sw, sh, 0xff000000u);
-    if (pic)
-    {
-        int tw, th;
-        plat_texture_size(pic, &tw, &th);
-        /* gameplay pictures fill the screen; covers are shown whole */
-        float k = snap ? fmaxf(sw / tw, sh / th) : fminf(sw * 0.62f / tw, (sh - 380) / th);
-        float zoom = 1.04f + 0.06f * SS.t / SLIDE_SECONDS;
-        float w = tw * k * zoom, h = th * k * zoom;
-        float x = (sw - w) * 0.5f + SS.dir * (SS.t / SLIDE_SECONDS - 0.5f) * sw * 0.04f;
-        float y = snap ? (sh - h) * 0.5f : (sh - 250 - h) * 0.5f; /* a cover stays above the title */
-        plat_draw_texture(pic, x, y, w, h, argb_alpha(0xffffffffu, fade), true);
-    }
-    /* the title, bottom left, over a shade */
-    for (int i = 0; i < 30; ++i) /* darker towards the bottom */
-        draw_rect(0, sh - 300 + i * 10, sw, 10, (uint32_t)(i * 6.5f) << 24);
-    text_draw_fit(TH_MARGIN, sh - 170, 56, FONT_BOLD, argb_alpha(0xffffffffu, fade), ALIGN_LEFT, sw - 2 * TH_MARGIN,
-                  display_title(g));
-    GameStats *st = stats_get(g->id);
-    char line[96] = "";
-    if (st && st->seconds)
-    {
-        char played[48];
-        stats_format_time(st->seconds, played, sizeof(played));
-        snprintf(line, sizeof(line), tr("Played %s"), played);
-    }
-    text_draw(TH_MARGIN, sh - 96, 24, FONT_REGULAR, argb_alpha(0xffc8c8d0u, fade), ALIGN_LEFT,
-              line[0] ? line : shelf_region_name(g->serial));
-    char clock_text[16];
-    plat_clock(clock_text, sizeof(clock_text));
-    text_draw(sw - TH_MARGIN, 48, 40, FONT_BOLD, 0xd0ffffffu, ALIGN_RIGHT, clock_text);
-    text_draw(sw - TH_MARGIN, sh - 96, 22, FONT_REGULAR, 0x90ffffffu, ALIGN_RIGHT, tr("Press any button"));
-    return true;
-}
-
 static bool start_black; /* the frame in which the game starts: all black, with the loading text */
 
 /* X on a game: offers Continue when it has a quick-resume save, else starts it. `ask` false (a disc put in the drive):
@@ -1422,9 +1307,6 @@ void shelf_screen(uint32_t pressed)
         storage_screen(pressed);
         return;
     }
-    if (slideshow(pressed))
-        return;
-
     /* O pressed with the shelf free: only such a press can start the hold-to-exit */
     const bool circle_on_shelf = (pressed & BIT(BTN_CIRCLE)) && !(S.dialog || S.details || P.open || S.launch_t > 0.0f);
 
