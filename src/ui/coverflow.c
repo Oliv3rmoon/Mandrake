@@ -1365,6 +1365,56 @@ static bool slideshow(uint32_t pressed)
 
 static bool start_black; /* the frame in which the game starts: all black, with the loading text */
 
+/* X on a game: offers Continue when it has a quick-resume save, else starts it. `ask` false (a disc put in the drive):
+ * it starts at once, from the beginning, with no Continue box. */
+static void play_game(int game, bool ask)
+{
+    const Game *g = &app.library.games[game];
+    S.details = false;
+    if (ask && app.global.quick_resume && !ra_hardcore() && play_has_resume(g, &S.resume_age))
+    {
+        /* offer to continue */
+        char path[SwanStationPS5_PATH_MAX];
+        static uint8_t rgba[THUMB_W * THUMB_H * 4];
+        play_resume_path(g, path, sizeof(path));
+        plat_texture_free(S.resume_thumb);
+        S.resume_thumb = play_load_thumb(path, rgba)
+                             ? plat_texture_create(rgba, THUMB_W, THUMB_H, true)
+                             : NULL;
+        S.dialog = true;
+        S.dialog_choice = 0;
+    }
+    else
+    {
+        S.resume = false;
+        S.launch_t = 0.0001f;
+    }
+    sfx_play(SFX_SELECT);
+}
+
+bool shelf_idle(void)
+{
+    return !S.dialog && S.launch_t <= 0.0f && !S.starting && !P.open;
+}
+
+bool shelf_play_game(int library_index)
+{
+    if (library_index < 0 || library_index >= app.library.count || !shelf_idle())
+        return false;
+    shelf_select_game(library_index);
+    if (selected_game() != library_index)
+    {
+        /* hidden, or outside the category on screen: the shelf shows everything and tries again */
+        app.global.shelf_category = CAT_ALL;
+        app.settings.shelf_category = CAT_ALL;
+        shelf_select_game(library_index);
+        if (selected_game() != library_index)
+            return false;
+    }
+    play_game(library_index, false);
+    return true;
+}
+
 void shelf_screen(uint32_t pressed)
 {
     if (app.storage_error[0])
@@ -1526,29 +1576,7 @@ void shelf_screen(uint32_t pressed)
             sfx_play(SFX_BACK);
         }
         if ((pressed & BIT(BTN_CROSS)) && game >= 0)
-        {
-            const Game *g = &app.library.games[game];
-            S.details = false;
-            if (app.global.quick_resume && !ra_hardcore() && play_has_resume(g, &S.resume_age))
-            {
-                /* offer to continue */
-                char path[SwanStationPS5_PATH_MAX];
-                static uint8_t rgba[THUMB_W * THUMB_H * 4];
-                play_resume_path(g, path, sizeof(path));
-                plat_texture_free(S.resume_thumb);
-                S.resume_thumb = play_load_thumb(path, rgba)
-                                     ? plat_texture_create(rgba, THUMB_W, THUMB_H, true)
-                                     : NULL;
-                S.dialog = true;
-                S.dialog_choice = 0;
-            }
-            else
-            {
-                S.resume = false;
-                S.launch_t = 0.0001f;
-            }
-            sfx_play(SFX_SELECT);
-        }
+            play_game(game, true);
         if ((pressed & BIT(BTN_SQUARE)) && S.details && game >= 0)
         {
             sfx_play(SFX_SELECT);

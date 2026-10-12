@@ -113,6 +113,7 @@ typedef struct
     int border;           /* around the picture: 0 black, 1 glow, 2 TV frame */
     bool remote;          /* settings page for phones on the local network */
     bool update_check;    /* look for new SwanStationPS5 releases at start */
+    bool disc_auto;       /* a disc put in the USB CD drive is imported and started by itself, from the shelf */
     bool pgxp;            /* precise geometry, no wobbling polygons */
     int shader;           /* 0 off, 1 LCD3x, 2 CRT Royale, 3 CRT, 4 sharp bilinear */
     bool hd_textures;     /* use a texture pack beside the game when there is one */

@@ -978,8 +978,41 @@ static void sbi_check_draw(void)
     draw_rrect(x + 32, y + 56, fmaxf(12.0f, (w - 64) * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
 }
 
-/* The disc import (Settings > System > SwanStationPS5 > Import disc): while it runs the buttons stay out of every
- * screen and nothing can cancel it; when it ends the result is shown and the library looks for the new game */
+/* The disc import (Settings > System > SwanStationPS5 > Import disc, or a disc put in the drive on the shelf): while it
+ * runs the buttons stay out of every screen and nothing can cancel it; when it ends the result is shown and the
+ * library looks for the new game */
+static char handled_discs[16][24]; /* discs already dealt with since the app opened: each one starts once */
+static int handled_count;
+static bool auto_launch;           /* the import was started by a disc being put in: start the game when it is done */
+
+static bool disc_handled(const char *key)
+{
+    for (int i = 0; i < handled_count; ++i)
+        if (!strcmp(handled_discs[i], key))
+            return true;
+    return false;
+}
+
+static void disc_mark_handled(const char *key)
+{
+    if (key[0] && !disc_handled(key) && handled_count < 16)
+        str_copy(handled_discs[handled_count++], sizeof(handled_discs[0]), key);
+}
+
+/* The game for a disc key in the library: its serial, or the "[fingerprint]" the import put in the folder's name */
+static int find_game_by_key(const char *key)
+{
+    char tag[32];
+    snprintf(tag, sizeof(tag), "[%s]", key);
+    for (int i = 0; i < app.library.count; ++i)
+    {
+        const Game *g = &app.library.games[i];
+        if ((g->serial[0] && !strcasecmp(g->serial, key)) || strstr(g->path, tag))
+            return i;
+    }
+    return -1;
+}
+
 static bool import_input(uint32_t *pressed)
 {
     DiscImportState s = discimport_state();
@@ -991,7 +1024,11 @@ static bool import_input(uint32_t *pressed)
         discimport_check_stall(); /* no progress for 30 seconds: it is given up and the next frame says why */
         return true;
     }
-    char msg[160];
+    char msg[160], key[24];
+    str_copy(key, sizeof(key), discimport_key());
+    disc_mark_handled(key); /* whatever happened, the same disc does not start it again by itself */
+    bool launch = auto_launch;
+    auto_launch = false;
     switch (s)
     {
     case DI_OK:
@@ -1004,6 +1041,7 @@ static bool import_input(uint32_t *pressed)
         break;
     case DI_ALREADY:
         snprintf(msg, sizeof(msg), tr("Already in your games: %s"), discimport_title());
+        app_rescan();
         break;
     default: break;
     }
@@ -1025,7 +1063,40 @@ static bool import_input(uint32_t *pressed)
     }
     discimport_ack();
     app_toast_for(msg, 6.0f);
+    if (launch) /* a disc put in on the shelf: the game starts by itself once it is in */
+    {
+        int game = find_game_by_key(key);
+        if (game >= 0)
+            shelf_play_game(game);
+    }
     return true;
+}
+
+/* Every frame: on the shelf, a disc newly put in the USB CD drive is started (or imported first, then started) */
+static void disc_auto_frame(void)
+{
+    /* a disc taken out forgets that it was started: put back, it starts again. One left in does not start twice. */
+    static int removed_seen;
+    if (discwatch_removed() != removed_seen)
+    {
+        removed_seen = discwatch_removed();
+        handled_count = 0;
+    }
+    bool free_for_disc = app.global.disc_auto && app.screen == SCREEN_LIBRARY && !app.game && shelf_idle() &&
+                         discimport_state() == DI_IDLE && !box_open && !SC.active;
+    discwatch_set_active(free_for_disc);
+    DiscId id;
+    if (!free_for_disc || !discwatch_take(&id) || disc_handled(id.key))
+        return;
+    disc_mark_handled(id.key);
+    int game = find_game_by_key(id.key);
+    SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, starting it" : "importing it");
+    if (game >= 0)
+    {
+        shelf_play_game(game);
+        return;
+    }
+    auto_launch = discimport_start(app.paths.games);
 }
 
 static void import_draw(void)
@@ -1034,18 +1105,35 @@ static void import_draw(void)
         return;
     const char *msg = tr("Importing the disc... do not remove it");
     const char *title = discimport_title();
-    float w = fmaxf(text_width(26, FONT_REGULAR, msg), text_width(26, FONT_REGULAR, title)) + 96, h = 124;
-    float x = (plat_width() - w) * 0.5f, y = plat_height() - 340;
+    PlatTexture *cover = (PlatTexture *)discimport_cover();
+    float cw = 0, ch = 200;
+    if (cover)
+    {
+        int tw, th;
+        plat_texture_size(cover, &tw, &th);
+        cw = fminf(ch * (float)tw / (float)th, 280.0f);
+    }
+    float text_w = fmaxf(text_width(26, FONT_REGULAR, msg), text_width(26, FONT_REGULAR, title)) + 120;
+    float w = text_w + (cover ? cw + 32 : 0) + 64, h = cover ? ch + 64 : 124;
+    float x = (plat_width() - w) * 0.5f, y = plat_height() - h - 140;
     float p = discimport_permille() / 1000.0f;
     char pct[16];
     snprintf(pct, sizeof(pct), "%d%%", discimport_permille() / 10);
     draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
-    text_draw(plat_width() * 0.5f, y + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
+    float tx = x + 32;
+    if (cover)
+    {
+        plat_draw_texture(cover, x + 32, y + 32, cw, ch, 0xffffffffu, true);
+        tx = x + 32 + cw + 32;
+    }
+    float tw_area = x + w - 32 - tx, mid = tx + tw_area * 0.5f, ty = y + (h - 124) * 0.5f;
+    text_draw(mid, ty + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
     if (title[0])
-        text_draw(plat_width() * 0.5f, y + 46, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, title);
-    draw_rrect(x + 32, y + 92, w - 64 - 90, 12, 6, TH_DIVIDER);
-    draw_rrect(x + 32, y + 92, fmaxf(12.0f, (w - 64 - 90) * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
-    text_draw(x + w - 32, y + 82, 26, FONT_REGULAR, TH_TEXT, ALIGN_RIGHT, pct);
+        text_draw(mid, ty + 46, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, title);
+    float bar_w = tw_area - 90;
+    draw_rrect(tx, ty + 92, bar_w, 12, 6, TH_DIVIDER);
+    draw_rrect(tx, ty + 92, fmaxf(12.0f, bar_w * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
+    text_draw(tx + tw_area, ty + 82, 26, FONT_REGULAR, TH_TEXT, ALIGN_RIGHT, pct);
 }
 
 void app_import_disc(void)
@@ -1055,6 +1143,7 @@ void app_import_disc(void)
         app_toast("Close the game to import a disc");
         return;
     }
+    auto_launch = false; /* from Settings: it only imports */
     discimport_start(app.paths.games);
 }
 
@@ -1805,6 +1894,7 @@ int main(void)
             quit = true;
         memcpy(app.pads, pads, sizeof(app.pads));
         uint32_t pressed = nav_pressed(pads);
+        disc_auto_frame();
         if (!question_input(&pressed) && !sbi_check_input(&pressed) && !import_input(&pressed))
             message_box_input(&pressed);
         /* the shelf and settings paint a full-screen backdrop: no clear needed */

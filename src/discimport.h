@@ -24,6 +24,16 @@ typedef enum
     DI_STALLED      /* nothing was read for 30 seconds: stopped (discimport_check_stall) */
 } DiscImportState;
 
+/* Who a disc is: read from its first data track. serial is empty for a disc without SYSTEM.CNF (homebrew). */
+typedef struct
+{
+    char serial[16];     /* SLUS-00662 */
+    char title[96];      /* the game database's name, else the volume label, else "Untitled disc" */
+    char label[40];      /* the volume label */
+    uint32_t fingerprint; /* CRC-32 of the table of contents and the volume descriptor */
+    char key[24];        /* the serial, or the fingerprint in hex: how the disc is told apart */
+} DiscId;
+
 /* Starts the import into `games_dir`; false if one is already running (or its result has not been taken). */
 bool discimport_start(const char *games_dir);
 /* DI_RUNNING while it works, then the result until discimport_ack(). */
@@ -39,5 +49,21 @@ bool discimport_check_stall(void);
 int discimport_bad(void);
 /* At start: removes what an interrupted import left (*.part in the games folder's subfolders). */
 void discimport_cleanup(const char *games_dir);
+
+/* The serial of the disc being imported, and its cover once it is known (a texture made on the calling thread;
+ * NULL until then or when there is none). */
+const char *discimport_serial(void);
+/* The disc's key (the serial, or the fingerprint in hex) once it is known; "" before. */
+const char *discimport_key(void);
+struct PlatTexture;
+struct PlatTexture *discimport_cover(void);
+
+/* The insert watcher: while `active`, it looks at the USB CD drive every second or so, and a disc that was not
+ * there before is read and reported once. discwatch_take() hands the report over (false when there is none). */
+void discwatch_set_active(bool active);
+bool discwatch_take(DiscId *out);
+/* How many times a disc was taken out of the drive since the app started (confirmed twice, so a drive that is
+ * only busy does not count). It goes up while a game is running too. */
+int discwatch_removed(void);
 
 #endif

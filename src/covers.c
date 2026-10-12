@@ -158,6 +158,22 @@ uint8_t *covers_decode(const char *path, int *w, int *h)
     return load_image(path, w, h);
 }
 
+uint8_t *covers_for_serial(const char *serial, int *w, int *h)
+{
+    char path[SwanStationPS5_PATH_MAX];
+    cache_path(path, sizeof(path), serial);
+    if (!path_exists(path) && download_enabled && network_failures < 3)
+    {
+        char url[256], dir[SwanStationPS5_PATH_MAX];
+        covers_url(url, sizeof(url), style, serial);
+        str_copy(dir, sizeof(dir), path);
+        *strrchr(dir, '/') = '\0';
+        make_dirs(dir);
+        net_download(url, path);
+    }
+    return path_exists(path) ? load_image(path, w, h) : NULL;
+}
+
 static const char *const IMAGE_EXTS[] = {"png", "jpg", "jpeg"};
 
 bool covers_is_image(const char *name)

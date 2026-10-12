@@ -292,6 +292,8 @@ static const Row SYSTEM[] = {
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Import disc", "Copies the PS1 disc in the USB CD drive into your games folder and adds it to the shelf. It takes several minutes and cannot be cancelled: do not remove the disc. Only PS1 discs, and only discs you own.",
      K_ACTION, APPLY_NOW, SP_IMPORT_DISC, true, NO_FIELD, NULL, 0, 0},
+    {NULL, "Import discs on insert", "On the shelf, a PS1 disc put in the USB CD drive is copied to your games folder (if it is not there yet) and started by itself, once per disc until SwanStationPS5 is opened again.",
+     K_TOGGLE, APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_auto), OFF_ON, 2, 0},
     {NULL, "Test the CD drive", "Looks at the USB CD drive and the disc in it and writes what it finds to the log (logs/SwanStationPS5.log). It only reads. Plug the drive in and put in a PS1 disc first.",
      K_ACTION, APPLY_NOW, SP_CDPROBE, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Output resolution", "The resolution of the picture sent to the TV: 1080p, 1440p or 4K. Higher is sharper but asks more of the console. It changes at once; the screen goes dark for a moment. If your TV doesn't offer the one you pick, 1080p is used.",

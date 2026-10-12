@@ -30,6 +30,12 @@ int cdscsi_cmd(const CdPass *pass, const uint8_t *cdb, int cdb_len, void *buf, u
 int cdscsi_cmd_out(const CdPass *pass, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len,
                    uint32_t timeout_ms, uint32_t *sense);
 
+/* One conversation with the drive at a time: the import holds this for its whole run, the insert watcher only
+ * takes it between two polls. */
+void cdscsi_lock(void);
+bool cdscsi_trylock(void);
+void cdscsi_unlock(void);
+
 #define CDSENSE_NO_MEDIUM 0x023a00 /* no disc in the drive */
 #define CDSENSE_BECOMING_READY 0x020400
 

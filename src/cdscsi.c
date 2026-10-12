@@ -13,6 +13,32 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <SDL2/SDL.h>
+
+static SDL_mutex *drive_mutex;
+
+static SDL_mutex *the_mutex(void)
+{
+    if (!drive_mutex)
+        drive_mutex = SDL_CreateMutex(); /* first used from the main thread, before any thread starts */
+    return drive_mutex;
+}
+
+void cdscsi_lock(void)
+{
+    SDL_LockMutex(the_mutex());
+}
+
+bool cdscsi_trylock(void)
+{
+    return SDL_TryLockMutex(the_mutex()) == 0;
+}
+
+void cdscsi_unlock(void)
+{
+    SDL_UnlockMutex(the_mutex());
+}
+
 #if defined(__PROSPERO__)
 #include <sys/types.h>
 #include <sys/ioctl.h>

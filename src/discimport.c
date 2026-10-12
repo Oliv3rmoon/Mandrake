@@ -9,7 +9,9 @@
 
 #include "cdscsi.h"
 #include "disc.h"
+#include "covers.h"
 #include "gamedb.h"
+#include "platform/platform.h"
 
 #include <SDL2/SDL.h>
 #include <ctype.h>
@@ -43,7 +45,11 @@ static struct
 {
     SDL_atomic_t state, permille, named, bad, abort, alive, last_change;
     char games[SwanStationPS5_PATH_MAX];
-    char title[96];
+    char title[96], serial[16], key[24];
+    uint8_t *cover_px;
+    int cover_w, cover_h;
+    SDL_atomic_t cover_ready;
+    struct PlatTexture *cover_tex;
 } J;
 
 DiscImportState discimport_state(void)
@@ -51,10 +57,41 @@ DiscImportState discimport_state(void)
     return (DiscImportState)SDL_AtomicGet(&J.state);
 }
 
+static void cover_free(void)
+{
+    if (J.cover_tex)
+        plat_texture_free(J.cover_tex);
+    J.cover_tex = NULL;
+}
+
 void discimport_ack(void)
 {
     if (discimport_state() > DI_RUNNING)
+    {
         SDL_AtomicSet(&J.state, DI_IDLE);
+        cover_free();
+    }
+}
+
+const char *discimport_serial(void)
+{
+    return SDL_AtomicGet(&J.named) ? J.serial : "";
+}
+
+const char *discimport_key(void)
+{
+    return SDL_AtomicGet(&J.named) ? J.key : "";
+}
+
+struct PlatTexture *discimport_cover(void)
+{
+    if (!J.cover_tex && SDL_AtomicGet(&J.cover_ready) && J.cover_px)
+    {
+        J.cover_tex = plat_texture_create(J.cover_px, J.cover_w, J.cover_h, true);
+        free(J.cover_px);
+        J.cover_px = NULL;
+    }
+    return J.cover_tex;
 }
 
 static void touch(void)
@@ -214,6 +251,56 @@ static DiscImportState find_disc(CdPass *p, uint8_t *toc, uint32_t toc_size, uin
     return worst;
 }
 
+/* Reads the volume descriptor and SYSTEM.CNF of the first data track. False if there is no ISO 9660 volume. */
+static bool identify(const CdPass *pass, const uint8_t *toc, uint32_t toc_got, uint32_t first_lba, DiscId *id,
+                     uint32_t *sense)
+{
+    static uint8_t raw[SECTOR];
+    bool has_volume = false;
+    memset(id, 0, sizeof(*id));
+    for (int t = 0; t < TRIES && !has_volume; ++t)
+        has_volume = read_cd(pass, first_lba + 16, 1, 0xf8, raw, sense) == 0 && memcmp(raw + 25, "CD001", 5) == 0;
+    if (!has_volume)
+        return false;
+    memcpy(id->label, raw + 24 + 40, 32);
+    id->label[32] = '\0';
+    for (int n = (int)strlen(id->label); n > 0 && id->label[n - 1] == ' '; --n)
+        id->label[n - 1] = '\0';
+    id->fingerprint = crc32_update(crc32_update(0, toc, toc_got), raw + 24, 2048);
+    bool has_serial = disc_serial_from_reader(read_user, (void *)pass, id->serial, sizeof(id->serial));
+    const GameInfo *info = has_serial ? gamedb_get(id->serial) : NULL;
+    if (!has_serial)
+        id->serial[0] = '\0';
+    if (info && info->name[0])
+        str_copy(id->title, sizeof(id->title), info->name);
+    else if (id->label[0])
+        str_copy(id->title, sizeof(id->title), id->label);
+    else
+        str_copy(id->title, sizeof(id->title), "Untitled disc");
+    if (has_serial)
+        str_copy(id->key, sizeof(id->key), id->serial);
+    else
+        snprintf(id->key, sizeof(id->key), "%08X", id->fingerprint);
+    return true;
+}
+
+/* The tracks and the lead-out from a table of contents. */
+static int parse_toc(const uint8_t *toc, uint32_t toc_got, Track *tracks, uint32_t *leadout)
+{
+    int ntracks = 0, entries = toc_got >= 4 ? ((int)toc_got - 4) / 8 : 0;
+    *leadout = 0;
+    for (int i = 0; i < entries; ++i)
+    {
+        const uint8_t *e = toc + 4 + 8 * i;
+        uint32_t lba = (uint32_t)e[4] << 24 | e[5] << 16 | e[6] << 8 | e[7];
+        if (e[2] == 0xaa)
+            *leadout = lba;
+        else if (ntracks < MAX_TRACKS)
+            tracks[ntracks++] = (Track){e[2], (e[1] & 0x04) != 0, lba};
+    }
+    return ntracks;
+}
+
 static void finish(DiscImportState result)
 {
     SDL_AtomicSet(&J.permille, result == DI_OK || result == DI_OK_INCOMPLETE ? 1000 : 0);
@@ -236,18 +323,8 @@ static void import_run(void)
 
     /* the tracks and the lead-out, from the table of contents */
     Track tracks[MAX_TRACKS];
-    int ntracks = 0;
     uint32_t leadout = 0;
-    int entries = toc_got >= 4 ? ((int)toc_got - 4) / 8 : 0;
-    for (int i = 0; i < entries; ++i)
-    {
-        const uint8_t *e = toc + 4 + 8 * i;
-        uint32_t lba = (uint32_t)e[4] << 24 | e[5] << 16 | e[6] << 8 | e[7];
-        if (e[2] == 0xaa)
-            leadout = lba;
-        else if (ntracks < MAX_TRACKS)
-            tracks[ntracks++] = (Track){e[2], (e[1] & 0x04) != 0, lba};
-    }
+    int ntracks = parse_toc(toc, toc_got, tracks, &leadout);
     if (!ntracks || !leadout || leadout <= tracks[0].lba)
     {
         P("the table of contents is not usable");
@@ -289,43 +366,32 @@ static void import_run(void)
     /* who it is: the serial from SYSTEM.CNF, else the volume label and a fingerprint of the table of contents */
     uint8_t raw[SECTOR * BLOCK];
     uint32_t sense = 0;
-    char label[40] = "", serial[16] = "", title[96], tag[24], folder[160];
-    bool has_volume = false;
-    for (int t = 0; t < TRIES && !has_volume; ++t)
-        has_volume = read_cd(&pass, tracks[0].lba + 16, 1, 0xf8, raw, &sense) == 0 && memcmp(raw + 25, "CD001", 5) == 0;
-    if (!has_volume)
+    DiscId id;
+    if (!identify(&pass, toc, toc_got, tracks[0].lba, &id, &sense))
     {
         P("no ISO 9660 volume at sector 16 (sense %06x)", sense);
         cdscsi_close(&pass);
         finish(sense == CDSENSE_NO_MEDIUM ? DI_DRIVE_LOST : DI_NOT_PS1);
         return;
     }
-    memcpy(label, raw + 24 + 40, 32);
-    label[32] = '\0';
-    for (int n = (int)strlen(label); n > 0 && label[n - 1] == ' '; --n)
-        label[n - 1] = '\0';
-    uint32_t fingerprint = crc32_update(crc32_update(0, toc, toc_got), raw + 24, 2048);
-    bool has_serial = disc_serial_from_reader(read_user, &pass, serial, sizeof(serial)) != false;
-    const GameInfo *info = has_serial ? gamedb_get(serial) : NULL;
-    if (info && info->name[0])
-        str_copy(title, sizeof(title), info->name);
-    else if (label[0])
-        str_copy(title, sizeof(title), label);
-    else
-        str_copy(title, sizeof(title), "Untitled disc");
-    if (has_serial)
-        str_copy(tag, sizeof(tag), serial);
-    else
-        snprintf(tag, sizeof(tag), "%08X", fingerprint);
-    char safe[96];
+    const char *serial = id.serial, *label = id.label, *title = id.title;
+    char folder[160], safe[96];
     safe_name(safe, sizeof(safe), title);
     if (!safe[0])
         str_copy(safe, sizeof(safe), "Disc");
-    snprintf(folder, sizeof(folder), "%s [%s]", safe, tag);
+    snprintf(folder, sizeof(folder), "%s [%s]", safe, id.key);
     str_copy(J.title, sizeof(J.title), title);
+    str_copy(J.serial, sizeof(J.serial), serial);
+    str_copy(J.key, sizeof(J.key), id.key);
     SDL_AtomicSet(&J.named, 1);
     touch();
     P("disc: '%s', serial '%s', label '%s', folder '%s'", title, serial, label, folder);
+    if (serial[0]) /* the cover for the card on screen; it also stays in the cache for the shelf */
+    {
+        J.cover_px = covers_for_serial(serial, &J.cover_w, &J.cover_h);
+        SDL_AtomicSet(&J.cover_ready, J.cover_px ? 1 : 0);
+        touch();
+    }
 
     char dir[SwanStationPS5_PATH_MAX], bin[SwanStationPS5_PATH_MAX], cue[SwanStationPS5_PATH_MAX],
         bin_part[SwanStationPS5_PATH_MAX + 8], cue_part[SwanStationPS5_PATH_MAX + 8];
@@ -502,7 +568,9 @@ static void import_run(void)
 static int import_thread(void *unused)
 {
     (void)unused;
+    cdscsi_lock(); /* the insert watcher stays out of the drive meanwhile */
     import_run();
+    cdscsi_unlock();
     SDL_AtomicSet(&J.alive, 0);
     return 0;
 }
@@ -515,6 +583,12 @@ bool discimport_start(const char *games_dir)
         return false;
     str_copy(J.games, sizeof(J.games), games_dir);
     J.title[0] = '\0';
+    J.serial[0] = '\0';
+    J.key[0] = '\0';
+    cover_free();
+    free(J.cover_px);
+    J.cover_px = NULL;
+    SDL_AtomicSet(&J.cover_ready, 0);
     SDL_AtomicSet(&J.named, 0);
     SDL_AtomicSet(&J.permille, 0);
     SDL_AtomicSet(&J.bad, 0);
@@ -530,5 +604,131 @@ bool discimport_start(const char *games_dir)
         return false;
     }
     SDL_DetachThread(t);
+    return true;
+}
+
+/* ---------------------------------------------------------------- the insert watcher */
+
+static struct
+{
+    SDL_atomic_t active, have, removed;
+    DiscId pending;
+    SDL_Thread *thread;
+} W;
+
+/* TEST UNIT READY: 1 ready, 2 ready but the disc changed since the last look, 0 not ready (spinning up...),
+ * -1 no disc in the drive */
+static int unit_ready(const CdPass *pass)
+{
+    static const uint8_t tur[6] = {0};
+    uint32_t sense = 0;
+    int rc = cdscsi_cmd(pass, tur, 6, NULL, 0, 3000, &sense, NULL);
+    if (rc == 0)
+        return 1;
+    if ((sense >> 16) == 6) /* unit attention: the medium may have changed; ask again */
+        return cdscsi_cmd(pass, tur, 6, NULL, 0, 3000, &sense, NULL) == 0 ? 2 : 0;
+    return sense == CDSENSE_NO_MEDIUM ? -1 : 0;
+}
+
+/* Reads who the disc in `pass` is, as a PS1 game would be; false if it is not one. */
+static bool read_disc(const CdPass *pass, DiscId *id)
+{
+    static const uint8_t read_toc[10] = {0x43, 0, 0, 0, 0, 0, 0, 0x08, 0x00, 0};
+    uint8_t toc[2048];
+    uint32_t got = 0, sense = 0;
+    Track tracks[MAX_TRACKS];
+    uint32_t leadout;
+    memset(toc, 0, sizeof(toc));
+    if (cdscsi_cmd(pass, read_toc, 10, toc, sizeof(toc), 10000, &sense, &got) != 0)
+        return false;
+    int n = parse_toc(toc, got, tracks, &leadout);
+    if (!n || !leadout || !tracks[0].data)
+        return false;
+    return identify(pass, toc, got, tracks[0].lba, id, &sense);
+}
+
+static int watch_thread(void *unused)
+{
+    (void)unused;
+    bool was_ready[8] = {false}, need[8];
+    int gone[8] = {0}; /* polls in a row that found the drive empty after a disc */
+    for (int u = 0; u < 8; ++u)
+        need[u] = true; /* a disc already in when the app starts is news too */
+    for (;;)
+    {
+        SDL_Delay(1200);
+        if (!cdscsi_trylock())
+            continue; /* an import is running */
+        for (unsigned u = 0; u < 8; ++u)
+        {
+            char dev[24];
+            snprintf(dev, sizeof(dev), "/dev/cd%u", u);
+            if (!exists(dev))
+                continue;
+            CdPass pass;
+            if (!cdscsi_open(u, &pass))
+                continue;
+            int ready = unit_ready(&pass);
+            if (ready == -1)
+            {
+                if (was_ready[u] && ++gone[u] >= 2) /* the disc is out: the same one put back is news again */
+                {
+                    was_ready[u] = false;
+                    gone[u] = 0;
+                    SDL_AtomicAdd(&W.removed, 1);
+                    P("watch: the disc in cd%u was taken out", u);
+                }
+            }
+            else if (ready > 0)
+            {
+                gone[u] = 0;
+                if (!was_ready[u] || ready == 2)
+                    need[u] = true;
+                was_ready[u] = true;
+                if (need[u] && SDL_AtomicGet(&W.active) && !SDL_AtomicGet(&W.have))
+                {
+                    need[u] = false;
+                    DiscId id;
+                    if (read_disc(&pass, &id))
+                    {
+                        P("watch: a disc in cd%u: '%s' (%s)", u, id.title, id.key);
+                        W.pending = id;
+                        SDL_AtomicSet(&W.have, 1);
+                    }
+                    else
+                        P("watch: the disc in cd%u is not a PS1 game", u);
+                }
+            }
+            cdscsi_close(&pass);
+        }
+        cdscsi_unlock();
+    }
+    return 0;
+}
+
+void discwatch_set_active(bool active)
+{
+    if (active && !W.thread)
+    {
+        W.thread = SDL_CreateThread(watch_thread, "disc-watch", NULL);
+        if (W.thread)
+            SDL_DetachThread(W.thread);
+        else
+            W.thread = (SDL_Thread *)1; /* could not start: do not try every frame */
+    }
+    SDL_AtomicSet(&W.active, active ? 1 : 0);
+}
+
+int discwatch_removed(void)
+{
+    return SDL_AtomicGet(&W.removed);
+}
+
+bool discwatch_take(DiscId *out)
+{
+    if (!SDL_AtomicGet(&W.have))
+        return false;
+    *out = W.pending;
+    SDL_AtomicSet(&W.have, 0);
     return true;
 }
