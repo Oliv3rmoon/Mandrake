@@ -123,6 +123,8 @@ void shelf_init(int last_game);
 void shelf_select_game(int library_index);
 /* Nothing is open on the shelf (no Continue box, no launch under way, no cover picker). */
 bool shelf_idle(void);
+/* The picture the shelf shows for a game without a cover (assets/nocover2.png). Not to be freed. */
+struct PlatTexture *shelf_no_cover(void);
 /* Puts the cursor on the game and starts it at once, from the beginning, with no Continue box: a disc put in the
  * drive. False if the shelf is busy or the game cannot be shown. */
 bool shelf_play_game(int library_index);

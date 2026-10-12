@@ -36,9 +36,6 @@ void covers_url(char *out, size_t size, int style, const char *serial);
  * call it from a thread. The file stays in the cache, so the shelf finds it when the game is added. */
 uint8_t *covers_for_serial(const char *serial, int *w, int *h);
 
-/* A square card with the game's title, for when there is no cover; RGBA to free(). Safe from a thread. */
-uint8_t *covers_title_card(const char *title, int *w, int *h);
-
 /* Forgets game `index`'s cover so it is looked up again (after a pick). */
 void covers_reload(int index);
 /* Where picked covers are kept: <root>/covers/custom/<game id>.<ext> */

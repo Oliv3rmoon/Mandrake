@@ -1005,7 +1005,26 @@ static void disc_mark_handled(const char *key)
         str_copy(handled_discs[handled_count++], sizeof(handled_discs[0]), key);
 }
 
-/* The game for a disc key in the library: its serial, or the "[fingerprint]" the import put in the folder's name */
+/* One of the files in the game's folder carries the disc's "[key]": a disc of a game with several, installed beside
+ * the others */
+static bool folder_has_disc(const Game *g, const char *tag)
+{
+    DIR *d = opendir(g->folder);
+    bool found = false;
+    struct dirent *e;
+    while (d && !found && (e = readdir(d)))
+        if (strstr(e->d_name, tag))
+        {
+            const char *ext = path_ext(e->d_name);
+            found = !str_icmp(ext, "cue") || !str_icmp(ext, "chd") || !str_icmp(ext, "iso") || !str_icmp(ext, "pbp");
+        }
+    if (d)
+        closedir(d);
+    return found;
+}
+
+/* The game for a disc key in the library: its serial, the "[key]" the installation put in the folder's or the file's
+ * name, or a disc of it that was installed beside the first */
 static int find_game_by_key(const char *key)
 {
     char tag[32];
@@ -1016,7 +1035,42 @@ static int find_game_by_key(const char *key)
         if ((g->serial[0] && !strcasecmp(g->serial, key)) || strstr(g->path, tag))
             return i;
     }
+    for (int i = 0; i < app.library.count; ++i)
+        if (folder_has_disc(&app.library.games[i], tag))
+            return i;
     return -1;
+}
+
+/* Which disc of the game's playlist (.m3u) is the one put in: 0 for the first. -1 when it is not a playlist. */
+static int disc_index_in_playlist(const Game *g, const char *key)
+{
+    if (str_icmp(path_ext(g->path), "m3u") != 0)
+        return -1;
+    FILE *f = fopen(g->path, "r");
+    if (!f)
+        return -1;
+    char tag[32], line[SwanStationPS5_PATH_MAX];
+    snprintf(tag, sizeof(tag), "[%s]", key);
+    int index = 0, found = -1;
+    while (found < 0 && fgets(line, sizeof(line), f))
+    {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (!line[0] || line[0] == '#')
+            continue;
+        if (strstr(line, tag))
+            found = index;
+        ++index;
+    }
+    fclose(f);
+    return found;
+}
+
+/* Starts the game on the disc that was put in */
+static void play_from_disc(int game, const char *key)
+{
+    host_set_initial_disc(disc_index_in_playlist(&app.library.games[game], key));
+    if (!shelf_play_game(game))
+        SwanStationPS5_log("disc: the game could not be started from the shelf");
 }
 
 #define CANCEL_HOLD 2.0f /* seconds O is held to cancel an import, as to close the app */
@@ -1065,8 +1119,8 @@ static bool import_input(uint32_t *pressed)
     auto_launch = false;
     switch (s)
     {
-    case DI_OK:
-        snprintf(msg, sizeof(msg), tr("Installed: %s"), discimport_title());
+    case DI_OK: /* no notice: the game appears on the shelf, and starts by itself if a disc put in began this */
+        msg[0] = '\0';
         app_rescan();
         break;
     case DI_OK_INCOMPLETE:
@@ -1102,12 +1156,13 @@ static bool import_input(uint32_t *pressed)
         return true;
     }
     discimport_ack();
-    app_toast_for(msg, 6.0f);
+    if (msg[0])
+        app_toast_for(msg, 6.0f);
     if (launch) /* a disc put in on the shelf: the game starts by itself once it is in */
     {
         int game = find_game_by_key(key);
-        if (game >= 0 && !shelf_play_game(game))
-            SwanStationPS5_log("disc: the imported game could not be started from the shelf");
+        if (game >= 0)
+            play_from_disc(game, key);
     }
     return true;
 }
@@ -1133,8 +1188,7 @@ static void disc_auto_frame(void)
     SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, starting it" : "importing it");
     if (game >= 0)
     {
-        if (!shelf_play_game(game))
-            SwanStationPS5_log("disc: the game could not be started from the shelf");
+        play_from_disc(game, id.key);
         return;
     }
     auto_launch = discimport_start(app.paths.games);
@@ -1151,6 +1205,8 @@ static void import_draw(void)
     else
         str_copy(msg, sizeof(msg), tr("Installing..."));
     PlatTexture *cover = (PlatTexture *)discimport_cover();
+    if (!cover && discimport_cover_none())
+        cover = (PlatTexture *)shelf_no_cover(); /* as on the shelf: assets/nocover2.png */
     /* a fixed size, so the card does not change while the disc is identified and the cover arrives */
     const float ch = 200, cw = ch, text_w = 760;
     float w = text_w + cw + 32 + 64, h = ch + 64;

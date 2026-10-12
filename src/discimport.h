@@ -61,6 +61,8 @@ const char *discimport_serial(void);
 const char *discimport_key(void);
 struct PlatTexture;
 struct PlatTexture *discimport_cover(void);
+/* True once it is known that there is no cover for the disc (no serial, none online): show the shelf's own picture. */
+bool discimport_cover_none(void);
 
 /* The insert watcher: while `active`, it looks at the USB CD drive every second or so, and a disc that was not
  * there before is read and reported once. discwatch_take() hands the report over (false when there is none). */

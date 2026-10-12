@@ -26,10 +26,6 @@ void cdscsi_close(CdPass *pass);
 int cdscsi_cmd(const CdPass *pass, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len,
                uint32_t timeout_ms, uint32_t *sense, uint32_t *got);
 
-/* The same for a command that sends data to the drive (SET STREAMING). */
-int cdscsi_cmd_out(const CdPass *pass, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len,
-                   uint32_t timeout_ms, uint32_t *sense);
-
 /* One conversation with the drive at a time: the import holds this for its whole run, the insert watcher only
  * takes it between two polls. */
 void cdscsi_lock(void);

@@ -146,11 +146,6 @@ static uint8_t *title_card(const char *title, int *w, int *h)
     return px;
 }
 
-uint8_t *covers_title_card(const char *title, int *w, int *h)
-{
-    return title_card(title, w, h);
-}
-
 static uint8_t *load_image(const char *path, int *w, int *h)
 {
     int comp;

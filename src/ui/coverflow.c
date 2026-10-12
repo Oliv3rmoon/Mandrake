@@ -429,6 +429,12 @@ static PlatTexture *no_cover_icon(void)
     return icon;
 }
 
+/* The same picture for other screens (the install card of a disc with no cover). */
+PlatTexture *shelf_no_cover(void)
+{
+    return no_cover_icon();
+}
+
 /* width / height of the picture for games without a cover */
 static float no_cover_aspect(void)
 {

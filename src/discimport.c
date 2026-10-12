@@ -48,7 +48,7 @@ static struct
     char title[96], serial[16], key[24];
     uint8_t *cover_px;
     int cover_w, cover_h;
-    SDL_atomic_t cover_ready, cover_gen;
+    SDL_atomic_t cover_ready, cover_gen, cover_none;
     struct PlatTexture *cover_tex;
 } J;
 
@@ -76,6 +76,11 @@ void discimport_ack(void)
 const char *discimport_serial(void)
 {
     return SDL_AtomicGet(&J.named) ? J.serial : "";
+}
+
+bool discimport_cover_none(void)
+{
+    return SDL_AtomicGet(&J.cover_none) != 0;
 }
 
 const char *discimport_key(void)
@@ -291,6 +296,48 @@ static bool identify(const CdPass *pass, const uint8_t *toc, uint32_t toc_got, u
     return true;
 }
 
+/* "Parasite Eve (Disc 2)" -> 2, and `stem` "Parasite Eve"; 0 when the title has no "(Disc N)". */
+static int disc_number(const char *title, char *stem, size_t size)
+{
+    const char *tag = strstr(title, "(Disc ");
+    if (!tag)
+        return 0;
+    char *end;
+    long n = strtol(tag + 6, &end, 10);
+    if (end == tag + 6 || *end != ')' || n < 1 || n > 9)
+        return 0;
+    size_t before = (size_t)(tag - title);
+    while (before && title[before - 1] == ' ')
+        --before;
+    const char *after = end + 1;
+    while (*after == ' ')
+        ++after;
+    snprintf(stem, size, "%.*s%s%s", (int)before, title, (before && *after) ? " " : "", after);
+    return (int)n;
+}
+
+/* The folder of an earlier disc of the same game ("<stem> [<serial>]") in the games folder, or "". */
+static void find_game_folder(const char *games, const char *stem, char *out, size_t size)
+{
+    out[0] = '\0';
+    DIR *d = opendir(games);
+    if (!d)
+        return;
+    char prefix[200];
+    snprintf(prefix, sizeof(prefix), "%s [", stem);
+    struct dirent *e;
+    while ((e = readdir(d)))
+    {
+        size_t n = strlen(e->d_name);
+        if (strncmp(e->d_name, prefix, strlen(prefix)) == 0 && n > 2 && e->d_name[n - 1] == ']')
+        {
+            str_copy(out, size, e->d_name);
+            break;
+        }
+    }
+    closedir(d);
+}
+
 /* The tracks and the lead-out from a table of contents. */
 static int parse_toc(const uint8_t *toc, uint32_t toc_got, Track *tracks, uint32_t *leadout)
 {
@@ -319,17 +366,17 @@ static int cover_thread(void *arg)
     CoverJob *job = arg;
     int w = 0, h = 0;
     uint8_t *px = job->serial[0] ? covers_for_serial(job->serial, &w, &h) : NULL;
-    if (!px)
-        px = covers_title_card(job->title, &w, &h);
-    if (px && SDL_AtomicGet(&J.cover_gen) == job->gen) /* still the same import */
+    if (SDL_AtomicGet(&J.cover_gen) != job->gen) /* another import began meanwhile */
+        free(px);
+    else if (px)
     {
         J.cover_px = px;
         J.cover_w = w;
         J.cover_h = h;
         SDL_AtomicSet(&J.cover_ready, 1);
     }
-    else
-        free(px);
+    else /* no serial (homebrew), no cover for it, or no network: the screen shows the shelf's "no cover" picture */
+        SDL_AtomicSet(&J.cover_none, 1);
     free(job);
     return 0;
 }
@@ -374,26 +421,13 @@ static void import_run(void)
     }
     P("%d tracks, lead-out at %u", ntracks, leadout);
 
-    /* A USB drive spins a data CD slowly (quietly) until it is asked for speed. SET STREAMING (B6) first, as
-     * ps-disc-detect does, then SET CD SPEED (BB) with "as fast as possible". Neither is required to succeed. */
+    /* A USB drive spins a data CD slowly (quietly) until it is asked for speed: SET CD SPEED (BB) with "as fast as
+     * possible". (SET STREAMING, B6, was also tried: the drive takes it, and the copy takes exactly as long.) */
     {
-        uint8_t perf[28] = {0};
-        uint32_t end = 0xffffffffu, kb = 0x00ffffffu, ms = 1000;
-        perf[8] = (uint8_t)(end >> 24), perf[9] = (uint8_t)(end >> 16), perf[10] = (uint8_t)(end >> 8),
-        perf[11] = (uint8_t)end;
-        perf[12] = (uint8_t)(kb >> 24), perf[13] = (uint8_t)(kb >> 16), perf[14] = (uint8_t)(kb >> 8),
-        perf[15] = (uint8_t)kb;
-        perf[16] = (uint8_t)(ms >> 24), perf[17] = (uint8_t)(ms >> 16), perf[18] = (uint8_t)(ms >> 8),
-        perf[19] = (uint8_t)ms;
-        perf[20] = perf[12], perf[21] = perf[13], perf[22] = perf[14], perf[23] = perf[15];
-        perf[24] = perf[16], perf[25] = perf[17], perf[26] = perf[18], perf[27] = perf[19];
-        uint8_t set_streaming[12] = {0xb6, 0, 0, 0, 0, 0, 0, 0, 0, 28, 0, 0};
-        uint32_t s1 = 0, s2 = 0;
-        int r1 = cdscsi_cmd_out(&pass, set_streaming, 12, perf, sizeof(perf), 5000, &s1);
         uint8_t set_speed[12] = {0xbb, 0, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0};
-        int r2 = cdscsi_cmd(&pass, set_speed, 12, NULL, 0, 5000, &s2, NULL);
-        P("speed: SET STREAMING %s (sense %06x), SET CD SPEED %s (sense %06x)", r1 == 0 ? "ok" : "failed", s1,
-          r2 == 0 ? "ok" : "failed", s2);
+        uint32_t sense_speed = 0;
+        int r = cdscsi_cmd(&pass, set_speed, 12, NULL, 0, 5000, &sense_speed, NULL);
+        P("speed: SET CD SPEED %s (sense %06x)", r == 0 ? "ok" : "failed", sense_speed);
     }
 
     /* who it is: the serial from SYSTEM.CNF, else the volume label and a fingerprint of the table of contents */
@@ -408,17 +442,34 @@ static void import_run(void)
         return;
     }
     const char *serial = id.serial, *label = id.label, *title = id.title;
-    char folder[160], safe[96];
+    char folder[160], dirname[160], safe[96];
     safe_name(safe, sizeof(safe), title);
     if (!safe[0])
         str_copy(safe, sizeof(safe), "Disc");
-    snprintf(folder, sizeof(folder), "%s [%s]", safe, id.key);
+    snprintf(folder, sizeof(folder), "%s [%s]", safe, id.key); /* the files' name */
+    str_copy(dirname, sizeof(dirname), folder);               /* and the folder's */
+    bool multi = false;
+    {
+        /* a disc of a game with several: they all go in one folder, which the library turns into one game (.m3u) */
+        char stem[96], safe_stem[96];
+        if (serial[0] && disc_number(title, stem, sizeof(stem)))
+        {
+            safe_name(safe_stem, sizeof(safe_stem), stem);
+            char existing[160];
+            find_game_folder(J.games, safe_stem, existing, sizeof(existing));
+            if (existing[0])
+                str_copy(dirname, sizeof(dirname), existing);
+            else
+                snprintf(dirname, sizeof(dirname), "%s [%s]", safe_stem, serial);
+            multi = true;
+        }
+    }
     str_copy(J.title, sizeof(J.title), title);
     str_copy(J.serial, sizeof(J.serial), serial);
     str_copy(J.key, sizeof(J.key), id.key);
     SDL_AtomicSet(&J.named, 1);
     touch();
-    P("disc: '%s', serial '%s', label '%s', folder '%s'", title, serial, label, folder);
+    P("disc: '%s', serial '%s', label '%s', files '%s' in '%s'", title, serial, label, folder, dirname);
     {
         /* the cover for the card on screen, fetched meanwhile (it also stays in the cache for the shelf); a card with
          * the title when there is none */
@@ -438,7 +489,7 @@ static void import_run(void)
 
     char dir[SwanStationPS5_PATH_MAX], bin[SwanStationPS5_PATH_MAX], cue[SwanStationPS5_PATH_MAX],
         bin_part[SwanStationPS5_PATH_MAX + 8], cue_part[SwanStationPS5_PATH_MAX + 8];
-    path_join(dir, sizeof(dir), J.games, folder);
+    path_join(dir, sizeof(dir), J.games, dirname);
     char file[200];
     snprintf(file, sizeof(file), "%s.bin", folder);
     path_join(bin, sizeof(bin), dir, file);
@@ -594,6 +645,24 @@ static void import_run(void)
         result = DI_WRITE_FAILED;
     if (result == DI_OK && (rename(bin_part, bin) != 0 || rename(cue_part, cue) != 0))
         result = DI_WRITE_FAILED;
+    if (multi && (result == DI_OK))
+    {
+        /* the playlist of the discs before this one is out of date: the library writes a new one on its next scan */
+        DIR *d = opendir(dir);
+        struct dirent *e;
+        while (d && (e = readdir(d)))
+        {
+            size_t n = strlen(e->d_name);
+            if (n > 4 && strcmp(e->d_name + n - 4, ".m3u") == 0)
+            {
+                char m3u[SwanStationPS5_PATH_MAX];
+                path_join(m3u, sizeof(m3u), dir, e->d_name);
+                remove(m3u);
+            }
+        }
+        if (d)
+            closedir(d);
+    }
     if (result != DI_OK && result != DI_OK_INCOMPLETE)
     {
         remove(bin_part);
@@ -635,6 +704,7 @@ bool discimport_start(const char *games_dir)
     free(J.cover_px);
     J.cover_px = NULL;
     SDL_AtomicSet(&J.cover_ready, 0);
+    SDL_AtomicSet(&J.cover_none, 0);
     SDL_AtomicSet(&J.named, 0);
     SDL_AtomicSet(&J.permille, 0);
     SDL_AtomicSet(&J.bad, 0);

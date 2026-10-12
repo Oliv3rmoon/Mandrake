@@ -57,13 +57,13 @@ void cdscsi_set_quiet(bool quiet)
 
 #define P(...) (quiet_mode ? (void)0 : SwanStationPS5_log("cdscsi: " __VA_ARGS__))
 
-static int run(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len, uint32_t timeout_ms,
-               uint32_t *sense, uint32_t *got, bool out)
+int cdscsi_cmd(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len, uint32_t timeout_ms,
+               uint32_t *sense, uint32_t *got)
 {
     union ccb *ccb = calloc(1, sizeof(*ccb));
     if (!ccb)
         return -1;
-    cam_fill_csio(&ccb->csio, 1, NULL, (len ? (out ? CAM_DIR_OUT : CAM_DIR_IN) : CAM_DIR_NONE) | CAM_DEV_QFRZDIS, MSG_SIMPLE_Q_TAG,
+    cam_fill_csio(&ccb->csio, 1, NULL, (len ? CAM_DIR_IN : CAM_DIR_NONE) | CAM_DEV_QFRZDIS, MSG_SIMPLE_Q_TAG,
                   (uint8_t *)buf, len, SSD_FULL_SIZE, (uint8_t)cdb_len, timeout_ms);
     ccb->ccb_h.path_id = (path_id_t)p->path;
     ccb->ccb_h.target_id = (target_id_t)p->target;
@@ -96,18 +96,6 @@ static int run(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint
         *got = result == 0 ? len - ccb->csio.resid : 0;
     free(ccb);
     return result;
-}
-
-int cdscsi_cmd(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len, uint32_t timeout_ms,
-               uint32_t *sense, uint32_t *got)
-{
-    return run(p, cdb, cdb_len, buf, len, timeout_ms, sense, got, false);
-}
-
-int cdscsi_cmd_out(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len, uint32_t timeout_ms,
-                   uint32_t *sense)
-{
-    return run(p, cdb, cdb_len, buf, len, timeout_ms, sense, NULL, true);
 }
 
 bool cdscsi_open(unsigned unit, CdPass *p)
@@ -194,12 +182,6 @@ int cdscsi_cmd(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint
     if (got)
         *got = 0;
     return -2;
-}
-
-int cdscsi_cmd_out(const CdPass *p, const uint8_t *cdb, int cdb_len, void *buf, uint32_t len, uint32_t timeout_ms,
-                   uint32_t *sense)
-{
-    return cdscsi_cmd(p, cdb, cdb_len, buf, len, timeout_ms, sense, NULL);
 }
 
 #endif

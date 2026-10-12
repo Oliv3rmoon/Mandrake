@@ -984,8 +984,26 @@ static void disc_remember(void)
     fclose(f);
 }
 
+static int forced_disc = -1;
+
+void host_set_initial_disc(int index)
+{
+    forced_disc = index;
+}
+
 static void disc_restore(const char *game_path)
 {
+    const int forced = forced_disc;
+    forced_disc = -1; /* for one load only */
+    if (forced >= 0 && disk_available && disk.set_initial_image)
+    {
+        if (forced > 0)
+        {
+            disk.set_initial_image((unsigned)forced, game_path);
+            SwanStationPS5_log("host: starting on disc %d (the one put in)", forced + 1);
+        }
+        return;
+    }
     if (!disc_path[0] || !disk_available || !disk.set_initial_image)
         return;
     FILE *f = fopen(disc_path, "r");
