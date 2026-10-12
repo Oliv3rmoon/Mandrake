@@ -74,9 +74,8 @@ static bool init_failed(const char *stage)
 }
 
 #if defined(__PROSPERO__)
-static bool gpu_ui;        /* the interface is drawn by the GPU (vk_ui.inc) now: the setting, changed at once */
+static bool gpu_ui;        /* the interface is drawn by the GPU (vk_ui.inc): always, once the GPU layer opens */
 static bool gpu_ui_available; /* the GPU layer exists */
-static bool gpu_ui_wanted = true;
 static int output_wanted; /* 0 1080p, 1 1440p, 2 4K */
 
 /* A textured rectangle of the GPU interface; tex < 0: the tint alone. Corners in canvas pixels. */
@@ -90,7 +89,6 @@ static void gpu_quad(int tex, float x0, float y0, float x1, float y1, float u0, 
 
 #else
 #define gpu_ui false /* the GPU interface exists on the console only */
-static bool gpu_ui_wanted;
 static int output_wanted;
 typedef struct
 {
@@ -125,31 +123,24 @@ static bool init_ps5_screen(void)
 {
     char error[160];
 #if defined(SwanStationPS5_VULKAN)
-    /* v2: the screen through Vulkan; the old VideoOut path stays as the
-     * fallback (and is forced by creating /data/SwanStationPS5/no_vulkan). */
-    /* fopen, not access(): access() fails in the sandbox even for files that open */
-    FILE *off = fopen("/data/SwanStationPS5/no_vulkan", "rb");
-    bool forced_off = off != NULL;
-    if (off)
-        fclose(off);
+    /* v2: the screen through Vulkan, always; the old VideoOut path stays only as the fallback for when Vulkan can't open */
     /* a bigger output is for the GPU interface, which draws at any size (the CPU canvas would only be stretched) */
     static const int OUTPUT_W[] = {1920, 2560, 3840}, OUTPUT_H[] = {1080, 1440, 2160};
-    const int output = gpu_ui_wanted && output_wanted > 0 && output_wanted < 3 ? output_wanted : 0;
+    const int output = output_wanted > 0 && output_wanted < 3 ? output_wanted : 0;
     vkp_want_size(OUTPUT_W[output], OUTPUT_H[output]);
-    use_vulkan = !forced_off && vkp_open(PS5_SCREEN_W, PS5_SCREEN_H, error, sizeof(error));
+    use_vulkan = vkp_open(PS5_SCREEN_W, PS5_SCREEN_H, error, sizeof(error));
     if (use_vulkan)
     {
         snprintf(screen_info, sizeof(screen_info), "Vulkan, %s", vkp_describe());
-        /* the shelf and the menus through the GPU too (Settings > System > SwanStationPS5); the CPU's canvas if it can't */
+        /* the shelf and the menus through the GPU too; the CPU's canvas only if the GPU layer can't open */
         {
             char ui_error[160];
             gpu_ui_available = vkp_ui_open(ui_error, sizeof(ui_error));
-            gpu_ui = gpu_ui_available && gpu_ui_wanted;
+            gpu_ui = gpu_ui_available;
         }
     }
     else
-        snprintf(screen_info, sizeof(screen_info), "VideoOut (Vulkan %s)",
-                 forced_off ? "turned off by /data/SwanStationPS5/no_vulkan" : error);
+        snprintf(screen_info, sizeof(screen_info), "VideoOut (Vulkan %s)", error);
     if (!use_vulkan && !ps5_video_open(error, sizeof(error)))
 #else
     snprintf(screen_info, sizeof(screen_info), "VideoOut");
@@ -1155,11 +1146,6 @@ void plat_set_framegen(bool on, double core_hz, double speed, bool nominal)
 #endif
 }
 
-void plat_want_gpu_ui(bool on)
-{
-    gpu_ui_wanted = on;
-}
-
 void plat_want_output(int resolution)
 {
     output_wanted = resolution;
@@ -1168,34 +1154,6 @@ void plat_want_output(int resolution)
 bool plat_gpu_ui_active(void)
 {
     return gpu_ui;
-}
-
-/* The shelf and the menus through the GPU or the CPU, at once (Settings > System > SwanStationPS5). Turning it off puts
- * the screen back at 1080p first, since the CPU's canvas is that size. The textures follow by themselves: each mode
- * makes its own from the pixels the texture keeps. False when there is no GPU layer, or the switch can't be done. */
-bool plat_set_gpu_ui(bool on)
-{
-#if defined(__PROSPERO__)
-    if (!gpu_ui_available)
-        return false;
-    if (on == gpu_ui)
-        return true;
-    if (!on)
-    {
-        char error[160];
-        vkp_set_mode(1920, 1080, error, sizeof(error));
-        gpu_ui = false;
-    }
-    else
-    {
-        gpu_ui = true;
-        vkp_ui_begin(0); /* the frame being drawn starts its list over */
-    }
-    return true;
-#else
-    (void)on;
-    return false;
-#endif
 }
 
 bool plat_set_output(int resolution)

@@ -65,6 +65,9 @@ void app_state_path(char *out, size_t size, int slot);
 void app_describe_bios(char *out, size_t size);
 void app_rescan(void);
 void app_restart_covers(void);
+/* The controller that moves through the app (the shelf, Settings, dialogs): player 1's; the others are only for playing.
+ * If player 1's isn't connected, the first one that is, so the console is never left without a way to move. */
+int app_nav_pad(void);
 /* resume: continue from the quick-resume save */
 void app_start_game(int index, bool resume);
 void app_stop_game(void);

@@ -17,6 +17,7 @@
 | [FFmpeg](https://ffmpeg.org/) | Developer-supplied selection-audio preparation |
 | [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus) | Directory-style deployment and hardware validation |
 | [ArkSama/PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon) | Original Lapy project and owned-root design |
+| [sodaraptor: Hypnagogia 無限の夢 Boundless Dreams Jewel Case](https://sketchfab.com/3d-models/hypnagogia-boundless-dreams-jewel-case-20e4780167b6441fb364060c79870378) | The 3D jewel case of the shelf (`assets/psx_case_NTSC.obj` and the textures made from its atlases by `tools/make_case_textures.py`), CC-BY 4.0; each game's cover replaces the printed art |
 | [mpereiraesaa/PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | Exact-title one-shot helper and cooperative elevation protocol |
 
 ## Native build dependencies
@@ -166,3 +167,12 @@ No proprietary runtime module, encryption key, or game file is included.
 | [AMD FidelityFX Super Resolution 1](https://github.com/GPUOpen-Effects/FidelityFX-FSR) (EASU and RCAS), in the libretro [slang-shaders](https://github.com/libretro/slang-shaders) port (`edge-smoothing/fsr`) | the FSR 1 shader, compiled to SPIR-V by `tools/make-ntsc.py` (`third_party/fsr`) | MIT (AMD's headers in `third_party/fsr/shaders`), Unlicense (the port) |
 | Frame interpolation from [PS5SX2](https://github.com/Swordpdf/PS5SX2) by Swordpdf (from his RPCS3-PS5 / ps5-framegen), as integrated in [PSXS5](https://github.com/SynoPiia/PSXS5) by SynoPiia | frame interpolation on Vulkan (`third_party/framegen`, built by `tools/build-framegen.sh`) | GPL-3.0-or-later |
 | [AMD FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK) 2.3.0 (FSR 3 optical flow and frame interpolation) | the frame interpolation shaders (`third_party/framegen/framegen`) | MIT (`third_party/framegen/framegen/LICENSE.txt`) |
+
+## 3D jewel case
+
+This work is based on "Hypnagogia 無限の夢 Boundless Dreams Jewel Case"
+(https://sketchfab.com/3d-models/hypnagogia-boundless-dreams-jewel-case-20e4780167b6441fb364060c79870378) by
+sodaraptor (https://sketchfab.com/sodaraptor), licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/).
+The model and its textures were adapted: the printed area of the lid (its art and the black banner) is cut out, so each
+game's own cover shows in its place, and the titles and the PAL box on the edges were removed; the rest of the case (the
+plastic, the ribs, the black edges) is the model's.

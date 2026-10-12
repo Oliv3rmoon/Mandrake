@@ -285,9 +285,7 @@ static const Row LIBRARY[] = {
 };
 
 static const Row SYSTEM[] = {
-    {"SwanStationPS5", "Interface on the GPU (Vulkan)", "Draws the shelf and the menus with the GPU (Vulkan), which is faster. Turn off to draw them with the CPU, as before. It changes at once.",
-     K_TOGGLE, APPLY_NOW, SP_NONE, true, BOOL_FIELD(gpu_ui), OFF_ON, 2, 0},
-    {NULL, "Output resolution", "The resolution of the picture sent to the TV: 1080p, 1440p or 4K. Higher is sharper but asks more of the console. It needs the interface on the GPU (Vulkan) and changes at once; the screen goes dark for a moment. If your TV doesn't offer the one you pick, 1080p is used.",
+    {NULL, "Output resolution", "The resolution of the picture sent to the TV: 1080p, 1440p or 4K. Higher is sharper but asks more of the console. It changes at once; the screen goes dark for a moment. If your TV doesn't offer the one you pick, 1080p is used.",
      K_CHOICE, APPLY_NOW, SP_OUTPUT, true, INT_FIELD(output_res), OUTPUTS, 3, 0},
     {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ and /mnt/usb1/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx and /mnt/usb1/psx. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
@@ -553,16 +551,8 @@ static void hdtex_set(Settings *t, bool on)
     }
 }
 
-/* Resolutions above 1080p are for the GPU interface: with it off, the output is 1080p and its row is locked */
-static bool row_locked(const Row *r)
-{
-    return r->special == SP_OUTPUT && !app.global.gpu_ui;
-}
-
 static int read_value(const Row *r)
 {
-    if (row_locked(r))
-        return 0;
     switch (r->special)
     {
     case SP_HDTEX: return hdtex_on(target(r)) ? 1 : 0;
@@ -578,11 +568,6 @@ static int read_value(const Row *r)
 
 static void write_value(const Row *r, int v)
 {
-    if (row_locked(r))
-    {
-        app_toast("Turn on the interface on the GPU first");
-        return;
-    }
     switch (r->special)
     {
     case SP_HDTEX:
@@ -637,24 +622,6 @@ static void write_value(const Row *r, int v)
         remote_update(app.global.remote);
     if (r->special == SP_OUTPUT)
         plat_set_output(app.global.output_res);
-    if (r->offset == (int)offsetof(Settings, gpu_ui))
-    {
-        /* the interface changes at once. Off: the output is 1080p (the CPU's canvas is that size) and its row locked.
-         * On: 4K, as far as the TV offers it (the mode falls back to 1080p by itself). */
-        if (!app.global.gpu_ui)
-        {
-            app.global.output_res = 0;
-            app.settings.output_res = 0;
-            plat_set_gpu_ui(false); /* puts the screen back at 1080p */
-        }
-        else
-        {
-            plat_set_gpu_ui(true);
-            app.global.output_res = 2;
-            app.settings.output_res = 2;
-            plat_set_output(2);
-        }
-    }
     if (r->special == SP_SOUND)
         sfx_configure(app.global.ui_sound, (app.global.ui_volume + 1) * 25);
     if (app.game)
@@ -1445,8 +1412,7 @@ static void draw_rows(void)
             continue;
         bool sel = i == S.cursor;
         bool dimmed = r->global_only && S.game_scope && app.game;
-        const bool locked = row_locked(r);
-        text_draw(x + 30, ry + 21, 28, FONT_REGULAR, (dimmed && !sel) || locked ? TH_TEXT_DIM : TH_TEXT, ALIGN_LEFT,
+        text_draw(x + 30, ry + 21, 28, FONT_REGULAR, (dimmed && !sel) ? TH_TEXT_DIM : TH_TEXT, ALIGN_LEFT,
                   tr(row_name(r)));
         if (dimmed)
             icon_draw(ICON_WORLD, x + 40 + text_width(28, FONT_REGULAR, tr(row_name(r))), ry + 24, 24,
@@ -1457,7 +1423,7 @@ static void draw_rows(void)
         {
         case K_CHOICE:
             draw_choice(right, ry + 15, 46, 24, sel ? (theme.light ? TH_BG : TH_SWITCH_OFF) : TH_PILL,
-                        locked ? TH_TEXT_DIM : TH_TEXT_SOFT, value_label(r, buf, sizeof(buf)));
+                        TH_TEXT_SOFT, value_label(r, buf, sizeof(buf)));
             break;
         case K_TOGGLE:
         {

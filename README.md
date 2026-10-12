@@ -18,9 +18,9 @@
 
 ## What is SwanStationPS5?
 
-SwanStationPS5 is a PlayStation 1 emulator that installs as an app on the PS5 home screen. It is a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) by SynoPiia that runs every game on SwanStation.
+SwanStationPS5 is a PlayStation 1 emulator that installs as an app on the PS5 home screen. It started as a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) by SynoPiia, and it is no longer one. PSXS5 draws its interface on the CPU, with SDL2's software renderer into a canvas that Vulkan only displays; SwanStationPS5 is now 100% Vulkan, the game's picture and the whole interface drawn by the GPU, so the two frontends no longer line up. It runs every game on SwanStation.
 
-It uses PSXS5's frontend (the shelf, menus, controls and tools) to drive the SwanStation core: SwanStation is the only emulator.
+Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has been reworked since to be 100% Vulkan. It drives the SwanStation core: SwanStation is the only emulator.
 
 - The emulator is [SwanStation](https://github.com/libretro/swanstation) (DuckStation's libretro core): accurate, and drawn on the PS5's GPU through Vulkan at up to 16x the PS1's resolution, with PGXP. It runs without a BIOS dump on its built-in OpenBIOS, but `SCPH1001.BIN` is highly recommended for good emulation.
 - You pick a game from a cover-flow shelf with your covers.
@@ -356,7 +356,7 @@ python3 tools/make_release.py   # optional: build and pack PPSA98510.zip, the re
 
 ## Credits
 
-SwanStationPS5 is a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) by SynoPiia and is built on the work of a lot of people. Thank you all.
+SwanStationPS5 started as a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) by SynoPiia and is built on the work of a lot of people. Thank you all.
 
 * **The SwanStation and DuckStation contributors**, for [SwanStation](https://github.com/libretro/swanstation), the emulator SwanStationPS5 runs.
 * **Mihawk-99**, for the PS5 port of Mesa's RADV Vulkan driver.
@@ -368,6 +368,7 @@ SwanStationPS5 is a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) by SynoPi
 * **ArkSama / Team PHU and mpereiraesaa**, for [PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon), the fallback sandbox elevation.
 * **[RetroAchievements](https://retroachievements.org)**, for the achievements, the community that makes the sets, and its [rcheevos](https://github.com/RetroAchievements/rcheevos) library.
 * **[xlenore/psx-covers](https://github.com/xlenore/psx-covers)**, for the covers the shelf downloads.
+* **sodaraptor** ([@sodaraptor_dev](https://sodaraptor.itch.io/psx-jewel-case)), for the PSX jewel case model and textures the shelf's 3D cases are built from: [Hypnagogia 無限の夢 Boundless Dreams Jewel Case](https://sketchfab.com/3d-models/hypnagogia-boundless-dreams-jewel-case-20e4780167b6441fb364060c79870378) (CC-BY 4.0), with each game's own cover in place of its art.
 * **The [libretro-database](https://github.com/libretro/libretro-database) contributors**, for the PlayStation cheat library.
 * **Swordpdf**, for [PS5SX2](https://github.com/Swordpdf/PS5SX2). Its shelf and project page inspired SwanStationPS5's, and studying it and the other PS5 emulator ports showed how a native emulator title runs on the console.
 * **Swordpdf and AMD**, for the frame interpolation behind *Double frames*: [PS5SX2](https://github.com/Swordpdf/PS5SX2)'s port of AMD FSR 3 (FidelityFX SDK), as first integrated in PSXS5 by SynoPiia.

@@ -294,15 +294,24 @@ void app_draw_hints_right(const HintCombo *items, int count)
 
 /* ---------------------------------------------------------------- input edges */
 
-/* Button presses for menus, with auto-repeat on directions and shoulders. */
+int app_nav_pad(void)
+{
+    for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
+        if (app.pads[i].connected)
+            return i;
+    return 0;
+}
+
+/* Button presses for menus, with auto-repeat on directions and shoulders. Only the navigating controller counts: the
+ * others are for playing. */
 static uint32_t nav_pressed(const PadState *pads)
 {
     static uint32_t previous;
     static uint64_t repeat_at;
     static int repeats;
     uint32_t held = 0;
-    for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
     {
+        const int i = app_nav_pad();
         held |= pads[i].buttons;
         if (pads[i].ly < -20000)
             held |= BIT(BTN_UP);
@@ -481,9 +490,7 @@ static void reset_to_factory(void)
     theme_apply(d.theme);
     sfx_configure(d.ui_sound, (d.ui_volume + 1) * 25);
     remote_update(d.remote);
-    plat_set_gpu_ui(d.gpu_ui);
-    if (d.gpu_ui)
-        plat_set_output(d.output_res);
+    plat_set_output(d.output_res);
     app_save_settings();
     app_rescan(); /* the USB folder is back to its own */
     app_toast("Factory settings restored");
@@ -1520,8 +1527,6 @@ int main(void)
          strcmp(saved_version, SwanStationPS5_VERSION) != 0);
     /* frame interpolation wants the 120 Hz mode, chosen when the screen opens */
     plat_want_high_refresh(config_peek_bool(app.paths.config, "framegen"));
-    /* the shelf and menus on the GPU, unless Settings > System > SwanStationPS5 turned that off */
-    plat_want_gpu_ui(config_peek_bool_or(app.paths.config, "gpu_ui", true));
     plat_want_output(config_peek_int(app.paths.config, "output_res", 2));
 
     if (!plat_init())

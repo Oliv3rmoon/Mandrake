@@ -22,6 +22,7 @@
 #include "../stats.h"
 #include "../tips.h"
 #include "../update.h"
+#include "case3d.h"
 #include "draw.h"
 #include "icons.h"
 #include "sfx.h"
@@ -44,14 +45,26 @@
 #define SIDE_GAP 400.0f  /* centre to the first neighbour */
 #define STACK_GAP 120.0f /* between further neighbours */
 #define SIDE_SCALE 0.74f
+#define CASE_SIDE_GAP 520.0f  /* the same, with 3D cases: apart enough to see the side of the first neighbour */
+#define CASE_STACK_GAP 125.0f
+#define BUZZ_TIME 0.09f /* a press at the end of the shelf (or with a single game) buzzes the controller this long */
+#define NUDGE_SPEED 4.2f /* the knock a left or right press gives the case, radians per second (a spring brings it back) */
+#define SIDE_YAW 0.45f   /* the jewel cases beside the selected one turn towards it (radians) */
 #define SIDE_SQUEEZE 1.0f /* the covers beside the selected one keep their width */
 #define LAUNCH_TIME 0.3f /* the fade to black */
 #define QUIT_HOLD 2.0f   /* seconds O is held on the shelf to close the app */
 #define DISC_TIME 0.95f  /* before it, with the disc animation: the disc slides out and spins up */
+#define CASE_DISC_TIME 2.4f /* the same with the 3D cases: the lid opens and the CD spins up on its tray */
+static bool shelf_cases(void);
+
+static float disc_time(void)
+{
+    return shelf_cases() ? CASE_DISC_TIME : DISC_TIME;
+}
 
 static float launch_total(void)
 {
-    return app.global.disc_animation ? DISC_TIME + LAUNCH_TIME : LAUNCH_TIME;
+    return app.global.disc_animation ? disc_time() + LAUNCH_TIME : LAUNCH_TIME;
 }
 
 static struct
@@ -60,6 +73,11 @@ static struct
     int view_count, view_capacity;
     int cursor; /* position in view */
     float pos;  /* animated position */
+    float tilt;  /* the selected case's turn, from the right stick (radians) */
+    float pitch; /* and its tilt up or down */
+    float buzz_t;     /* seconds left of the little vibration of a press that can't move the cursor */
+    bool buzz_locked; /* it buzzed already: not again until the direction is let go (holding it auto-repeats) */
+    float nudge, nudge_v; /* a knock to the left or right, as if the right stick had been flicked: on a spring */
     bool details;
     float details_t, launch_t, quit_hold;
     bool starting; /* the launch is over: this frame shows "Loading", the next one loads */
@@ -386,7 +404,8 @@ static void draw_ach_badge(const Game *g, float right, float bottom, float size)
     text_draw(x + tw - size * 0.6f, y + (h - size) * 0.5f - 1, size, FONT_BOLD, 0xffffffffu, ALIGN_RIGHT, t);
 }
 
-/* The app's icon (sce_sys/icon0.png), for games whose cover has not arrived or does not exist. */
+/* The picture for games whose cover has not arrived or does not exist (assets/nocover2.png), or the app's icon
+ * (sce_sys/icon0.png) when it is missing. */
 static PlatTexture *no_cover_icon(void)
 {
     static PlatTexture *icon;
@@ -395,9 +414,14 @@ static PlatTexture *no_cover_icon(void)
     {
         tried = true;
         char path[SwanStationPS5_PATH_MAX];
-        plat_asset_path(path, sizeof(path), "../sce_sys/icon0.png");
+        plat_asset_path(path, sizeof(path), "nocover2.png");
         int w, h, n;
         uint8_t *rgba = stbi_load(path, &w, &h, &n, 4);
+        if (!rgba)
+        {
+            plat_asset_path(path, sizeof(path), "../sce_sys/icon0.png");
+            rgba = stbi_load(path, &w, &h, &n, 4);
+        }
         if (rgba)
         {
             icon = plat_texture_create(rgba, w, h, true);
@@ -405,6 +429,22 @@ static PlatTexture *no_cover_icon(void)
         }
     }
     return icon;
+}
+
+/* width / height of the picture for games without a cover */
+static float no_cover_aspect(void)
+{
+    int w = 0, h = 0;
+    plat_texture_size(no_cover_icon(), &w, &h);
+    return w > 0 && h > 0 ? (float)w / h : 1.0f;
+}
+
+/* the picture for games without a cover, in the middle of a box, whole and keeping its proportions */
+static void draw_no_cover_fit(float x, float y, float w, float h, uint32_t tint)
+{
+    const float aspect = no_cover_aspect();
+    const float pw = fminf(w, h * aspect), ph = pw / aspect;
+    plat_draw_texture(no_cover_icon(), x + (w - pw) * 0.5f, y + (h - ph) * 0.5f, pw, ph, tint, true);
 }
 
 /* the cover on the shelf: NULL for a generated title card, so the app icon shows instead */
@@ -434,12 +474,37 @@ static void draw_cover_reflection(PlatTexture *tex, float x, float y, float w, f
     plat_draw_mesh(tex, v, 6, NULL, 0);
 }
 
+/* The default shelf shows 3D jewel cases (assets/psx_case_NTSC.obj) with the flat front art on them. Only with the GPU
+ * interface (Vulkan): the CPU's renderer would crawl, so it keeps the flat covers. The pre-rendered 3D covers (cover
+ * style "3D case") already are cases, and a missing model falls back to the flat covers too. */
+static bool shelf_cases(void)
+{
+    return plat_gpu_ui_active() && theme.layout != LAYOUT_GRID && theme.layout != LAYOUT_SPINES &&
+           app.global.cover_style == COVER_FLAT && case3d_available();
+}
+
+static void draw_case(PlatTexture *tex, const Game *g, float cx, float cy, float h, float yaw, float pitch,
+                      uint32_t tint, bool selected)
+{
+    if (!tex && no_cover_icon())
+        tex = no_cover_icon();
+    const float w = h * case3d_aspect();
+    case3d_matte(tex == no_cover_icon()); /* the picture of a game without a cover is lit like paper */
+    case3d_draw(tex, cx, cy, h, yaw, pitch, tint, reflections_on());
+    if (selected)
+    {
+        if (!tex && fabsf(yaw) < 0.3f)
+            text_draw_fit(cx, cy - 16, 24, FONT_BOLD, TH_TEXT_DIM, ALIGN_CENTER, w - 120, display_title(g));
+        draw_ach_badge(g, cx + w * 0.5f, cy + h * 0.5f, 20);
+    }
+}
+
 static void draw_cover(PlatTexture *tex, const Game *g, float cx, float cy, float h, float squeeze,
                        uint32_t tint, bool selected)
 {
     int tw = 1, th = 1;
     plat_texture_size(tex, &tw, &th);
-    float aspect = tex ? (float)tw / th : no_cover_icon() ? 1.0f : 0.88f; /* the app icon is square */
+    float aspect = tex ? (float)tw / th : no_cover_icon() ? no_cover_aspect() : 0.88f;
     float w = h * aspect * squeeze, x = cx - w * 0.5f, y = cy - h * 0.5f;
     if (selected)
     {
@@ -994,7 +1059,7 @@ static void draw_grid(int game, float launch)
             plat_draw_texture(t, x + (tile - w) * 0.5f, y + (tile - h) * 0.5f, w, h, 0xffffffffu, true);
         }
         else if (no_cover_icon())
-            plat_draw_texture(no_cover_icon(), x + 10, y + 10, tile - 20, tile - 20, 0xffffffffu, true);
+            draw_no_cover_fit(x + 10, y + 10, tile - 20, tile - 20, 0xffffffffu);
         else
             icon_draw(ICON_DISC, x + tile * 0.5f - 32, y + tile * 0.5f - 32, 64, TH_TEXT_DIM);
         draw_ach_badge(g, x + tile, y + tile, 15);
@@ -1019,7 +1084,7 @@ static void draw_grid(int game, float launch)
         plat_draw_texture(t, cx + (cw - w) * 0.5f, cy + 32, w, h, 0xffffffffu, true);
     }
     else if (no_cover_icon())
-        plat_draw_texture(no_cover_icon(), cx + (cw - art) * 0.5f, cy + 32, art, art, 0xffffffffu, true);
+        draw_no_cover_fit(cx + (cw - art) * 0.5f, cy + 32, art, art, 0xffffffffu);
     float ty = cy + 32 + art + 28;
     float a = 1.0f - launch;
     text_draw_fit(cx + 32, ty, 36, FONT_BOLD, argb_alpha(TH_TEXT, a), ALIGN_LEFT, cw - 64, display_title(g));
@@ -1101,7 +1166,7 @@ static void draw_spines(float launch)
     if (sel)
         plat_draw_texture(sel, fx, fy, face_w, face_h, 0xffffffffu, true);
     else if (no_cover_icon())
-        plat_draw_texture(no_cover_icon(), fx, fy, face_w, face_h, 0xffffffffu, true);
+        draw_no_cover_fit(fx, fy, face_w, face_h, 0xffffffffu);
     else
         draw_rrect(fx, fy, face_w, face_h, 8, TH_CARD);
     draw_rrect_outline(fx - 5, fy - 5, face_w + 10, face_h + 10, 10, 3, theme.cover_outline);
@@ -1167,7 +1232,9 @@ static void draw_launch_disc(int game, float d, float t)
     float r = COVER_H * 0.42f;
     PlatTexture *cover = covers_get(game);
     float aspect = 0.88f;
-    if (cover)
+    if (shelf_cases())
+        aspect = case3d_aspect();
+    else if (cover)
     {
         int tw = 1, th = 1;
         plat_texture_size(cover, &tw, &th);
@@ -1359,6 +1426,24 @@ void shelf_screen(uint32_t pressed)
             sfx_play(SFX_CLICK);
             S.title_fade = 0.35f;
         }
+        /* Left or right pressed and the cursor moved: the case gets a knock that way, as if the right stick had been flicked
+         * that way. With nowhere to go (the first or last game, or a single one) there is no knock, only the buzz below. */
+        if (shelf_cases() && !S.dialog && S.cursor != before)
+        {
+            if (pressed & BIT(BTN_LEFT))
+                S.nudge_v -= NUDGE_SPEED;
+            if (pressed & BIT(BTN_RIGHT))
+                S.nudge_v += NUDGE_SPEED;
+        }
+        /* Left or right pressed with nowhere to go (the first or last game, or a single one): a small vibration */
+        if (S.cursor == before && (pressed & (BIT(BTN_LEFT) | BIT(BTN_RIGHT))) && !S.dialog && app.global.vibration > 0 &&
+            !S.buzz_locked)
+        {
+            const float level = app.global.vibration * 0.25f; /* Settings > Controls > Vibration */
+            plat_rumble(app_nav_pad(), 0, (uint16_t)(26000.0f * level)); /* the controller that pressed: the navigating one */
+            S.buzz_t = BUZZ_TIME;
+            S.buzz_locked = true; /* once: holding the direction (it auto-repeats) doesn't buzz again */
+        }
         if (pressed & BIT(BTN_L1))
             change_category(-1);
         if (pressed & BIT(BTN_R1))
@@ -1477,9 +1562,7 @@ void shelf_screen(uint32_t pressed)
 
     /* holding O on the shelf closes the app */
     {
-        bool circle = false;
-        for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
-            circle |= (app.pads[i].buttons & BIT(BTN_CIRCLE)) != 0;
+        const bool circle = (app.pads[app_nav_pad()].buttons & BIT(BTN_CIRCLE)) != 0;
         static float hold;
         static bool armed; /* O was pressed on the free shelf: not carried over from a menu, details or a dialog */
         if (!circle)
@@ -1503,6 +1586,58 @@ void shelf_screen(uint32_t pressed)
 
     /* ------------------------------------------------ animation */
     anim_approach(&S.pos, (float)S.cursor, app.dt, 16.0f);
+    {
+        /* the buzz can come again once left or right has been let go */
+        const PadState *nav = &app.pads[app_nav_pad()];
+        if (!(nav->buttons & (BIT(BTN_LEFT) | BIT(BTN_RIGHT))) && abs(nav->lx) < 20000)
+            S.buzz_locked = false;
+    }
+    if (S.buzz_t > 0.0f)
+    {
+        S.buzz_t -= app.dt;
+        if (S.buzz_t <= 0.0f)
+            plat_rumble(app_nav_pad(), 0, 0);
+    }
+    {
+        /* the knock: a damped spring, so the case swings that way, a touch past, and settles */
+        const float dt = fminf(app.dt, 0.05f), k = 110.0f, c = 9.0f;
+        S.nudge_v += (-k * S.nudge - c * S.nudge_v) * dt;
+        S.nudge += S.nudge_v * dt;
+        if (!shelf_cases() || (fabsf(S.nudge) < 0.0005f && fabsf(S.nudge_v) < 0.005f))
+            S.nudge = S.nudge_v = 0.0f;
+        S.nudge = fmaxf(fminf(S.nudge, 0.5f), -0.5f);
+    }
+    {
+        /* the right stick turns the selected case (sideways) and tilts it (up or down), only as far as its back stays
+         * out of view */
+        float push = 0.0f, lift = 0.0f;
+        bool moving = false; /* the left stick or the d-pad is in use: it moves through the shelf, and nothing else turns the case */
+        {
+            const PadState *nav = &app.pads[app_nav_pad()];
+            if (nav->connected)
+            {
+                push = nav->rx / 32767.0f;
+                lift = nav->ry / 32767.0f;
+                moving = (nav->buttons & (BIT(BTN_LEFT) | BIT(BTN_RIGHT) | BIT(BTN_UP) | BIT(BTN_DOWN))) != 0 ||
+                         abs(nav->lx) > 20000 || abs(nav->ly) > 20000;
+            }
+        }
+        const float dead = 0.25f;
+        push = fabsf(push) < dead ? 0.0f : (push - (push > 0 ? dead : -dead)) / (1.0f - dead);
+        lift = fabsf(lift) < dead ? 0.0f : (lift - (lift > 0 ? dead : -dead)) / (1.0f - dead);
+        /* only the four ways, never a diagonal: the axis pushed further wins */
+        if (fabsf(push) >= fabsf(lift))
+            lift = 0.0f;
+        else
+            push = 0.0f;
+        if (S.dialog || S.details || P.open || S.launch_t > 0.0f || !shelf_cases() || moving)
+            push = lift = 0.0f;
+        /* with the left stick in use the right one is ignored, and what it had turned goes back fast: the knock of a press
+         * is a way of its own, never mixed with a tilt */
+        const float follow = moving ? 24.0f : 12.0f;
+        anim_approach(&S.pitch, -lift * case3d_max_pitch(), app.dt, follow); /* stick up: the top goes away */
+        anim_approach(&S.tilt, push * case3d_max_yaw(), app.dt, follow);
+    }
     S.details_t = fminf(fmaxf(S.details_t + (S.details ? app.dt : -app.dt) * 8.0f, 0.0f), 1.0f);
     if (S.title_fade > 0)
         S.title_fade = fmaxf(S.title_fade - app.dt, 0.0f);
@@ -1559,11 +1694,12 @@ void shelf_screen(uint32_t pressed)
     {
         int first = (int)floorf(S.pos) - 6, last = (int)ceilf(S.pos) + 6;
         const int base = (int)floorf(S.pos + 0.5f);
+        const bool cases_ = shelf_cases();
         /* where the cover at (ring, side) stands: its centre, scale, width and the shade it is drawn with */
         struct Place
         {
             int k;
-            float ox, scale, squeeze, width, ad;
+            float ox, scale, squeeze, width, ad, yaw, pitch;
             uint32_t tint;
         };
         #define PLACE(out, ring_, side_)                                                                           \
@@ -1574,23 +1710,33 @@ void shelf_screen(uint32_t pressed)
                 float d_ = pl->k - S.pos, ad_ = fabsf(d_), near_ = ad_ < 1.0f ? ad_ : 1.0f;                       \
                 /* a light perspective: the selected cover comes forward, the others step back, each a little */  \
                 /* further than the one before (as in the PS5X360 shelf) */                                       \
-                float depth_ = 1.0f / (1.0f + 0.06f * (ad_ > 1.0f ? ad_ - 1.0f : 0.0f));                         \
-                pl->ox = ad_ < 1.0f ? d_ * SIDE_GAP                                                               \
-                                    : (d_ > 0 ? 1.0f : -1.0f) * (SIDE_GAP + (ad_ - 1.0f) * STACK_GAP * depth_);   \
+                float depth_ = 1.0f / (1.0f + (cases_ ? 0.22f : 0.06f) * (ad_ > 1.0f ? ad_ - 1.0f : 0.0f));         \
+                const float gap_ = cases_ ? CASE_SIDE_GAP : SIDE_GAP, stack_ = cases_ ? CASE_STACK_GAP : STACK_GAP; \
+                pl->ox = ad_ < 1.0f ? d_ * gap_                                                                   \
+                                    : (d_ > 0 ? 1.0f : -1.0f) * (gap_ + (ad_ - 1.0f) * stack_ * depth_);          \
                 pl->scale = (1.0f - near_ * (1.0f - SIDE_SCALE)) * depth_ * (1.0f + 0.06f * (1.0f - near_));      \
                 pl->squeeze = 1.0f - near_ * (1.0f - SIDE_SQUEEZE);                                               \
-                if (pl->k == S.cursor)                                                                            \
+                if (pl->k == S.cursor && !cases_) /* the 3D cases stay where they are: only their disc comes near */ \
                     pl->scale *= 1.0f + launch * 0.12f;                                                           \
                 pl->ad = ad_;                                                                                     \
                 float fade_ = ad_ > 4.0f ? fmaxf(0.0f, 1.0f - (ad_ - 4.0f) / 2.0f) : 1.0f;                       \
-                float shade_ = (1.0f - near_ * 0.4f) * fade_ * (pl->k == S.cursor ? 1.0f : 1.0f - launch);       \
+                float shade_ = (1.0f - near_ * 0.4f) * fade_ * (pl->k == S.cursor || cases_ ? 1.0f : 1.0f - launch)    \
+                              * (cases_ && ad_ > 1.0f ? 1.0f / (1.0f + 0.2f * (ad_ - 1.0f)) : 1.0f);    \
                 uint8_t s8_ = (uint8_t)(255 * shade_);                                                            \
                 pl->tint = 0xff000000u | (uint32_t)s8_ << 16 | (uint32_t)s8_ << 8 | s8_;                          \
                 PlatTexture *tx_ = pl->k >= 0 && pl->k < S.view_count ? shelf_cover(S.view[pl->k]) : NULL;      \
                 int tw_ = 1, th_ = 1;                                                                             \
                 plat_texture_size(tx_, &tw_, &th_);                                                               \
-                float aspect_ = tx_ ? (float)tw_ / th_ : no_cover_icon() ? 1.0f : 0.88f;                          \
+                float aspect_ = tx_ ? (float)tw_ / th_ : no_cover_icon() ? no_cover_aspect() : 0.88f;                \
                 pl->width = COVER_H * pl->scale * aspect_ * pl->squeeze;                                          \
+                pl->yaw = pl->pitch = 0.0f;                                                                       \
+                if (cases_)                                                                                       \
+                {                                                                                                 \
+                    pl->yaw = (d_ > 1.0f ? 1.0f : d_ < -1.0f ? -1.0f : d_) * SIDE_YAW + fmaxf(fminf(S.tilt + S.nudge, case3d_max_yaw()), -case3d_max_yaw()) * (1.0f - near_);   \
+                    pl->pitch = S.pitch * (1.0f - near_);                                                         \
+                    pl->width = COVER_H * pl->scale * (case3d_aspect() * cosf(pl->yaw) +                          \
+                                                       case3d_depth() * fabsf(sinf(pl->yaw)));                    \
+                }                                                                                                 \
             } while (0)
         /* far to near, so the selected cover is drawn last. A cover beside the middle is mostly hidden by the
          * nearer one: only the part that shows is drawn (a clip, so the software renderer skips the rest) */
@@ -1613,15 +1759,29 @@ void shelf_screen(uint32_t pressed)
                     float edge = CENTER_X + nearer.ox + side * nearer.width * 0.5f;
                     if (side > 0 ? edge >= plat_width() : edge <= 0)
                         continue; /* wholly behind the nearer one */
-                    if (side > 0)
-                        plat_set_clip((int)edge, 0, plat_width() - (int)edge, plat_height());
-                    else
-                        plat_set_clip(0, 0, (int)edge, plat_height());
-                    clipped = true;
+                    if (!cases_) /* the cases (GPU only) don't need it, and it would cut off the side of the next one */
+                    {
+                        if (side > 0)
+                            plat_set_clip((int)edge, 0, plat_width() - (int)edge, plat_height());
+                        else
+                            plat_set_clip(0, 0, (int)edge, plat_height());
+                        clipped = true;
+                    }
                 }
                 int index = S.view[k];
-                draw_cover(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox, flow_y(),
-                           COVER_H * me.scale, me.squeeze, me.tint, selected && me.ad < 0.25f && launch < 0.5f);
+                if (cases_ && selected && S.launch_t > 0.0f && app.global.disc_animation)
+                {
+                    /* the chosen case: the lid opens and the CD spins up on its tray while the game loads */
+                    const float t = S.launch_t, o = fminf(t / 0.95f, 1.0f);
+                    const float u = fmaxf(t - 0.8f, 0.0f);
+                    case3d_launch(o * o * (3.0f - 2.0f * o), 7.0f * u * u);
+                }
+                if (cases_)
+                    draw_case(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox, flow_y(),
+                              COVER_H * me.scale, me.yaw, me.pitch, me.tint, selected && me.ad < 0.25f && launch < 0.5f);
+                else
+                    draw_cover(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox, flow_y(),
+                               COVER_H * me.scale, me.squeeze, me.tint, selected && me.ad < 0.25f && launch < 0.5f);
                 if (clipped)
                     plat_set_clip(0, 0, 0, 0);
             }
@@ -1737,11 +1897,15 @@ void shelf_screen(uint32_t pressed)
         bool disc = app.global.disc_animation && game >= 0;
         /* with the disc, the shelf darkens behind it and the disc keeps spinning
          * while the game loads (no black gap); without it, a fade to black */
-        draw_rect(0, 0, plat_width(), plat_height(), argb_alpha(0xff000000u, disc ? launch * 0.85f : launch));
-        if (disc)
+        /* the 3D cases don't darken at all: the CD spins in the light until the game starts, with no fade to black */
+        if (!(disc && shelf_cases()))
+            draw_rect(0, 0, plat_width(), plat_height(), argb_alpha(0xff000000u, disc ? launch * 0.85f : launch));
+        if (disc && !shelf_cases()) /* the 3D cases bring their own CD out */
             draw_launch_disc(game, fminf(S.launch_t / DISC_TIME, 1.0f), S.launch_t);
-        if (launch > 0.0f)
-            text_draw(CENTER_X, plat_height() - 120, 30, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, launch),
+        /* with the 3D cases the text is there from the moment the case opens; otherwise it comes with the final fade */
+        const float loading = disc && shelf_cases() ? fminf(S.launch_t / 0.4f, 1.0f) : launch;
+        if (loading > 0.0f)
+            text_draw(CENTER_X, plat_height() - 120, 30, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, loading),
                       ALIGN_CENTER, tr("Loading your game..."));
     }
     if (S.quit_hold > 0.5f)

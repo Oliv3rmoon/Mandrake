@@ -27,7 +27,6 @@ void config_defaults(Settings *s)
     s->vibration = 4;
     s->quick_resume = true;
     s->update_check = true;
-    s->gpu_ui = true;
     snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/usb0/psx and /mnt/usb1/psx */
     s->bezel = true; /* the game's artwork frame, when there is one */
     s->theme = 1; /* Neon Arcade (THEME_NEON in ui/theme.h) */
@@ -218,8 +217,6 @@ static bool config_apply(Settings *s, const char *path)
             s->fast_effects = as_bool(value);
         else if (strcmp(key, "framegen") == 0)
             s->framegen = as_bool(value);
-        else if (strcmp(key, "gpu_ui") == 0)
-            s->gpu_ui = as_bool(value);
         else if (strcmp(key, "usb_folder") == 0)
             snprintf(s->usb_folder, sizeof(s->usb_folder), "%s", value);
         else if (strcmp(key, "output_res") == 0)
@@ -294,7 +291,6 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
     out->background = global->background;
     out->remote = global->remote;
     out->update_check = global->update_check;
-    out->gpu_ui = global->gpu_ui;
     snprintf(out->usb_folder, sizeof(out->usb_folder), "%s", global->usb_folder);
     out->output_res = global->output_res;
     out->quick_resume = global->quick_resume;
@@ -382,7 +378,7 @@ bool config_save(const Settings *s, const char *path)
     fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\n",
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
             s->update_check);
-    fprintf(f, "renderer=%d\ngpu_ui=%d\noutput_res=%d\nusb_folder=%s\n", s->renderer, s->gpu_ui, s->output_res, s->usb_folder);
+    fprintf(f, "renderer=%d\noutput_res=%d\nusb_folder=%s\n", s->renderer, s->output_res, s->usb_folder);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,
             s->crop_edges);

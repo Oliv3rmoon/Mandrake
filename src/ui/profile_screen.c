@@ -149,9 +149,7 @@ void profile_screen(uint32_t pressed)
 {
     /* holding L2 + R2 for a few seconds signs out */
     {
-        uint32_t held = 0;
-        for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
-            held |= app.pads[i].buttons;
+        const uint32_t held = app.pads[app_nav_pad()].buttons;
         if ((held & BIT(BTN_L2)) && (held & BIT(BTN_R2)))
             P.signout_hold += app.dt;
         else
