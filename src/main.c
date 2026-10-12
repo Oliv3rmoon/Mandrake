@@ -16,6 +16,7 @@
 #include "gamedb.h"
 #include "profiles.h"
 #include "covers.h"
+#include "discimport.h"
 #include "i18n.h"
 #include "platform/platform.h"
 #include "platform/ps5_crash.h"
@@ -977,6 +978,86 @@ static void sbi_check_draw(void)
     draw_rrect(x + 32, y + 56, fmaxf(12.0f, (w - 64) * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
 }
 
+/* The disc import (Settings > System > SwanStationPS5 > Import disc): while it runs the buttons stay out of every
+ * screen and nothing can cancel it; when it ends the result is shown and the library looks for the new game */
+static bool import_input(uint32_t *pressed)
+{
+    DiscImportState s = discimport_state();
+    if (s == DI_IDLE)
+        return false;
+    *pressed = 0;
+    if (s == DI_RUNNING)
+    {
+        discimport_check_stall(); /* no progress for 30 seconds: it is given up and the next frame says why */
+        return true;
+    }
+    char msg[160];
+    switch (s)
+    {
+    case DI_OK:
+        snprintf(msg, sizeof(msg), tr("Imported: %s"), discimport_title());
+        app_rescan();
+        break;
+    case DI_OK_INCOMPLETE:
+        snprintf(msg, sizeof(msg), tr("Imported with %d unreadable sectors: %s"), discimport_bad(), discimport_title());
+        app_rescan();
+        break;
+    case DI_ALREADY:
+        snprintf(msg, sizeof(msg), tr("Already in your games: %s"), discimport_title());
+        break;
+    default: break;
+    }
+    if (s != DI_OK && s != DI_OK_INCOMPLETE && s != DI_ALREADY)
+    {
+        /* what went wrong, in a box that stays until X */
+        static const char *const WHY[] = {
+            [DI_NO_DRIVE] = "No CD drive was found. Plug the USB CD drive into the console and try again.",
+            [DI_NO_DISC] = "The CD drive has no disc ready. Put in a disc, wait for it to spin up and try again.",
+            [DI_NOT_PS1] = "This disc is not a PS1 game: its first track is not data or it has no readable volume. Nothing was imported.",
+            [DI_UNREADABLE] = "The disc has too many sectors that cannot be read, so the import was stopped and what was copied was deleted. Clean the disc or try another copy.",
+            [DI_DRIVE_LOST] = "The disc or the drive was removed during the import. What was copied was deleted.",
+            [DI_WRITE_FAILED] = "The game could not be written to the games folder. Check that there is free space and try again.",
+            [DI_STALLED] = "The import was stopped: the CD drive did not read anything for 30 seconds. The disc may be dirty, scratched or badly burned. Clean it and try again; what was copied was deleted.",
+        };
+        discimport_ack();
+        app_message_box(WHY[s]);
+        return true;
+    }
+    discimport_ack();
+    app_toast_for(msg, 6.0f);
+    return true;
+}
+
+static void import_draw(void)
+{
+    if (discimport_state() != DI_RUNNING)
+        return;
+    const char *msg = tr("Importing the disc... do not remove it");
+    const char *title = discimport_title();
+    float w = fmaxf(text_width(26, FONT_REGULAR, msg), text_width(26, FONT_REGULAR, title)) + 96, h = 124;
+    float x = (plat_width() - w) * 0.5f, y = plat_height() - 340;
+    float p = discimport_permille() / 1000.0f;
+    char pct[16];
+    snprintf(pct, sizeof(pct), "%d%%", discimport_permille() / 10);
+    draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
+    text_draw(plat_width() * 0.5f, y + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
+    if (title[0])
+        text_draw(plat_width() * 0.5f, y + 46, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, title);
+    draw_rrect(x + 32, y + 92, w - 64 - 90, 12, 6, TH_DIVIDER);
+    draw_rrect(x + 32, y + 92, fmaxf(12.0f, (w - 64 - 90) * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
+    text_draw(x + w - 32, y + 82, 26, FONT_REGULAR, TH_TEXT, ALIGN_RIGHT, pct);
+}
+
+void app_import_disc(void)
+{
+    if (app.game)
+    {
+        app_toast("Close the game to import a disc");
+        return;
+    }
+    discimport_start(app.paths.games);
+}
+
 void app_start_game(int index, bool resume)
 {
     if (index < 0 || index >= app.library.count)
@@ -1646,6 +1727,7 @@ int main(void)
         else
             SwanStationPS5_log("games folder %s: could not be created (%s)", games, strerror(errno));
     }
+    discimport_cleanup(app.paths.games);
     SwanStationPS5_log("SwanStationPS5 %s starting, data root %s", SwanStationPS5_VERSION, app.paths.root);
     SwanStationPS5_log("screen: %s", plat_screen_info());
 #if defined(__PROSPERO__)
@@ -1723,7 +1805,7 @@ int main(void)
             quit = true;
         memcpy(app.pads, pads, sizeof(app.pads));
         uint32_t pressed = nav_pressed(pads);
-        if (!question_input(&pressed) && !sbi_check_input(&pressed))
+        if (!question_input(&pressed) && !sbi_check_input(&pressed) && !import_input(&pressed))
             message_box_input(&pressed);
         /* the shelf and settings paint a full-screen backdrop: no clear needed */
         bool backdrop = app.screen == SCREEN_LIBRARY || (app.screen == SCREEN_SETTINGS && !app.game);
@@ -1776,6 +1858,7 @@ int main(void)
             ra_idle();
         draw_achievement();
         sbi_check_draw();
+        import_draw();
         message_box_draw();
         question_draw();
         plat_end_frame();

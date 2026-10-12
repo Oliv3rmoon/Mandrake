@@ -73,6 +73,8 @@ int app_nav_pad(void);
 void app_start_game(int index, bool resume);
 /* Boots the console's BIOS with no disc (Settings > About > Start BIOS) */
 void app_start_bios(void);
+/* Dumps the PS1 disc in the USB CD drive into the games folder (a bar blocks the screen meanwhile) */
+void app_import_disc(void);
 void app_stop_game(void);
 /* Path of a game's own settings file. */
 void app_game_config_path(char *out, size_t size, const Game *g);

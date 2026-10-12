@@ -7,6 +7,7 @@
 #include "../config.h"
 #include "../controls.h"
 #include "../core/host.h"
+#include "../discprobe.h"
 #include "../i18n.h"
 #include "../profiles.h"
 #include "../platform/platform.h"
@@ -56,6 +57,8 @@ enum Special
     SP_ACCOUNT,
     SP_BIOS,
     SP_BIOS_START,
+    SP_CDPROBE,
+    SP_IMPORT_DISC,
     SP_GAMES,
     SP_DATA,
     SP_CREDITS,
@@ -287,6 +290,10 @@ static const Row LIBRARY[] = {
 static const Row SYSTEM[] = {
     {"SwanStationPS5", "Start BIOS", "Starts the console's BIOS with no disc, to manage memory cards. While Memory Card 1 Type (Restart) is set to Libretro, the saves will not show: that card belongs to each game, and with no game there is none.",
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
+    {NULL, "Import disc", "Copies the PS1 disc in the USB CD drive into your games folder and adds it to the shelf. It takes several minutes and cannot be cancelled: do not remove the disc. Only PS1 discs, and only discs you own.",
+     K_ACTION, APPLY_NOW, SP_IMPORT_DISC, true, NO_FIELD, NULL, 0, 0},
+    {NULL, "Test the CD drive", "Looks at the USB CD drive and the disc in it and writes what it finds to the log (logs/SwanStationPS5.log). It only reads. Plug the drive in and put in a PS1 disc first.",
+     K_ACTION, APPLY_NOW, SP_CDPROBE, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Output resolution", "The resolution of the picture sent to the TV: 1080p, 1440p or 4K. Higher is sharper but asks more of the console. It changes at once; the screen goes dark for a moment. If your TV doesn't offer the one you pick, 1080p is used.",
      K_CHOICE, APPLY_NOW, SP_OUTPUT, true, INT_FIELD(output_res), OUTPUTS, 3, 0},
     {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ and /mnt/usb1/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx and /mnt/usb1/psx. Leave it empty to turn it off.",
@@ -1639,6 +1646,15 @@ static void activate(const Row *r)
         textinput_open(SCREEN_SETTINGS, "Games folder on USB drives",
                        "Type the folder name: games are looked for on /mnt/usb0/ and /mnt/usb1/",
                        app.global.usb_folder, usb_folder_set);
+        return;
+    case SP_IMPORT_DISC:
+        sfx_play(SFX_SELECT);
+        app_import_disc();
+        return;
+    case SP_CDPROBE:
+        sfx_play(SFX_SELECT);
+        if (discprobe_start())
+            app_toast("Testing the CD drive: the result is in the log");
         return;
     case SP_BIOS_START:
         sfx_play(SFX_SELECT);
