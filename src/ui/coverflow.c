@@ -956,7 +956,7 @@ static void picker_draw(void)
     draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_CARD, t));
     text_draw(x + 40, y + 30, 32, FONT_BOLD, argb_alpha(TH_TEXT, t), ALIGN_LEFT, tr("Choose a cover"));
     text_draw_fit(x + 40, y + 76, 22, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, t), ALIGN_LEFT, 760,
-                  app.library.games[P.game].title);
+                  shelf_game_title(&app.library.games[P.game]));
 
     /* the list */
     const float lx = x + 40, ly = y + 130, lw = 760, rh = 50;
@@ -1854,7 +1854,7 @@ void shelf_screen(uint32_t pressed)
         const float w = 1000, h = 420, x = CENTER_X - w * 0.5f, y = 330 + (1.0f - e) * 40;
         draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_CARD, t));
         text_draw_fit(x + 40, y + 30, 32, FONT_BOLD, argb_alpha(TH_TEXT, t), ALIGN_LEFT, w - 80,
-                      app.library.games[game].title);
+                      shelf_game_title(&app.library.games[game]));
         const char *labels[2] = {tr("Continue"), tr("Start over")};
         char age[64], ago[48];
         long a = S.resume_age;

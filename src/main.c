@@ -998,7 +998,7 @@ void app_start_game(int index, bool resume)
         if (fixes)
             SwanStationPS5_log("start: known fixes %x (DuckStation's database)", fixes);
     }
-    SwanStationPS5_log("start: %s (%s) from %s%s", g->title, g->serial, g->path,
+    SwanStationPS5_log("start: %s (%s) from %s%s", shelf_game_title(g), g->serial, g->path,
               app.game_has_own ? " with its own settings" : "");
     if (!host_load(g->path, g->serial, &app.paths, &app.settings, error, sizeof(error)))
     {

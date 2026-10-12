@@ -10,6 +10,7 @@
 #include "platform/platform.h"
 #include "i18n.h"
 #include "ra/achievements.h"
+#include "ui/coverflow.h"
 
 #include <SDL2/SDL.h>
 #include <ctype.h>
@@ -158,7 +159,7 @@ bool play_screenshot(void)
     char when[32] = "0";
     if (local_time((long long)time(NULL), &tm))
         strftime(when, sizeof(when), "%Y-%m-%d %H.%M.%S", &tm);
-    snprintf(name, sizeof(name), "%.100s %s.png", app.game->title, when);
+    snprintf(name, sizeof(name), "%.100s %s.png", shelf_game_title(app.game), when);
     for (char *c = name; *c; ++c)
         if (strchr("/\\:*?\"<>|", *c))
             *c = '-';

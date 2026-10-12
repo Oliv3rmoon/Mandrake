@@ -21,6 +21,7 @@
 #include "app.h"
 #include "ra/achievements.h"
 #include "ra/login.h"
+#include "ui/coverflow.h"
 #include "net.h"
 #include "i18n.h"
 #include "platform/platform.h"
@@ -792,7 +793,7 @@ void remote_frame(void)
         {
             const Game *g = &app.library.games[i];
             str_copy(games[game_count].id, sizeof(games[0].id), g->id);
-            str_copy(games[game_count].title, sizeof(games[0].title), g->title);
+            str_copy(games[game_count].title, sizeof(games[0].title), shelf_game_title(g));
             str_copy(games[game_count].serial, sizeof(games[0].serial), g->serial);
             ++game_count;
         }
