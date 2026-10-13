@@ -376,17 +376,17 @@ static void make_backdrop(uint8_t *grey, int W, int H, int style, bool light)
                 break;
             case BACKDROP_FLOOR:
             {
-                /* a wall, and a floor that begins to darken where the farthest cases of a full row would stand (the sixth
-                 * beside the middle one is drawn at 0.35 and its base is at 0.57 of the screen's height) and goes on
-                 * darkening, a little at a time, towards the front, where the middle case stands (at 0.72): no edge, a
-                 * smooth fall from 0.56 to a dark grey (0.20) */
-                const float horizon = 0.57f;
+                /* a wall, and a floor that darkens from where the farthest case of a full row touches it: the fifth beside
+                 * the middle one (the sixth has faded out) is drawn at 0.39 of the middle one's size and its base is at
+                 * 0.58 of the screen's height. From there it falls at once, a little more slowly as it nears the front,
+                 * where the middle case stands (at 0.72): no edge, down to a very dark grey (0.06) at the very front */
+                const float horizon = 0.58f;
                 if (t < horizon)
                     v = 0.34f + 0.22f * (t / horizon);
                 else
                 {
                     float u = (t - horizon) / (1.0f - horizon);
-                    v = 0.56f - 0.36f * (u * u * (3.0f - 2.0f * u));
+                    v = 0.56f - 0.50f * (1.0f - powf(1.0f - u, 1.45f));
                 }
                 v *= 1.0f - dx * dx * 0.25f;
                 break;
@@ -576,6 +576,7 @@ static void draw_case(PlatTexture *tex, const Game *g, float cx, float cy, float
         tex = no_cover_icon();
     const float w = h * case3d_aspect();
     case3d_lighting(app.global.case_lighting);
+    case3d_floor_shadow(theme_current() == THEME_GRAYRAT ? 0.45f : 1.0f); /* Grayrat: a fainter patch on the floor */
     case3d_matte(tex == no_cover_icon()); /* the picture of a game without a cover is lit like paper */
     case3d_draw(tex, cx, cy, h, yaw, pitch, tint, reflections_on());
     if (selected)

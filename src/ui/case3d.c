@@ -375,6 +375,7 @@ static bool launch_on;
 static float lid_c = 1.0f, lid_s, disc_c = 1.0f, disc_s;
 static float draw_cx, draw_scale = 1.0f; /* the case being drawn: its centre on the screen and px per model unit */
 static bool lighting_on = true;                  /* case3d_lighting: the cover's light */
+static float floor_shadow_strength = 1.0f;       /* case3d_floor_shadow: how dark the patch under the case is */
 static bool matte_next, matte;           /* the cover sheet is lit like paper (case3d_matte): taken by the next draw only */
 
 #define LID_OPEN 2.2689f    /* the lid's full swing, radians: 130 degrees */
@@ -975,6 +976,11 @@ void case3d_lighting(bool on)
     lighting_on = on;
 }
 
+void case3d_floor_shadow(float strength)
+{
+    floor_shadow_strength = strength < 0.0f ? 0.0f : strength > 1.0f ? 1.0f : strength;
+}
+
 void case3d_matte(bool on)
 {
     matte_next = on;
@@ -1060,7 +1066,8 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
         draw_part(PART_INNER, mirrored, cover, tint, &mirror);
         draw_part(PART_PROMO, mirrored, cover, tint, &mirror);
         draw_part(PART_FRONT, mirrored, cover, tint, &mirror);
-        draw_contact_shadow(c, s, cx, cy, scale, alpha);
+        if (floor_shadow_strength > 0.0f)
+            draw_contact_shadow(c, s, cx, cy, scale, alpha * floor_shadow_strength);
     }
     draw_part(PART_BACK, pts, cover, tint, NULL);
     draw_part(PART_INNER, pts, cover, tint, NULL);
