@@ -32,6 +32,7 @@
 #include "stb_image.h"
 
 #include <dirent.h>
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,7 +84,8 @@ static struct
     float details_t, launch_t, quit_hold, delete_hold;
     bool delete_armed; /* Triangle was pressed with Details already open: not the press that opened it */
     bool starting; /* the launch is over: this frame shows "Loading", the next one loads */
-    float chip_x, chip_w; /* animated category highlight */
+    float chip_x, chip_w; /* animated category highlight (from the start of the row of chips) */
+    float chips_scroll;   /* how far the row of chips has slid to the left to keep the chosen one in view */
     float tint[3];        /* animated background colour */
     float title_fade;     /* text fades in after a move */
     int last_cursor_game;
@@ -93,7 +95,20 @@ static struct
     float dialog_t;
     long resume_age;
     PlatTexture *resume_thumb;
+    char filter[48]; /* what the shelf is filtered by (R1): name, folder or serial of any game, whatever the category */
 } S;
+
+/* The small keyboard R1 opens: what is typed filters the shelf at once */
+#define FILTER_MAX 47
+static struct
+{
+    bool open;
+    char text[FILTER_MAX + 1];
+    char before[FILTER_MAX + 1]; /* the filter when it opened: Back goes back to it */
+    int before_category;         /* and the category: opening the filter shows all the games */
+    int row, col; /* row FILTER_ROWS is Space (col 0) and Apply (col 1) */
+    bool shift, symbols;
+} F;
 
 static const char *const CATEGORY_NAMES[CAT_COUNT] = {
     "All games", "Recently played", "Favorites", "Multi-disc", "USA", "Europe", "Japan", "2+ players"};
@@ -189,6 +204,55 @@ static int compare(const void *pa, const void *pb)
     return t ? t : (*(const int *)pa - *(const int *)pb);
 }
 
+static const char *display_title(const Game *g);
+
+/* Case-insensitive "contains" */
+static bool ci_contains(const char *hay, const char *needle)
+{
+    size_t n = strlen(needle);
+    if (!n)
+        return true;
+    for (; *hay; ++hay)
+    {
+        size_t k = 0;
+        while (k < n && hay[k] && tolower((unsigned char)hay[k]) == tolower((unsigned char)needle[k]))
+            ++k;
+        if (k == n)
+            return true;
+    }
+    return false;
+}
+
+/* Does the game match every word of the filter? Each word is looked for in the game's name (DuckStation's or the
+ * file's), in the name of the folder holding it, and in its serial (with or without the dash: SLUS00421). */
+static bool matches_filter(const Game *g, const char *filter)
+{
+    const char *folder = strrchr(g->folder, '/');
+    folder = folder ? folder + 1 : g->folder;
+    char serial[sizeof(g->serial)];
+    size_t n = 0;
+    for (const char *c = g->serial; *c && n + 1 < sizeof(serial); ++c)
+        if (*c != '-')
+            serial[n++] = *c;
+    serial[n] = '\0';
+    char word[FILTER_MAX + 1];
+    for (const char *p = filter; *p;)
+    {
+        while (*p == ' ')
+            ++p;
+        size_t w = 0;
+        while (*p && *p != ' ' && w < FILTER_MAX)
+            word[w++] = *p++;
+        word[w] = '\0';
+        if (!w)
+            break;
+        if (!ci_contains(display_title(g), word) && !ci_contains(g->title, word) && !ci_contains(folder, word) &&
+            !ci_contains(g->serial, word) && !ci_contains(serial, word))
+            return false;
+    }
+    return true;
+}
+
 static void build_view(int keep_game)
 {
     Settings *g = &app.global;
@@ -204,7 +268,8 @@ static void build_view(int keep_game)
     }
     S.view_count = 0;
     for (int i = 0; i < app.library.count; ++i)
-        if (in_category(&app.library.games[i], g->shelf_category))
+        if (S.filter[0] ? matches_filter(&app.library.games[i], S.filter) /* all the games, not the category's */
+                        : in_category(&app.library.games[i], g->shelf_category))
             S.view[S.view_count++] = i;
     sort_mode = g->shelf_category == CAT_RECENT ? SORT_RECENT : g->sort_mode;
     qsort(S.view, (size_t)S.view_count, sizeof(int), compare);
@@ -513,9 +578,9 @@ static void draw_cover(PlatTexture *tex, const Game *g, float cx, float cy, floa
     float w = h * aspect * squeeze, x = cx - w * 0.5f, y = cy - h * 0.5f;
     if (selected)
     {
-        /* Classic and Neon Arcade: no shadow, glow or border around the selected cover (the other themes keep theirs) */
+        /* Classic, Neon Arcade and Grayrat: no shadow, glow or border around the selected cover (the other themes keep theirs) */
         int id = theme_current();
-        if (id != THEME_CLASSIC && id != THEME_NEON)
+        if (id != THEME_CLASSIC && id != THEME_NEON && id != THEME_GRAYRAT)
         {
             draw_rrect(x - 10, y + 14, w + 20, h + 6, 18, 0x60000000u); /* shadow */
             if (theme.backdrop == BACKDROP_GRID) /* a neon glow */
@@ -690,30 +755,75 @@ static void draw_header(void)
     text_draw(title_x, 40, 44, FONT_BOLD, TH_TEXT, ALIGN_LEFT, SwanStationPS5_TITLE);
     const float title_w = text_width(44, FONT_BOLD, SwanStationPS5_TITLE);
     text_draw(title_x + title_w + 14, 56, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_LEFT, "v" SwanStationPS5_VERSION);
-    float x = title_x + title_w + 14 + text_width(22, FONT_REGULAR, "v" SwanStationPS5_VERSION) + 40, y = 46, h = 46;
+    const float x0 = title_x + title_w + 14 + text_width(22, FONT_REGULAR, "v" SwanStationPS5_VERSION) + 40, y = 46,
+                h = 46;
+    /* R1 Filter, top right: big, with no frame, so it is not missed. The chips have the room up to it. */
+    const int filter_pad[1] = {GLYPH_R1};
+    const char *filter_msg = tr("Filter");
+    const float filter_w = hint_combo_width(filter_pad, 1, filter_msg, 30);
+    const float view_w = plat_width() - TH_MARGIN - filter_w - 40 - x0;
+
+    /* the chips laid out from 0; when they do not fit, the row slides like a carousel to keep the chosen one in view */
+    float cx[CAT_COUNT], cw[CAT_COUNT], pos = 0, sel_x = 0, sel_w = 0;
+    char labels[CAT_COUNT][64];
+    bool shown[CAT_COUNT];
     for (int c = 0; c < CAT_COUNT; ++c)
     {
         int n = category_size(c);
-        if (c != CAT_ALL && n == 0)
+        shown[c] = c == CAT_ALL || n > 0;
+        if (!shown[c])
             continue;
-        char label[64];
         if (c == CAT_ALL)
-            snprintf(label, sizeof(label), "%s  %d", tr(CATEGORY_NAMES[c]), n);
+            snprintf(labels[c], sizeof(labels[c]), "%s  %d", tr(CATEGORY_NAMES[c]), n);
         else
-            str_copy(label, sizeof(label), tr(CATEGORY_NAMES[c]));
-        float w = text_width(22, FONT_REGULAR, label) + 40;
+            str_copy(labels[c], sizeof(labels[c]), tr(CATEGORY_NAMES[c]));
+        cw[c] = text_width(22, FONT_REGULAR, labels[c]) + 40;
+        cx[c] = pos;
+        if (c == app.global.shelf_category)
+            sel_x = cx[c], sel_w = cw[c];
+        pos += cw[c] + 6;
+    }
+    char filter_label[64] = "";
+    float filter_x = 0, filter_chip_w = 0;
+    if (S.filter[0])
+    {
+        /* the filter in force, after the categories */
+        snprintf(filter_label, sizeof(filter_label), "\"%.40s\"", S.filter);
+        filter_chip_w = text_width(22, FONT_REGULAR, filter_label) + 40 + 34;
+        filter_x = pos + 8;
+        pos = filter_x + filter_chip_w;
+    }
+    const float want_x = S.filter[0] ? filter_x : sel_x, want_w = S.filter[0] ? filter_chip_w : sel_w;
+    float scroll_to = want_x + want_w > view_w ? want_x + want_w - view_w : 0.0f;
+    const float scroll_max = pos > view_w ? pos - view_w : 0.0f;
+    scroll_to = scroll_to > scroll_max ? scroll_max : scroll_to;
+    anim_approach(&S.chips_scroll, scroll_to, app.dt, TH_SNAP);
+    const float off = x0 - S.chips_scroll;
+
+    plat_set_clip((int)x0 - 4, 0, (int)view_w + 8, 140);
+    for (int c = 0; c < CAT_COUNT; ++c)
+    {
+        if (!shown[c])
+            continue;
         bool on = c == app.global.shelf_category;
         if (on)
         {
             if (S.chip_w == 0)
-                S.chip_x = x, S.chip_w = w;
-            anim_approach(&S.chip_x, x, app.dt, TH_SNAP);
-            anim_approach(&S.chip_w, w, app.dt, TH_SNAP);
-            draw_rrect(S.chip_x, y, S.chip_w, h, h * 0.5f, TH_TEXT);
+                S.chip_x = cx[c], S.chip_w = cw[c];
+            anim_approach(&S.chip_x, cx[c], app.dt, TH_SNAP);
+            anim_approach(&S.chip_w, cw[c], app.dt, TH_SNAP);
+            draw_rrect(off + S.chip_x, y, S.chip_w, h, h * 0.5f, TH_TEXT);
         }
-        text_draw(x + 20, y + 11, 22, FONT_REGULAR, on ? TH_BG : TH_HINT, ALIGN_LEFT, label);
-        x += w + 6;
+        text_draw(off + cx[c] + 20, y + 11, 22, FONT_REGULAR, on ? TH_BG : TH_HINT, ALIGN_LEFT, labels[c]);
     }
+    if (S.filter[0])
+    {
+        draw_rrect_outline(off + filter_x, y, filter_chip_w, h, h * 0.5f, 3, TH_FOCUS);
+        icon_draw(ICON_SEARCH, off + filter_x + 18, y + 11, 24, TH_FOCUS);
+        text_draw(off + filter_x + 54, y + 11, 22, FONT_REGULAR, TH_TEXT, ALIGN_LEFT, filter_label);
+    }
+    plat_set_clip(0, 0, 0, 0);
+    draw_hint_combo(plat_width() - TH_MARGIN - filter_w, 48, filter_pad, 1, '+', filter_msg, 30, TH_TEXT);
 
     /* account and clock, bottom right, just above the divider line over the hints */
     const float dy = TH_HINT_Y - 126;
@@ -831,6 +941,8 @@ static void storage_screen(uint32_t pressed)
 
 static void change_category(int step)
 {
+    const bool was_filtered = S.filter[0] != '\0';
+    S.filter[0] = '\0'; /* choosing a category leaves the filter */
     int c = app.global.shelf_category;
     for (int i = 0; i < CAT_COUNT; ++i)
     {
@@ -838,7 +950,7 @@ static void change_category(int step)
         if (c == CAT_ALL || category_size(c) > 0)
             break;
     }
-    if (c == app.global.shelf_category)
+    if (c == app.global.shelf_category && !was_filtered)
         return;
     int keep = selected_game();
     app.global.shelf_category = c;
@@ -1320,9 +1432,179 @@ static void play_game(int game, bool ask, bool silent)
         sfx_play(SFX_SELECT);
 }
 
+/* ---------------------------------------------------------------- the filter keyboard (R1) */
+
+#define FILTER_ROWS 4
+static const char *const FILTER_LETTERS[FILTER_ROWS] = {"1234567890", "qwertyuiop", "asdfghjkl-", "zxcvbnm._/"};
+static const char *const FILTER_SYMBOLS[FILTER_ROWS] = {"!@#$%^&*()", "-_=+[]{};:", "'\",.<>/?\\|", "~`"};
+
+static int filter_row_length(int row)
+{
+    return row == FILTER_ROWS ? 2 : (int)strlen((F.symbols ? FILTER_SYMBOLS : FILTER_LETTERS)[row]);
+}
+
+/* The text in the field is the filter: the shelf follows it letter by letter */
+static void filter_changed(void)
+{
+    int keep = selected_game();
+    str_copy(S.filter, sizeof(S.filter), F.text);
+    build_view(keep);
+    S.title_fade = 0.35f;
+}
+
+static void filter_open(void)
+{
+    F.open = true;
+    str_copy(F.before, sizeof(F.before), S.filter);
+    F.before_category = app.global.shelf_category;
+    str_copy(F.text, sizeof(F.text), S.filter);
+    F.row = 1;
+    F.col = 0;
+    F.symbols = false;
+    sfx_play(SFX_SELECT);
+    if (app.global.shelf_category != CAT_ALL)
+    {
+        /* it always looks through all the games */
+        int keep = selected_game();
+        app.global.shelf_category = CAT_ALL;
+        app.settings.shelf_category = CAT_ALL;
+        build_view(keep);
+    }
+}
+
+static void filter_input(uint32_t pressed)
+{
+    int row = F.row, col = F.col;
+    if (pressed & BIT(BTN_UP))
+        F.row = (F.row + FILTER_ROWS) % (FILTER_ROWS + 1);
+    if (pressed & BIT(BTN_DOWN))
+        F.row = (F.row + 1) % (FILTER_ROWS + 1);
+    if (pressed & BIT(BTN_LEFT))
+        --F.col;
+    if (pressed & BIT(BTN_RIGHT))
+        ++F.col;
+    int len = filter_row_length(F.row);
+    if (F.col < 0)
+        F.col = len - 1;
+    if (F.col >= len)
+        F.col = (pressed & BIT(BTN_RIGHT)) ? 0 : len - 1;
+    if (F.row != row || F.col != col)
+        sfx_play(SFX_CLICK);
+    if (pressed & BIT(BTN_L2))
+    {
+        F.symbols = !F.symbols;
+        if (F.col >= filter_row_length(F.row))
+            F.col = filter_row_length(F.row) - 1;
+        sfx_play(SFX_CLICK);
+    }
+    size_t n = strlen(F.text);
+    if ((pressed & BIT(BTN_SQUARE)) && n)
+    {
+        F.text[n - 1] = '\0';
+        sfx_play(SFX_CLICK);
+        filter_changed();
+    }
+    if ((pressed & BIT(BTN_TRIANGLE)) && n)
+    {
+        F.text[0] = '\0';
+        sfx_play(SFX_CLICK);
+        filter_changed();
+    }
+    if (pressed & (BIT(BTN_START) | BIT(BTN_CROSS)))
+    {
+        char typed = 0;
+        if (F.row < FILTER_ROWS && (pressed & BIT(BTN_CROSS)))
+            typed = (F.symbols ? FILTER_SYMBOLS : FILTER_LETTERS)[F.row][F.col];
+        else if (F.row == FILTER_ROWS && F.col == 0 && (pressed & BIT(BTN_CROSS)))
+            typed = ' ';
+        if (typed)
+        {
+            n = strlen(F.text);
+            if (n < FILTER_MAX)
+            {
+                F.text[n] = typed;
+                F.text[n + 1] = '\0';
+                sfx_play(SFX_CLICK);
+                filter_changed();
+            }
+        }
+        else
+        {
+            F.open = false; /* Apply (or Start): the filter stays */
+            sfx_play(SFX_SELECT);
+        }
+    }
+    else if (pressed & BIT(BTN_CIRCLE))
+    {
+        F.open = false; /* Back: as it was, the category too */
+        app.global.shelf_category = F.before_category;
+        app.settings.shelf_category = F.before_category;
+        str_copy(F.text, sizeof(F.text), F.before);
+        filter_changed();
+        sfx_play(SFX_BACK);
+    }
+}
+
+static void filter_draw(void)
+{
+    if (!F.open)
+        return;
+    draw_rect(0, 0, plat_width(), plat_height(), 0xc0000000u);
+    const float mw = 760, key = 62, gap = 8, kh = 54;
+    const float mh = 76 + 62 + 22 + (FILTER_ROWS + 1) * (kh + gap) + 14;
+    const float mx = CENTER_X - mw * 0.5f, my = (plat_height() - mh) * 0.5f - 30;
+    draw_rrect(mx, my, mw, mh, TH_RADIUS, TH_CARD);
+    text_draw(mx + 32, my + 24, 30, FONT_BOLD, TH_TEXT, ALIGN_LEFT, tr("Filter games"));
+    char count[48];
+    snprintf(count, sizeof(count), tr("%d games"), S.view_count);
+    text_draw(mx + mw - 32, my + 32, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_RIGHT, count);
+
+    const float fy = my + 76;
+    draw_rrect(mx + 32, fy, mw - 64, 62, TH_RADIUS_SMALL, TH_ROW_SELECTED);
+    draw_rrect_outline(mx + 32, fy, mw - 64, 62, TH_RADIUS_SMALL, 3, TH_FOCUS);
+    if (F.text[0])
+    {
+        char shown[FILTER_MAX + 2];
+        snprintf(shown, sizeof(shown), "%s_", F.text);
+        text_draw_fit(mx + 52, fy + 14, 30, FONT_BOLD, TH_TEXT, ALIGN_LEFT, mw - 104, shown);
+    }
+    else
+        text_draw_fit(mx + 52, fy + 18, 24, FONT_REGULAR, TH_TEXT_DIM, ALIGN_LEFT, mw - 104,
+                      tr("Filter by name, folder or serial..."));
+
+    float ky = fy + 62 + 22;
+    for (int r = 0; r < FILTER_ROWS; ++r)
+    {
+        int rl = filter_row_length(r);
+        float x = CENTER_X - (rl * (key + gap) - gap) * 0.5f;
+        for (int c = 0; c < rl; ++c)
+        {
+            bool on = r == F.row && c == F.col;
+            float kx = x + c * (key + gap);
+            draw_rrect(kx, ky, key, kh, TH_RADIUS_SMALL, on ? TH_ROW_SELECTED : TH_PILL);
+            if (on)
+                draw_rrect_outline(kx, ky, key, kh, TH_RADIUS_SMALL, 3, TH_FOCUS);
+            char label[2] = {(F.symbols ? FILTER_SYMBOLS : FILTER_LETTERS)[r][c], '\0'};
+            text_draw(kx + key * 0.5f, ky + 11, 28, FONT_BOLD, TH_TEXT, ALIGN_CENTER, label);
+        }
+        ky += kh + gap;
+    }
+    const float sw = 10 * (key + gap) - gap, space_w = sw * 0.62f, go_w = sw - space_w - gap, sx = CENTER_X - sw * 0.5f;
+    for (int c = 0; c < 2; ++c)
+    {
+        bool on = F.row == FILTER_ROWS && F.col == c;
+        float kx = c == 0 ? sx : sx + space_w + gap, kw = c == 0 ? space_w : go_w;
+        draw_rrect(kx, ky, kw, kh, TH_RADIUS_SMALL, on ? TH_ROW_SELECTED : TH_PILL);
+        if (on)
+            draw_rrect_outline(kx, ky, kw, kh, TH_RADIUS_SMALL, 3, TH_FOCUS);
+        text_draw(kx + kw * 0.5f, ky + 13, 24, FONT_BOLD, c ? TH_FOCUS : TH_TEXT_DIM, ALIGN_CENTER,
+                  c ? tr("Apply") : tr("Space"));
+    }
+}
+
 bool shelf_idle(void)
 {
-    return !S.dialog && S.launch_t <= 0.0f && !S.starting && !P.open;
+    return !S.dialog && S.launch_t <= 0.0f && !S.starting && !P.open && !F.open;
 }
 
 bool shelf_show_game(int library_index)
@@ -1334,6 +1616,11 @@ bool shelf_show_game(int library_index)
     {
         app.global.shelf_category = CAT_ALL;
         app.settings.shelf_category = CAT_ALL;
+    }
+    if (S.filter[0] && !matches_filter(&app.library.games[library_index], S.filter))
+    {
+        S.filter[0] = '\0'; /* the filter hides it: off */
+        build_view(selected_game());
     }
     shelf_select_game(library_index);
     if (selected_game() != library_index)
@@ -1366,12 +1653,18 @@ void shelf_screen(uint32_t pressed)
         return;
     }
     /* O pressed with the shelf free: only such a press can start the hold-to-exit */
-    const bool circle_on_shelf = (pressed & BIT(BTN_CIRCLE)) && !(S.dialog || S.details || P.open || S.launch_t > 0.0f);
+    const bool circle_on_shelf =
+        (pressed & BIT(BTN_CIRCLE)) && !(S.dialog || S.details || P.open || F.open || S.launch_t > 0.0f);
 
     /* ------------------------------------------------ input */
     if (P.open)
     {
         picker_input(pressed);
+        pressed = 0;
+    }
+    if (F.open)
+    {
+        filter_input(pressed);
         pressed = 0;
     }
     if (S.dialog)
@@ -1437,9 +1730,9 @@ void shelf_screen(uint32_t pressed)
             S.buzz_locked = true; /* once: holding the direction (it auto-repeats) doesn't buzz again */
         }
         if (pressed & BIT(BTN_L1))
-            change_category(-1);
+            change_category(1); /* the next category, to the right */
         if (pressed & BIT(BTN_R1))
-            change_category(1);
+            filter_open();
         if (pressed & BIT(BTN_START))
         {
             int keep = selected_game();
@@ -1789,6 +2082,17 @@ void shelf_screen(uint32_t pressed)
         draw_details(&app.library.games[game], S.details_t);
         plat_profile("info");
     }
+    else if (S.filter[0])
+    {
+        /* the filter finds nothing: not the empty shelf's instructions, only that */
+        const float w = 760, h = 230, x = CENTER_X - w * 0.5f, y = 360;
+        draw_rrect(x, y, w, h, TH_RADIUS, TH_CARD_SOFT);
+        icon_draw(ICON_SEARCH, CENTER_X - 32, y + 28, 64, TH_TEXT_DIM);
+        text_draw_fit(CENTER_X, y + 112, 30, FONT_BOLD, TH_TEXT, ALIGN_CENTER, w - 60, tr("No game matches the filter."));
+        char shown[64];
+        snprintf(shown, sizeof(shown), "\"%.40s\"", S.filter);
+        text_draw_fit(CENTER_X, y + 164, 24, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, w - 60, shown);
+    }
     else
     {
         float w = 1200, x = CENTER_X - w * 0.5f, y = 300;
@@ -1830,29 +2134,33 @@ void shelf_screen(uint32_t pressed)
 
     draw_header();
     plat_profile("header");
-    int pending = covers_downloading();
-    if (pending > 0)
-    {
-        char dl[64];
-        snprintf(dl, sizeof(dl), tr("Getting covers (%d)"), pending);
-        text_draw(plat_width() - TH_MARGIN, 104, 20, FONT_REGULAR, TH_TEXT_DIM, ALIGN_RIGHT, dl);
-    }
     const int glyphs[] = {GLYPH_CROSS, GLYPH_TRIANGLE, GLYPH_SQUARE, GLYPH_L3,
                           GLYPH_R3, GLYPH_TOUCHPAD};
     const char *const labels[] = {"Play", "Details", "Settings", "Reload", "Favorite", "M.Card"};
     /* in Details: only Play down here; Choose a cover and Delete (held) are in the panel itself */
     const int details_glyphs[] = {GLYPH_CROSS};
     const char *const details_labels[] = {"Play"};
-    if (S.details && S.view_count)
-        app_draw_hints(details_glyphs, details_labels, 1, NULL);
-    else
-        app_draw_hints(glyphs, labels, S.view_count ? 6 : 1, NULL);
-    if (S.view_count)
+    if (F.open)
     {
-        char sort[64];
-        snprintf(sort, sizeof(sort), "%s: %s", tr("Sort"), shelf_sort_name(app.global.sort_mode));
-        const HintCombo right[2] = {{{GLYPH_L1, GLYPH_R1}, 2, '/', "Category"}, {{GLYPH_START}, 1, '+', sort}};
-        app_draw_hints_right(right, 2);
+        static const int fglyphs[] = {GLYPH_CROSS, GLYPH_SQUARE, GLYPH_TRIANGLE, GLYPH_START, GLYPH_CIRCLE};
+        static const char *const flabels[] = {"Type", "Delete", "Clear", "Apply", "Back"};
+        app_draw_hints(fglyphs, flabels, 5, NULL);
+        const HintCombo fright[1] = {{{GLYPH_L2}, 1, '+', "Symbols"}};
+        app_draw_hints_right(fright, 1);
+    }
+    else
+    {
+        if (S.details && S.view_count)
+            app_draw_hints(details_glyphs, details_labels, 1, NULL);
+        else
+            app_draw_hints(glyphs, labels, S.view_count ? 6 : 1, NULL);
+        if (S.view_count)
+        {
+            char sort[64];
+            snprintf(sort, sizeof(sort), "%s: %s", tr("Sort"), shelf_sort_name(app.global.sort_mode));
+            const HintCombo right[2] = {{{GLYPH_L1}, 1, '+', "Category"}, {{GLYPH_START}, 1, '+', sort}};
+            app_draw_hints_right(right, 2);
+        }
     }
     plat_profile("hints");
 
@@ -1903,6 +2211,7 @@ void shelf_screen(uint32_t pressed)
     }
 
     picker_draw();
+    filter_draw();
     if (start_black)
     {
         start_black = false;

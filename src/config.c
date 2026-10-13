@@ -6,6 +6,7 @@
 
 #include "i18n.h"
 #include "platform/platform.h"
+#include "ui/theme.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -158,7 +159,11 @@ static bool config_apply(Settings *s, const char *path)
         else if (strcmp(key, "pgxp") == 0)
             s->pgxp = as_bool(value);
         else if (strcmp(key, "theme") == 0)
-            s->theme = atoi(value) % 5;
+        {
+            int theme = atoi(value); /* a number that is not a theme (an older or newer file) leaves the default */
+            if (theme >= 0 && theme < THEME_COUNT)
+                s->theme = theme;
+        }
         else if (strcmp(key, "hd_textures") == 0)
             s->hd_textures = as_bool(value);
         else if (strcmp(key, "shader") == 0)

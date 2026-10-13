@@ -18,6 +18,7 @@ enum ThemeId
     THEME_MEMORY,      /* Memory Card, light */
     THEME_MEMORY_DARK, /* Memory Card, dark */
     THEME_RECORD,      /* Record Shelf */
+    THEME_GRAYRAT,    /* Grayrat: Classic's look with the colours of Memory Card Dark */
     THEME_COUNT
 };
 

@@ -331,6 +331,7 @@ static const Entry ENTRIES[] = {
     {{"Memory Card", "Carte mémoire", "Cartão de memória", "Tarjeta de memoria", "メモリーカード"}},
     {{"Memory Card Dark", "Carte mémoire sombre", "Cartão de memória escuro", "Tarjeta de memoria oscura", "メモリーカード (ダーク)"}},
     {{"Record Shelf", "Étagère à disques", "Prateleira de discos", "Estante de discos", "レコード棚"}},
+    {{"Grayrat", "Grayrat", "Grayrat", "Grayrat", "Grayrat"}},
     {{"Classic theme: Dark keeps the screen deep navy; Cover colour tints it with the selected game.",
       "Thème Classique : Sombre garde un bleu nuit ; Couleur de la jaquette teinte l'écran selon le jeu.",
       "Tema Clássico: Escuro mantém o azul-noite; Cor da capa tinge o ecrã com o jogo escolhido.",
@@ -363,8 +364,6 @@ static const Entry ENTRIES[] = {
     {{"Then choose Settings > Rescan library.", "Puis choisissez Paramètres > Actualiser la bibliothèque.",
       "Depois escolha Definições > Voltar a procurar jogos.", "Luego elige Configuración > Volver a buscar juegos.",
       "その後、設定 > ライブラリを再スキャン を選んでください。"}},
-    {{"Getting covers (%d)", "Téléchargement des jaquettes (%d)", "A transferir capas (%d)",
-      "Descargando portadas (%d)", "カバーを取得中 (%d)"}},
 
     /* ---- storage and BIOS */
     {{"Storage unavailable", "Stockage indisponible", "Armazenamento indisponível", "Almacenamiento no disponible",
@@ -1282,6 +1281,10 @@ static const Entry ENTRIES[] = {
       "ハードコアの解除はカウントされません。RetroAchievementsはこのエミュレーターをまだ認識していません。"}},
     {{"RetroAchievements has not tested this version of the game: its unlocks may not count.", "RetroAchievements n'a pas testé cette version du jeu : les succès peuvent ne pas compter.", "O RetroAchievements não testou esta versão do jogo: as conquistas podem não contar.", "RetroAchievements no ha probado esta versión del juego: los logros podrían no contar.",
       "RetroAchievementsはこのバージョンのゲームを検証していません。解除がカウントされない場合があります。"}},
+    {{"Filter games", "Filtrer les jeux", "Filtrar jogos", "Filtrar juegos", "ゲームを絞り込む"}},
+    {{"Filter by name, folder or serial...", "Filtrer par nom, dossier ou numéro de série...", "Filtrar por nome, pasta ou número de série...", "Filtrar por nombre, carpeta o serial...", "名前・フォルダ・シリアルで絞り込み..."}},
+    {{"Filter", "Filtrer", "Filtrar", "Filtrar", "絞り込み"}},
+    {{"No game matches the filter.", "Aucun jeu ne correspond au filtre.", "Nenhum jogo corresponde ao filtro.", "Ningún juego coincide con el filtro.", "条件に合うゲームがありません。"}},
     {{"Your profile", "Votre profil", "O seu perfil", "Tu perfil",
       "あなたのプロフィール"}},
     {{"Your points, games mastered, what you unlocked lately and the games closest to mastery.", "Vos points, jeux maîtrisés, vos derniers déblocages et les jeux les plus proches de la maîtrise.", "Os seus pontos, jogos dominados, o que desbloqueou recentemente e os jogos mais perto de dominar.", "Tus puntos, juegos dominados, lo último que desbloqueaste y los juegos más cerca de dominar.",
