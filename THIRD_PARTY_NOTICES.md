@@ -20,6 +20,16 @@
 | [sodaraptor: Hypnagogia 無限の夢 Boundless Dreams Jewel Case](https://sketchfab.com/3d-models/hypnagogia-boundless-dreams-jewel-case-20e4780167b6441fb364060c79870378) | The 3D jewel case of the shelf (`assets/psx_case_NTSC.obj` and the textures made from its atlases by `tools/make_case_textures.py`), CC-BY 4.0; each game's cover replaces the printed art |
 | [mpereiraesaa/PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) | Exact-title one-shot helper and cooperative elevation protocol |
 
+## Emulation cores shipped
+
+SwanStationPS5 ships **one** emulation core:
+
+| Core | Upstream | License | Notes |
+| --- | --- | --- | --- |
+| SwanStation (libretro) | [libretro/swanstation](https://github.com/libretro/swanstation), a fork of [DuckStation](https://github.com/stenzek/duckstation) | GPL-3.0 (`third_party/swanstation/LICENSE`) | PlayStation 1. Built from source into the app |
+
+No other core is included, and no non-commercial-licensed core is shipped. SwanStationPS5 is free and has no paid features, ads or in-app purchases.
+
 ## Native build dependencies
 
 The application build uses LLVM/Clang/lld, zlib 1.3.2, and the public

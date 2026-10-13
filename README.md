@@ -316,6 +316,7 @@ python tools/SwanStationPS5_sync.py ra-login --host <PS5 IP> --profile "Player 2
 - **Your profile** (Settings → Achievements) shows your points, the games you've mastered, recent unlocks and the games closest to mastery. Covers show a trophy badge with your progress.
 
 - **Hardcore mode** (Settings → Achievements) turns off loading states and cheats, as RetroAchievements requires. Turning it on restarts the running game.
+- Hardcore mode follows RetroAchievements' [hardcore compliance requirements](https://docs.retroachievements.org/general/hardcore-compliance-requirements.html): cheats, save states, quick resume, rewind and autosave are off; turning it on resets the running game; fast-forward is off; there is no slow motion or frame advance. The user agent sent to the server is `SwanStationPS5/<version> (PS5) rcheevos/<version>`.
 - Without a connection, unlocks are kept and sent when the console is back online.
 - Games are recognised by the same disc hash RetroArch uses, so the usual RetroAchievements-compatible dumps (Redump) work. When a version isn't in any set (some PlayStation Store or patched images), SwanStationPS5 says so.
 
@@ -414,6 +415,8 @@ SwanStationPS5 started as a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) b
 Licences for everything above are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Legal
+
+[Privacy policy](PRIVACY.md) · [Third-party notices and shipped cores](THIRD_PARTY_NOTICES.md)
 
 SwanStationPS5 is free software under the GPL-3.0-or-later. SwanStation is GPL-3.0.
 
