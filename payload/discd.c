@@ -166,6 +166,21 @@ static void load_language(void)
         fclose(f);
 }
 
+/* "Install discs only" (Settings > System > SwanStationPS5), read for every disc: the game is not started, so the app is
+ * not opened, and a disc whose game is installed already is left alone */
+static bool install_only(void)
+{
+    FILE *f = fopen(CONFIG, "r");
+    char line[256];
+    bool on = false;
+    while (f && fgets(line, sizeof(line), f))
+        if (strncmp(line, "disc_install_only=", 18) == 0)
+            on = atoi(line + 18) != 0;
+    if (f)
+        fclose(f);
+    return on;
+}
+
 /* ------------------------------------------------------------------ notifications and log */
 
 typedef struct
@@ -399,6 +414,7 @@ static void handle_disc(const DiscId *id)
 {
     say("a disc: '%s' (%s)", id->title, id->key);
     sleep(kSettleSec); /* the system's own screen for a disc it does not know, before anything of ours */
+    const bool only = install_only();
     stamp(BUSY);
     if (!discimport_start(GAMES))
     {
@@ -449,7 +465,10 @@ static void handle_disc(const DiscId *id)
     {
     case DI_OK: notify(M_INSTALLED, title); break;
     case DI_OK_INCOMPLETE: notify(M_INSTALLED_BAD, title, bad); break;
-    case DI_ALREADY: notify(M_ALREADY, title); break;
+    case DI_ALREADY:
+        if (!only) /* with install only the game is there already: nothing to say and nothing to open */
+            notify(M_ALREADY, title);
+        break;
     case DI_NO_DRIVE: notify(M_NO_DRIVE); break;
     case DI_NO_DISC: notify(M_NO_DISC); break;
     case DI_NOT_PS1: notify(M_NOT_PS1); break;
@@ -460,7 +479,9 @@ static void handle_disc(const DiscId *id)
     case DI_STALLED: title[0] ? notify(M_STALLED_N, title) : notify(M_STALLED); break;
     default: break;
     }
-    if (result == DI_OK || result == DI_OK_INCOMPLETE || result == DI_ALREADY)
+    if (only)
+        say("install only: the app is not opened");
+    else if (result == DI_OK || result == DI_OK_INCOMPLETE || result == DI_ALREADY)
         launch_app(); /* it finds the disc in the drive and starts the game */
 }
 

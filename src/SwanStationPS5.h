@@ -16,7 +16,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.2.3"
+#define SwanStationPS5_VERSION "1.2.4"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -145,12 +145,13 @@ typedef struct
     bool boot_intro;      /* the PS1's startup logo and sound before the game (a real BIOS) */
     int sharpen;          /* 0 off, 1 light, 2 strong (AMD FidelityFX CAS) */
     bool disc_animation;  /* the disc slides out of its case when a game starts */
+    bool disc_install_only; /* a disc put in is installed but its game is not started (the disc daemon does not open the app) */
+    bool jewel_cases;     /* the shelf shows 3D jewel cases; off: the flat covers with a reflection, as in 1.1.8 */
     bool negcon;          /* racing games that take a NeGcon: analog gas and brake on R2 / L2 */
     bool touch_mouse;     /* mouse games: the touchpad moves the pointer */
     int run_ahead;        /* 0 off, 1 or 2 frames less input lag */
     bool fast_effects;    /* screen effects on the GPU, without the software copy */
     bool fsr;             /* FSR 1 scales the picture before the shader */
-    int output_res;       /* the screen output: 0 1080p, 1 1440p, 2 4K */
     char usb_folder[48];  /* a folder name looked for on USB drives: /mnt/usb0/<name> and /mnt/usb1/<name> (empty: none) */
     bool framegen;        /* frame interpolation: a frame between two of the game's (120 Hz screen, from the next start) */
     int aspect_before_wide; /* the aspect ratio (index) the widescreen hack replaced with 16:9, or -1; saved by value */

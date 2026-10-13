@@ -74,7 +74,6 @@ enum Special
     SP_PROFILE,
     SP_WHO,
     SP_HDTEX, /* drives the two core options for texture packs */
-    SP_OUTPUT, /* the screen's resolution, changed at once */
     SP_USBFOLDER, /* the games folder on USB drives, typed */
 };
 
@@ -110,7 +109,6 @@ static const char *row_help(const Row *r)
 
 static const char *const OFF_ON[] = {"Off", "On"};
 static const char *const RENDERERS[] = {"GPU (Recommended)", "CPU"};
-static const char *const OUTPUTS[] = {"1080p", "1440p", "4K"};
 static const char *const INTERNAL[] = {"Native", "2x", "4x", "8x", "16x"};
 /* unused while the Emulator row is commented out */
 static const __attribute__((unused)) char *const UPSCALE[] = {"Off", "2x", "3x", "4x"};
@@ -268,6 +266,8 @@ static const Row LIBRARY[] = {
     {NULL, "Cover art", "Flat front covers, or 3D boxes.", K_CHOICE, APPLY_NOW, SP_NONE, true,
      INT_FIELD(cover_style), COVER_STYLES, 2, 0},
     */
+    {NULL, "Jewel cases", "The shelf shows 3D jewel cases. Off: the flat covers with a reflection on the floor, as in version 1.1.8.", K_TOGGLE,
+     APPLY_NOW, SP_NONE, true, BOOL_FIELD(jewel_cases), OFF_ON, 2, 0},
     {NULL, "Disc animation", "When a game starts, its disc slides out of the case and spins.", K_TOGGLE, APPLY_NOW,
      SP_NONE, true, BOOL_FIELD(disc_animation), OFF_ON, 2, 0},
     {NULL, "Download missing covers", "Fetches covers for new games over the internet.", K_TOGGLE,
@@ -287,8 +287,8 @@ static const Row LIBRARY[] = {
 static const Row SYSTEM[] = {
     {"SwanStationPS5", "Start BIOS", "Starts the console's BIOS with no disc, to manage memory cards. While Memory Card 1 Type (Restart) is set to Libretro, the saves will not show: that card belongs to each game, and with no game there is none.",
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
-    {NULL, "Output resolution", "The resolution of the picture sent to the TV: 1080p, 1440p or 4K. Higher is sharper but asks more of the console. It changes at once; the screen goes dark for a moment. If your TV doesn't offer the one you pick, 1080p is used.",
-     K_CHOICE, APPLY_NOW, SP_OUTPUT, true, INT_FIELD(output_res), OUTPUTS, 3, 0},
+    {NULL, "Install discs only", "A disc put in the USB CD drive is installed but its game does not start: with the disc daemon the app is not opened, and with the app open the shelf only moves to the game. Off: the game starts by itself.", K_TOGGLE,
+     APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_install_only), OFF_ON, 2, 0},
     {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ and /mnt/usb1/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx and /mnt/usb1/psx. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
     {"Emulation", "Region", "Auto follows the disc; force 50 or 60 Hz if a game misbehaves.", K_CHOICE,
@@ -752,8 +752,6 @@ static void write_value(const Row *r, int v)
         theme_apply(app.global.theme);
     if (r->special == SP_REMOTE)
         remote_update(app.global.remote);
-    if (r->special == SP_OUTPUT)
-        plat_set_output(app.global.output_res);
     if (r->special == SP_SOUND)
         sfx_configure(app.global.ui_sound, (app.global.ui_volume + 1) * 25);
     if (app.game)

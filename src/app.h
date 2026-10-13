@@ -126,6 +126,7 @@ struct PlatTexture *shelf_no_cover(void);
 /* Puts the cursor on the game and starts it from the beginning, with no Continue box: a disc put in the drive. With
  * `direct` (the app was opened by the disc daemon, nobody is watching) it also skips the opening animation and the
  * click; otherwise it plays as when ✕ is pressed. False if the shelf is busy or the game cannot be shown. */
+bool shelf_show_game(int library_index); /* moves the cursor to the game (the shelf shows all if its category hides it) */
 bool shelf_play_game(int library_index, bool direct);
 void shelf_library_changed(void); /* after a rescan */
 

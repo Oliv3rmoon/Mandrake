@@ -102,6 +102,7 @@ def pack():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--sync-version", action="store_true", help="only write the version into sce_sys/param.json (make deploy does it)")
     ap.add_argument("--skip-build", action="store_true", help="do not run make; pack dist/ as it is")
     ap.add_argument("--jobs", type=int, default=10, help="parallel compile jobs (default 10)")
     ap.add_argument("--no-nice", action="store_true", help="run make at normal priority (faster, hogs the PC)")
@@ -111,6 +112,9 @@ def main():
 
     version = read_version()
     print(f"SwanStationPS5 {version}")
+    if args.sync_version:
+        sync_content_version(version)
+        return
     if not args.skip_build:
         sync_content_version(version)
         # the payload first: it takes seconds, and if it fails nobody waits for the app to build to find out

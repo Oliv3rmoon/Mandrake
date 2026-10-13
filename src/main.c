@@ -506,7 +506,6 @@ static void reset_to_factory(void)
     theme_apply(d.theme);
     sfx_configure(d.ui_sound, (d.ui_volume + 1) * 25);
     remote_update(d.remote);
-    plat_set_output(d.output_res);
     app_save_settings();
     app_rescan(); /* the USB folder is back to its own */
     app_toast("Factory settings restored");
@@ -1177,8 +1176,10 @@ static bool import_input(uint32_t *pressed)
     if (launch) /* a disc put in on the shelf: the game starts by itself once it is in */
     {
         int game = find_game_by_key(key);
-        if (game >= 0)
+        if (game >= 0 && !app.global.disc_install_only)
             play_from_disc(game, key);
+        else if (game >= 0) /* install only: the game, new or there already, is only shown */
+            shelf_show_game(game);
     }
     return true;
 }
@@ -1245,10 +1246,13 @@ static void disc_auto_frame(void)
         return;
     disc_mark_handled(id.key);
     int game = find_game_by_key(id.key);
-    SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, starting it" : "importing it");
+    SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, starting it (or showing it, with install only)" : "importing it");
     if (game >= 0)
     {
-        play_from_disc(game, id.key);
+        if (app.global.disc_install_only) /* it is installed already: only shown on the shelf */
+            shelf_show_game(game);
+        else
+            play_from_disc(game, id.key);
         return;
     }
     auto_launch = discimport_start(app.paths.games);
@@ -1921,7 +1925,7 @@ int main(void)
          strcmp(saved_version, SwanStationPS5_VERSION) != 0);
     /* frame interpolation wants the 120 Hz mode, chosen when the screen opens */
     plat_want_high_refresh(config_peek_bool(app.paths.config, "framegen"));
-    plat_want_output(config_peek_int(app.paths.config, "output_res", 2));
+    plat_want_output(2); /* always 4K (1080p when the TV lacks the mode) */
 
     if (!plat_init())
     {
@@ -2150,15 +2154,19 @@ int main(void)
     SwanStationPS5_log("shutdown: done");
 #endif
 #if defined(__PROSPERO__)
-    /* The system closes the title: exit()/_exit() raise SIGSYS on the console. */
-    extern int sceSystemServiceGetAppIdOfRunningBigApp(void);
-    extern int sceSystemServiceKillApp(int app_id, int how, int reason, int core_dump);
+    /* The system closes the title: exit()/_exit() raise SIGSYS on the console. As ProsperoStore does it: LoadExec
+     * "exit" ends the title normally. */
+    extern int sceSystemServiceLoadExec(const char *path, const char **arguments);
+    /* extern int sceSystemServiceGetAppIdOfRunningBigApp(void);
+     * extern int sceSystemServiceKillApp(int app_id, int how, int reason, int core_dump); */
     SwanStationPS5_log("shutdown: closing the title");
     plat_audio_close();
     fflush(NULL);
     for (;;)
     {
-        sceSystemServiceKillApp(sceSystemServiceGetAppIdOfRunningBigApp(), -1, 0, 0);
+        /* sceSystemServiceKillApp(sceSystemServiceGetAppIdOfRunningBigApp(), -1, 0, 0); */
+        int rc = sceSystemServiceLoadExec("exit", NULL);
+        SwanStationPS5_log("shutdown: LoadExec exit refused rc=0x%x", (unsigned)rc);
         plat_sleep_us(1000000); /* until the shell takes the title down; asked again if it did not */
     }
 #endif

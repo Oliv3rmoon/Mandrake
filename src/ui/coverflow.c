@@ -484,7 +484,7 @@ static void draw_cover_reflection(PlatTexture *tex, float x, float y, float w, f
 static bool shelf_cases(void)
 {
     return plat_gpu_ui_active() && theme.layout != LAYOUT_GRID && theme.layout != LAYOUT_SPINES &&
-           /* app.global.cover_style == COVER_FLAT && */ case3d_available();
+           app.global.jewel_cases && /* app.global.cover_style == COVER_FLAT && */ case3d_available();
 }
 
 static void draw_case(PlatTexture *tex, const Game *g, float cx, float cy, float h, float yaw, float pitch,
@@ -1324,11 +1324,11 @@ bool shelf_idle(void)
     return !S.dialog && S.launch_t <= 0.0f && !S.starting && !P.open;
 }
 
-bool shelf_play_game(int library_index, bool direct)
+bool shelf_show_game(int library_index)
 {
     if (library_index < 0 || library_index >= app.library.count || !shelf_idle())
         return false;
-    /* a disc put in is a request to play it: if the game is not in the category on screen, the shelf shows all */
+    /* a disc put in is a request for its game: if it is not in the category on screen, the shelf shows all */
     if (!in_category(&app.library.games[library_index], app.global.shelf_category))
     {
         app.global.shelf_category = CAT_ALL;
@@ -1340,6 +1340,13 @@ bool shelf_play_game(int library_index, bool direct)
         SwanStationPS5_log("shelf: game %d cannot be shown in category %d", library_index, app.global.shelf_category);
         return false;
     }
+    return true;
+}
+
+bool shelf_play_game(int library_index, bool direct)
+{
+    if (!shelf_show_game(library_index))
+        return false;
     play_game(library_index, false, direct);
     if (direct)
     {

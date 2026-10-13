@@ -33,14 +33,14 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 </p>
 <p align="center">
   <img src="docs/media/screens/SwanStationPS5_20261010201647.jpg" alt="The in-game menu, with the disc switch of a multi-disc game and the save state slots" width="32%">
-  <img src="docs/media/screens/SwanStationPS5_20261010201419.jpg" alt="Settings > System > SwanStationPS5: the GPU interface, the output resolution and the USB games folder" width="32%">
+  <img src="docs/media/screens/SwanStationPS5_20261010201419.jpg" alt="Settings > System > SwanStationPS5: the GPU interface and the USB games folder" width="32%">
   <img src="docs/media/screens/SwanStationPS5_20261010201557.jpg" alt="The memory card manager, with each save's icon" width="32%">
 </p>
 
 ## Highlights
 
-- **The shelf and menus on the GPU too.** The interface is drawn through Vulkan, with a floor reflection under every cover. Settings → System → SwanStationPS5 turns it off, and the change is at once; with it off, the interface is drawn by the CPU as before.
-- **Output resolution up to 4K.** 1080p, 1440p or 4K (4K by default), changed at once with no restart. It needs the GPU interface, and it falls back to 1080p if the TV lacks the mode.
+- **The shelf and menus on the GPU too.** The interface is drawn through Vulkan, with a floor reflection under every cover. When you start a game, the case's lid opens and the CD spins.
+- **Always 4K.** The picture is sent to the TV at 4K, and it falls back to 1080p if the TV lacks the mode.
 - **Up to 16x resolution on the GPU.** SwanStation renders through Vulkan: native, 2x, 4x, 8x or 16x (4x by default), at full speed.
 - **No more wobbly 3D.** PGXP (precise geometry) keeps polygons still and textures straight.
 - **One emulator, nothing to choose.** Every game runs on SwanStation. Memory cards are saved per game.
@@ -48,8 +48,8 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 
 - **Five themes.** Neon Arcade (the default), Classic, Memory Card (light and dark, a grid of covers) and Record Shelf (spines on a shelf), each with its own colours and fonts. Around a 4:3 picture: black, the current background or a 90s TV, or the game's own artwork frame (off by default).
 - **Games on a USB drive, by one name.** *Games folder on USB drives* (`psx` by default, typed with an on-screen keyboard) is looked for on `/mnt/usb0/` and `/mnt/usb1/` at once, so it still works when the console numbers your drives differently.
-- **Install your own PS1 discs from a USB CD drive.** Plug in a USB CD drive and put in a PS1 disc: on the shelf, SwanStationPS5 copies it to your games folder (a `.bin` and a `.cue`, with a progress bar and the game's cover), adds it to the shelf and starts it, once per disc until the app is opened again. A disc that is already in your games just starts. It only copies discs you own, shows the cover and a progress bar (hold O to cancel), and stops with an explanation if the disc cannot be read.
-- **Install discs without opening the app.** Send `SwanStationPS5-DiscDaemon.elf` once to your console's ELF loader (port 9021, for example `socat -t 99999999 - TCP:<PS5 IP>:9021 < SwanStationPS5-DiscDaemon.elf`) and leave it running. A PS1 disc put in the USB CD drive is installed to the games folder with the console's own notifications (the game's name and the percentage), and then SwanStationPS5 opens and starts it. While the app is open it looks after the drive itself and the daemon stays out of the way. To cancel, take the disc out. Build it with `make disc-daemon`.
+- **Play your own PS1 discs from a USB CD drive.** Put a PS1 disc in a USB CD drive and SwanStationPS5 copies it to your games folder (a `.bin` and a `.cue`, with a progress bar and the game's cover), adds it to the shelf and starts it. Once a disc is installed, putting it in again just starts the game. With the disc daemon this works even with the app closed. See [Playing from a USB CD drive](#playing-from-a-usb-cd-drive).
+- **Discs without opening the app.** Send `SwanStationPS5-DiscDaemon.elf` (a file of the release) once to your console's ELF loader and leave it running: a disc put in the drive is installed with the console's own notifications (name, percentage and time left), and then the game opens by itself.
 - **Multi-disc games.** Change disc from the in-game menu and it happens as soon as you choose; the disc you leave a game on is the one it starts on next time. A `.m3u` playlist of `.chd` discs gets its serial (and so its cover and data) from the first disc's name.
 - **The DualSense as a light gun.** Point the controller at the screen in GunCon games (Time Crisis, Point Blank...); R2 fires.
 - **Adaptive triggers.** R2 feels like a gas pedal in racing games, and R2 / L2 can be the gas and brake.
@@ -76,7 +76,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 - **Settings from your phone.** Turn it on and scan the QR code: a settings page opens on any phone on the same network.
 - **Updates from GitHub.** SwanStationPS5 finds a new release when it starts and installs it by itself a second after opening (or from *Settings → About*), into the folder the app is running from: `/data/homebrew`, or an extended or USB drive. After an update it asks once whether to start from the new version's factory settings (✕ resets, ○ keeps yours).
 - **Native app.** A real home-screen title (`PPSA98510`) with its own icon and art. Nothing is streamed and no PC is needed while you play.
-- **A shelf for your games.** A cover flow with depth, a reflection under every cover (with the GPU interface) and a soft click as you browse.
+- **A shelf for your games.** A cover flow with depth, 3D jewel cases, a reflection under every cover and a soft click as you browse.
   - Covers are matched by the serial read from each disc, so every region gets its own art.
   - Missing covers download on the console.
   - Your own art wins: a `cover.png`/`.jpg` in the game's folder, or an image in `/data/SwanStationPS5/covers/` named like the game's title, its disc file or its serial (`Crash Bandicoot.png`, `SCUS-94900.jpg`).
@@ -108,6 +108,36 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
   - writes missing `.cue` sheets and `.m3u` playlists
   - fetches covers and cheats
 - **Logs that help.** A session log and a crash report (with addresses for the symbol map) stay on the console.
+
+## Playing from a USB CD drive
+
+The PS5 has no laser for CDs, so PS1 discs are played from an external **USB CD drive**. SwanStationPS5 does not read the disc while you play: it **installs** it first (copies it to `.bin` and `.cue` in your games folder, the same as a dump you made yourself) and plays that copy. That way the game runs at full speed and works with every feature (save states, rewind, cheats, RetroAchievements). It only copies discs you own.
+
+### The flow, with the disc daemon (the app can be closed)
+
+1. **Once per console start**, send the payload `SwanStationPS5-DiscDaemon.elf` (it is attached to every [release](../../releases/latest), next to the zip; it is not inside the zip) to the ELF loader of your console, with the app closed:
+   ```bash
+   socat -t 99999999 - TCP:<PS5 IP>:9021 < SwanStationPS5-DiscDaemon.elf
+   ```
+   A notification says it is ready. Leave it running; sending a newer copy replaces the old one.
+2. **Plug in the USB CD drive and put in a PS1 disc.** The console's own notifications show `Installing <game>: 37% - 5 min 30 s left...`. The time left comes from the speed the drive has just had, since a CD reads faster towards its edge.
+3. **The game starts by itself.** When the copy ends, SwanStationPS5 opens, skips its opening animation and starts the game at once, on the disc you put in.
+4. **Next time**, the same disc (or a disc of the games folder) just says `Loading <game>...` and opens the game: nothing is copied twice. The game stays on your shelf, so you no longer need the disc.
+
+To cancel an installation, take the disc out (what was copied is deleted). If the drive reads nothing for 30 seconds, or the disc has too many bad sectors, the installation stops with a notification that says why. A disc that is not a PS1 game is ignored.
+
+### The flow, with the app open
+
+With SwanStationPS5 open, the app looks after the drive itself and the daemon stays out of the way (they never use it at the same time). Put the disc in while you are on the shelf: a card shows `Installing <game>...` with its cover and a bar, and the game starts when it ends. **Hold O** to cancel (what was copied is deleted, and the same disc does not start again until you take it out).
+
+### Good to know
+
+- **Games of several discs** go in one folder: install disc 1, then disc 2... and SwanStationPS5 turns them into one game with a `.m3u` playlist. The game starts on the disc you put in, and you change disc from the game menu.
+- The cover is downloaded while the disc is copied. Homebrew discs without a serial are installed too, with no cover.
+- Where it goes: `/data/SwanStationPS5/games/<Game name> [<serial>]/`. Delete a game from its Details (hold Triangle) to free the space.
+- The daemon needs the console to be jailbroken, as the app does, and writes its log to `/data/SwanStationPS5/logs/disc-daemon.log`.
+- It is not in the zip because it is not a part of the app: it is a payload you load like any other. Build it yourself with `make disc-daemon` (`dist/SwanStationPS5-DiscDaemon.elf`).
+- Not every USB CD drive may work. If yours does not, send the logs (`SwanStationPS5.log` and `disc-daemon.log`) with your bug report.
 
 ## Supported folders for games and BIOS
 
@@ -156,7 +186,7 @@ Put the BIOS files directly in the folder, not in a subfolder, and keep their st
 
 ## Getting started
 
-1. **Download** the `SwanStationPS5-v*.zip` from the [latest release](../../releases/latest) and extract it. Inside is a `PPSA98510` folder and the PC tools.
+1. **Download** `PPSA98510.zip` from the [latest release](../../releases/latest) and extract it. Inside is the `PPSA98510` folder. The PC tool is in the repository (`tools/SwanStationPS5_sync.py`).
 2. **Install the app.** Copy the `PPSA98510` folder to `/data/homebrew/` on the PS5 over FTP. Then set its permissions to `777`: in FileZilla, right-click the folder → *File permissions* → `777`, recurse into subdirectories. Without this, the PS5 says *"Can't start the game or app"* (CE-107750-0). The PC tool does all of this for you:
    ```bash
    python tools/SwanStationPS5_sync.py app --app-dir PPSA98510 --host <PS5 IP>
@@ -264,7 +294,7 @@ It also shows the time and how long you've been playing.
 | Controls | Controller (digital or DualShock), left stick as D-pad, vibration, light bar, players (multitap), player order, dead zone, stick response, rumble feel, trigger effects, gas and brake on R2 / L2, light gun, button mapping, and SwanStation's controller port options |
 | Achievements | Account, your profile, unlock pop-ups and their style, progress tracker, hardcore mode |
 | Library | Theme, cover style, download missing covers, sort, your library, memory cards, rescan |
-| System | SwanStationPS5 (start the BIOS, output resolution, games folder on USB drives), region, PS1 startup intro, fast CD loading, known game fixes, SwanStation's console and advanced options, quick resume, rewind, auto-save, who's playing (profiles), settings from your phone, language, unlocking `/data`, PS5SX2 Helper whitelist |
+| System | SwanStationPS5 (start the BIOS, games folder on USB drives), region, PS1 startup intro, fast CD loading, known game fixes, SwanStation's console and advanced options, quick resume, rewind, auto-save, who's playing (profiles), settings from your phone, language, unlocking `/data`, PS5SX2 Helper whitelist |
 
 Video settings apply while you play. Internal resolution, PGXP, region, BIOS, controller and SwanStation's options apply from the next game.
 
@@ -337,7 +367,8 @@ cd SwanStationPS5
 git submodule update --init --recursive third_party/rcheevos
 git submodule update --init third_party/swanstation
 make            # -> dist/PPSA98510/ and dist/PPSA98510.zip
-python3 tools/make_release.py   # optional: build and pack PPSA98510.zip, the release asset
+make disc-daemon                # -> dist/SwanStationPS5-DiscDaemon.elf, the disc daemon payload
+python3 tools/make_release.py   # optional: build the payload and the app, and pack PPSA98510.zip
 ```
 
 `make` builds SwanStation (`tools/build-swanstation.sh`) and rcheevos (`tools/build-rcheevos.sh`) as static libraries, links the RADV Vulkan driver (`tools/fetch-radv.sh`), compiles `src/` and signs `eboot.bin`. `APP_VULKAN=0` builds without Vulkan and SwanStation.
@@ -351,7 +382,8 @@ python3 tools/make_release.py   # optional: build and pack PPSA98510.zip, the re
 | `src/ui/` | cover flow, text, sounds |
 | `src/platform/` | PS5 video output, input, heap, scaling filters |
 | `tools/SwanStationPS5_sync.py` | the PC tool |
-| `tools/make_release.py` | builds the app and packs PPSA98510.zip, the release asset |
+| `payload/discd.c` | the disc daemon payload, built by `make disc-daemon` into `dist/SwanStationPS5-DiscDaemon.elf` |
+| `tools/make_release.py` | builds the payload and the app, packs PPSA98510.zip (with `--ip`, also uploads the app to the console) |
 | `tools/make_dds.py` | converts the two backgrounds to the BC7 `pic0.dds` / `pic1.dds` |
 | `tools/make_art.py` | generates the icon and the home-screen art |
 | `docs/boilerplate/` | documentation of the PS5 app boilerplate SwanStationPS5 is built on |

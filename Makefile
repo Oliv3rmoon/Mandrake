@@ -209,8 +209,9 @@ self-update-example: $(RUNTIME) self-update-helper
 		APP_ROOT_FILES="$(SELF_UPDATE_HELPER) $(APP_ROOT_FILES)" \
 		bash tools/build.sh Folder
 
-# The disc daemon payload first (seconds; a mistake in it shows before the app's long build), then the app.
-deploy: disc-daemon
+# The version into sce_sys/param.json (as make release does), the disc daemon payload (seconds; a mistake in it shows
+# before the app's long build), then the app.
+deploy: sync-version disc-daemon
 	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
 	@bash tools/deploy.sh
 
@@ -244,6 +245,10 @@ clean:
 distclean: clean
 	@printf '%s\n' '==> [distclean] Removing downloaded dependency caches'
 	@rm -rf -- .deps
+
+.PHONY: sync-version
+sync-version:
+	@python3 tools/make_release.py --sync-version
 
 .PHONY: disc-daemon
 # The disc daemon payload (payload/discd.c): dist/SwanStationPS5-DiscDaemon.elf, sent once to the console's ELF loader.

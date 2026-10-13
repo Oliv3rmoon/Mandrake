@@ -33,7 +33,6 @@ void config_defaults(Settings *s)
     snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/usb0/psx and /mnt/usb1/psx */
     s->bezel = false; /* the game's artwork frame, when there is one */
     s->theme = 1; /* Neon Arcade (THEME_NEON in ui/theme.h) */
-    s->output_res = 2; /* 4K */
     s->pgxp = true; /* no wobbling polygons */
     s->ra_popups = true;
     s->hd_textures = true;
@@ -43,6 +42,8 @@ void config_defaults(Settings *s)
     s->brightness = 1;
     s->game_fixes = true;
     s->disc_animation = true;
+    s->jewel_cases = true;
+    s->disc_install_only = false;
     s->negcon = false;
     s->touch_mouse = true;
     s->racing_triggers = false;
@@ -218,6 +219,10 @@ static bool config_apply(Settings *s, const char *path)
             s->sharpen = atoi(value) % 3;
         else if (strcmp(key, "disc_animation") == 0)
             s->disc_animation = as_bool(value);
+        else if (strcmp(key, "disc_install_only") == 0)
+            s->disc_install_only = as_bool(value);
+        else if (strcmp(key, "jewel_cases") == 0)
+            s->jewel_cases = as_bool(value);
         else if (strcmp(key, "negcon") == 0)
             s->negcon = as_bool(value);
         else if (strcmp(key, "touch_mouse") == 0)
@@ -230,8 +235,6 @@ static bool config_apply(Settings *s, const char *path)
             s->framegen = as_bool(value);
         else if (strcmp(key, "usb_folder") == 0)
             snprintf(s->usb_folder, sizeof(s->usb_folder), "%s", value);
-        else if (strcmp(key, "output_res") == 0)
-            s->output_res = atoi(value) % 3;
         else if (strcmp(key, "fsr") == 0)
             s->fsr = as_bool(value);
         else if (strcmp(key, "rewind") == 0)
@@ -305,7 +308,6 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
     out->remote = global->remote;
     out->update_check = global->update_check;
     snprintf(out->usb_folder, sizeof(out->usb_folder), "%s", global->usb_folder);
-    out->output_res = global->output_res;
     out->quick_resume = global->quick_resume;
     return true;
 }
@@ -391,7 +393,7 @@ bool config_save(const Settings *s, const char *path)
     fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\n",
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
             s->update_check);
-    fprintf(f, "renderer=%d\noutput_res=%d\nusb_folder=%s\n", s->renderer, s->output_res, s->usb_folder);
+    fprintf(f, "renderer=%d\nusb_folder=%s\n", s->renderer, s->usb_folder);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,
             s->crop_edges);
@@ -403,8 +405,8 @@ bool config_save(const Settings *s, const char *path)
             s->overclock, s->brightness, s->colour, s->autosave, s->bezel);
     fprintf(f, "msaa=%d\ntexture_filter=%d\nfilter_2d=%d\nsupersampling=%d\ndeinterlace=%d\npal60=%d\ngame_fixes=%d\n",
             s->msaa, s->texture_filter, s->filter_2d, s->supersampling, s->deinterlace, s->pal60, s->game_fixes);
-    fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\nnegcon=%d\n",
-            s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->negcon);
+    fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\nnegcon=%d\njewel_cases=%d\ndisc_install_only=%d\n",
+            s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->negcon, s->jewel_cases, s->disc_install_only);
     fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nfsr=%d\n", s->touch_mouse, s->run_ahead,
             s->fast_effects, s->framegen, s->fsr);
     for (int i = 0; i < SS_OPT_COUNT; ++i)
