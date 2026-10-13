@@ -314,8 +314,8 @@ unsigned ra_user_hardcore_score(void)
 static void warn_hardcore_not_counted(void)
 {
     if (warn_emulator && client && rc_client_get_hardcore_enabled(client))
-        post("RetroAchievements",
-             tr("Hardcore unlocks are not counted: RetroAchievements does not recognise this emulator yet."));
+        post("RetroAchievements", /* the line break is fixed: the notice wraps the rest */
+             tr("Hardcore unlocks are not counted:\nRetroAchievements does not recognise this emulator yet."));
 }
 
 static void RC_CCONV on_event(const rc_client_event_t *e, rc_client_t *c)

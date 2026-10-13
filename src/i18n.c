@@ -1259,6 +1259,8 @@ static const Entry ENTRIES[] = {
       "%d分プレイ中"}},
     {{"Playing for %d h %02d", "En jeu depuis %d h %02d", "A jogar há %d h %02d", "Jugando desde hace %d h %02d",
       "%d時間%02d分プレイ中"}},
+    {{"Hardcore unlocks are not counted:\nRetroAchievements does not recognise this emulator yet.", "Les succès hardcore ne comptent pas :\nRetroAchievements ne reconnaît pas encore cet émulateur.", "As conquistas hardcore não contam:\no RetroAchievements ainda não reconhece este emulador.", "Los logros hardcore no cuentan:\nRetroAchievements aún no reconoce este emulador.",
+      "ハードコアの解除はカウントされません。\nRetroAchievementsはこのエミュレーターをまだ認識していません。"}},
     {{"Hardcore unlocks are not counted: RetroAchievements does not recognise this emulator yet.", "Les succès hardcore ne comptent pas : RetroAchievements ne reconnaît pas encore cet émulateur.", "As conquistas hardcore não contam: o RetroAchievements ainda não reconhece este emulador.", "Los logros hardcore no cuentan: RetroAchievements aún no reconoce este emulador.",
       "ハードコアの解除はカウントされません。RetroAchievementsはこのエミュレーターをまだ認識していません。"}},
     {{"RetroAchievements has not tested this version of the game: its unlocks may not count.", "RetroAchievements n'a pas testé cette version du jeu : les succès peuvent ne pas compter.", "O RetroAchievements não testou esta versão do jogo: as conquistas podem não contar.", "RetroAchievements no ha probado esta versión del juego: los logros podrían no contar.",

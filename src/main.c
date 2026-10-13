@@ -627,6 +627,57 @@ static void draw_tracker(void)
         draw_rrect(x + 20, y + 62, bw * k < 10 ? 10 : bw * k, 10, 5, TH_GOLD);
 }
 
+/* Splits `s` into lines no wider than max_w, at its own line breaks and at spaces (or between characters when a word is wider, as in Japanese).
+ * Returns how many lines were filled; what does not fit in max_lines is dropped. */
+#define WRAP_LINE 200
+static int wrap_lines(const char *s, float size, int weight, float max_w, char out[][WRAP_LINE], int max_lines)
+{
+    int n = 0, len = 0, space = -1;
+    char line[WRAP_LINE];
+    line[0] = '\0';
+    for (const char *p = s; *p && n < max_lines;)
+    {
+        const unsigned char b = (unsigned char)*p;
+        if (b == '\n')
+        {
+            memcpy(out[n++], line, (size_t)len + 1); /* a break the text asks for */
+            len = 0;
+            line[0] = '\0';
+            space = -1;
+            ++p;
+            continue;
+        }
+        int c = b < 0x80 ? 1 : (b & 0xE0) == 0xC0 ? 2 : (b & 0xF0) == 0xE0 ? 3 : 4;
+        if (len + c >= WRAP_LINE)
+            break;
+        memcpy(line + len, p, (size_t)c);
+        len += c;
+        line[len] = '\0';
+        if (b == ' ')
+            space = len - 1;
+        if (len > c && text_width(size, weight, line) > max_w)
+        {
+            int cut = space > 0 ? space : len - c;
+            int rest = space > 0 ? space + 1 : len - c;
+            memcpy(out[n], line, (size_t)cut);
+            out[n++][cut] = '\0';
+            memmove(line, line + rest, (size_t)(len - rest) + 1);
+            len -= rest;
+            space = -1;
+            for (int i = 0; i < len; ++i)
+                if (line[i] == ' ')
+                    space = i;
+        }
+        p += c;
+    }
+    if (len > 0 && n < max_lines)
+    {
+        memcpy(out[n], line, (size_t)len + 1);
+        ++n;
+    }
+    return n;
+}
+
 static void draw_achievement(void)
 {
     if (app.screen == SCREEN_GAME && app.global.ra_tracker)
@@ -657,37 +708,49 @@ static void draw_achievement(void)
     float a = in < out ? in : out, slide = (1.0f - in) * (1.0f - in) * 80.0f;
     if (app.global.ra_popup_style == 1)
     {
-        /* compact: one line at the top */
-        char line[300];
+        /* compact: a line at the top, two when it does not fit */
+        char line[300], rows[2][WRAP_LINE];
         snprintf(line, sizeof(line), "%s  \xc2\xb7  %s", title, detail);
+        const float room = plat_width() - 200 - 80;
+        int n = wrap_lines(line, 22, FONT_REGULAR, room, rows, 2);
         float lw = text_width(22, FONT_REGULAR, line) + 90;
-        if (lw > plat_width() - 200)
+        if (n > 1 || lw > plat_width() - 200)
             lw = plat_width() - 200;
+        float lh = 52 + (n > 1 ? (n - 1) * 28 : 0);
         float lx = (plat_width() - lw) * 0.5f, ly = 24 - slide * 0.5f;
-        draw_rrect(lx, ly, lw, 52, 26, argb_alpha(TH_CARD_A(0xf0), a));
+        draw_rrect(lx, ly, lw, lh, n > 1 ? TH_RADIUS_SMALL : 26, argb_alpha(TH_CARD_A(0xf0), a));
         icon_draw(ICON_TROPHY, lx + 18, ly + 11, 30, argb_alpha(TH_GOLD, a));
-        text_draw_fit(lx + 60, ly + 13, 22, FONT_REGULAR, argb_alpha(TH_TEXT, a), ALIGN_LEFT, lw - 80, line);
+        for (int i = 0; i < n; ++i)
+            text_draw_fit(lx + 60, ly + 13 + i * 28, 22, FONT_REGULAR, argb_alpha(TH_TEXT, a), ALIGN_LEFT, lw - 80,
+                          rows[i]);
         return;
     }
     if (app.global.ra_popup_style == 2)
     {
         /* big trophy, in the middle */
-        float bw = 760, bh = 300, bx = (plat_width() - bw) * 0.5f, by = (plat_height() - bh) * 0.5f - 40 + slide * 0.4f;
+        char rows[3][WRAP_LINE];
+        int n = wrap_lines(detail, 22, FONT_REGULAR, 700, rows, 3);
+        float bw = 760, bh = 300 + (n > 1 ? (n - 1) * 28 : 0), bx = (plat_width() - bw) * 0.5f,
+              by = (plat_height() - bh) * 0.5f - 40 + slide * 0.4f;
         draw_rrect(bx, by, bw, bh, TH_RADIUS, argb_alpha(TH_CARD_A(0xf0), a));
         draw_circle(bx + bw * 0.5f, by + 92, 62, argb_alpha(0xff2a2410u, a));
         icon_draw(ICON_TROPHY, bx + bw * 0.5f - 44, by + 48, 88, argb_alpha(TH_GOLD, a));
         text_draw_fit(bx + bw * 0.5f, by + 176, 34, FONT_BOLD, argb_alpha(TH_TEXT, a), ALIGN_CENTER, bw - 60, title);
-        text_draw_fit(bx + bw * 0.5f, by + 230, 22, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, a), ALIGN_CENTER, bw - 60,
-                      detail);
+        for (int i = 0; i < n; ++i)
+            text_draw_fit(bx + bw * 0.5f, by + 230 + i * 28, 22, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, a), ALIGN_CENTER,
+                          bw - 60, rows[i]);
         return;
     }
-    const float w = 660, h = 116, x = plat_width() - w - 48 + slide, y = 48;
+    char rows[3][WRAP_LINE];
+    int n = wrap_lines(detail, 22, FONT_REGULAR, 660 - 140, rows, 3);
+    const float w = 660, h = 116 + (n > 1 ? (n - 1) * 28 : 0), x = plat_width() - w - 48 + slide, y = 48;
     draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_CARD_A(0xf0), a));
     draw_rrect(x + 18, y + 18, 80, 80, TH_RADIUS_SMALL, argb_alpha(0xff2a2410u, a));
     icon_draw(ICON_TROPHY, x + 30, y + 30, 56, argb_alpha(TH_GOLD, a));
     text_draw_fit(x + 120, y + 20, 30, FONT_BOLD, argb_alpha(TH_TEXT, a), ALIGN_LEFT, w - 140, title);
-    text_draw_fit(x + 120, y + 66, 22, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, a), ALIGN_LEFT, w - 140,
-                  detail);
+    for (int i = 0; i < n; ++i)
+        text_draw_fit(x + 120, y + 66 + i * 28, 22, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, a), ALIGN_LEFT, w - 140,
+                      rows[i]);
 }
 
 /* ---------------------------------------------------------------- game start/stop */
