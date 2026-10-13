@@ -310,6 +310,14 @@ unsigned ra_user_hardcore_score(void)
     return u ? u->score : 0;
 }
 
+/* The server does not know this emulator: hardcore unlocks are not counted. Said when both are true, in whichever order. */
+static void warn_hardcore_not_counted(void)
+{
+    if (warn_emulator && client && rc_client_get_hardcore_enabled(client))
+        post("RetroAchievements",
+             tr("Hardcore unlocks are not counted: RetroAchievements does not recognise this emulator yet."));
+}
+
 static void RC_CCONV on_event(const rc_client_event_t *e, rc_client_t *c)
 {
     char detail[192];
@@ -320,10 +328,15 @@ static void RC_CCONV on_event(const rc_client_event_t *e, rc_client_t *c)
         {
             /* "Unknown Emulator" / "Unsupported Game Version": shown once, but they are not unlocks */
             if (e->achievement->title && strstr(e->achievement->title, "Emulator"))
+            {
                 warn_emulator = true;
+                warn_hardcore_not_counted(); /* in our words, and only when hardcore is on */
+            }
             else
+            {
                 warn_version = true;
-            post(e->achievement->title, e->achievement->description);
+                post(e->achievement->title, e->achievement->description);
+            }
             break;
         }
         snprintf(detail, sizeof(detail), tr("%s  (%u points)"), e->achievement->description,
@@ -642,6 +655,8 @@ void ra_set_hardcore(bool on)
         rc_client_set_hardcore_enabled(client, on ? 1 : 0);
     if (user[0])
         save_ini();
+    if (on)
+        warn_hardcore_not_counted(); /* turned on after the game's notice came */
 }
 
 bool ra_warning(bool *emulator, bool *version)
