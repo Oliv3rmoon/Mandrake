@@ -710,7 +710,7 @@ static void draw_sheet(const Sheet *sh, float cx, float cy, float scale, float a
             const float du = (ex * uh[0] + ey * uh[1] + ez * uh[2]) / sh->sigma_u;
             const float dv = (ex * vh[0] + ey * vh[1] + ez * vh[2]) / sh->sigma_v;
             const float glare = expf(-(du * du + dv * dv));
-            const float soft = 0.10f * expf(-(ex * ex + ey * ey + ez * ez) * 4.0f);
+            const float soft = 0.03f * expf(-(ex * ex + ey * ey + ez * ez) * 4.0f);
             float al = (glare * sh->peak + soft + sh->sheen) * alpha;
             PlatVertex *q = &grid[j * (COLS + 1) + i];
             float persp = VIEW_DISTANCE / (VIEW_DISTANCE - pz);
@@ -766,7 +766,7 @@ static void draw_plastic(float cx, float cy, float scale, float alpha)
 
     /* the shine of the light point over the lid */
     const Sheet lid = {{0, 0, FRONT_Z + 0.02f}, {case_w * 0.5f, 0, 0}, {0, case_h * 0.5f, 0}, {0, 0, 1},
-                       0.90f, 0.24f, 0.30f, 0.0f, true};
+                       0.90f, 0.24f, 0.08f, 0.0f, true};
     draw_sheet(&lid, cx, cy, scale, alpha);
 }
 
