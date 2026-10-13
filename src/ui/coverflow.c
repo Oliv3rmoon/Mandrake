@@ -493,6 +493,7 @@ static void draw_case(PlatTexture *tex, const Game *g, float cx, float cy, float
     if (!tex && no_cover_icon())
         tex = no_cover_icon();
     const float w = h * case3d_aspect();
+    case3d_lighting(app.global.case_lighting);
     case3d_matte(tex == no_cover_icon()); /* the picture of a game without a cover is lit like paper */
     case3d_draw(tex, cx, cy, h, yaw, pitch, tint, reflections_on());
     if (selected)

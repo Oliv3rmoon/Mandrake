@@ -268,6 +268,8 @@ static const Row LIBRARY[] = {
     */
     {NULL, "Jewel cases", "The shelf shows 3D jewel cases. Off: the flat covers with a reflection on the floor, as in version 1.1.8.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(jewel_cases), OFF_ON, 2, 0},
+    {NULL, "Cover lighting", "The light on the cover in the jewel case: its shading and the glare over the lid. Off: the picture as it is.", K_TOGGLE,
+     APPLY_NOW, SP_NONE, true, BOOL_FIELD(case_lighting), OFF_ON, 2, 0},
     {NULL, "Disc animation", "When a game starts, its disc slides out of the case and spins.", K_TOGGLE, APPLY_NOW,
      SP_NONE, true, BOOL_FIELD(disc_animation), OFF_ON, 2, 0},
     {NULL, "Download missing covers", "Fetches covers for new games over the internet.", K_TOGGLE,

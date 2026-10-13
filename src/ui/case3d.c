@@ -374,6 +374,7 @@ static float launch_open, launch_spin;
 static bool launch_on;
 static float lid_c = 1.0f, lid_s, disc_c = 1.0f, disc_s;
 static float draw_cx, draw_scale = 1.0f; /* the case being drawn: its centre on the screen and px per model unit */
+static bool lighting_on = true;                  /* case3d_lighting: the cover's light */
 static bool matte_next, matte;           /* the cover sheet is lit like paper (case3d_matte): taken by the next draw only */
 
 #define LID_OPEN 2.2689f    /* the lid's full swing, radians: 130 degrees */
@@ -526,7 +527,7 @@ static void draw_part(int part, const Pt *pts, PlatTexture *cover, uint32_t tint
     {
         const Face *f = &m->faces[order[i]];
         /* the pictures carry their own light: a little shading keeps the case's volume */
-        const float k = 0.62f + 0.38f * shade[i];
+        const float k = lighting_on || part != PART_PROMO ? 0.62f + 0.38f * shade[i] : 1.0f;
         uint32_t rgb = shade_color(k, tex ? 0xffffffu : base);
         rgb = (uint32_t)(((rgb >> 16) & 0xff) * tr) << 16 | (uint32_t)(((rgb >> 8) & 0xff) * tg) << 8 |
               (uint32_t)((rgb & 0xff) * tb);
@@ -590,7 +591,7 @@ static void draw_part(int part, const Pt *pts, PlatTexture *cover, uint32_t tint
                 float dx = (LIGHT_SCREEN_X - draw_cx) / draw_scale - pp->x, dy = LIGHT_HEIGHT - pp->y, dz = LIGHT_DEPTH - pp->z;
                 const float dl = sqrtf(dx * dx + dy * dy + dz * dz);
                 const float lambert = fmaxf((side[0] * dx + side[1] * dy + side[2] * dz) / dl, 0.0f);
-                const float kk = fminf(0.42f + 0.62f * lambert, 1.0f);
+                const float kk = lighting_on || part != PART_PROMO ? fminf(0.42f + 0.62f * lambert, 1.0f) : 1.0f;
                 q[v].argb = alpha | (uint32_t)(255.0f * kk * tr) << 16 | (uint32_t)(255.0f * kk * tg) << 8 | (uint32_t)(255.0f * kk * tb);
             }
             if (mirror)
@@ -767,7 +768,8 @@ static void draw_plastic(float cx, float cy, float scale, float alpha)
     /* the shine of the light point over the lid */
     const Sheet lid = {{0, 0, FRONT_Z + 0.02f}, {case_w * 0.5f, 0, 0}, {0, case_h * 0.5f, 0}, {0, 0, 1},
                        0.90f, 0.24f, 0.08f, 0.0f, true};
-    draw_sheet(&lid, cx, cy, scale, alpha);
+    if (lighting_on)
+        draw_sheet(&lid, cx, cy, scale, alpha);
 }
 
 /* The game's cover under the CD's printed ring: a flat ring on the disc's face, turning with it, showing the middle
@@ -966,6 +968,11 @@ static void draw_disc(const Pt *pts, PlatTexture *cover, uint32_t tint, float cx
     draw_disc_cover(cover, tint, cx, cy, scale);
     draw_disc_gloss(tint, cx, cy, scale);
     draw_part(PART_DISC_TOP, pts, cover, tint, NULL);
+}
+
+void case3d_lighting(bool on)
+{
+    lighting_on = on;
 }
 
 void case3d_matte(bool on)

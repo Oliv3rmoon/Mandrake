@@ -146,6 +146,7 @@ typedef struct
     int sharpen;          /* 0 off, 1 light, 2 strong (AMD FidelityFX CAS) */
     bool disc_animation;  /* the disc slides out of its case when a game starts */
     bool disc_install_only; /* a disc put in is installed but its game is not started (the disc daemon does not open the app) */
+    bool case_lighting;   /* the cover in the jewel case gets light: its shading and the glare over the lid; off: the picture as it is */
     bool jewel_cases;     /* the shelf shows 3D jewel cases; off: the flat covers with a reflection, as in 1.1.8 */
     bool negcon;          /* racing games that take a NeGcon: analog gas and brake on R2 / L2 */
     bool touch_mouse;     /* mouse games: the touchpad moves the pointer */
