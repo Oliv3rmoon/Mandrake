@@ -214,7 +214,7 @@ static void apply_swanstation_options(const Settings *s)
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         int v = s->ss_opt[i];
-        const char *value = SS_OPTS[i].values[v >= 0 && v < SS_OPTS[i].count ? v : SS_OPTS[i].def];
+        const char *value = ss_opt_value(i, v);
         if (!strcmp(SS_OPTS[i].key, "swanstation_Display_ShowOSDMessages"))
         {
             /* the core always says its messages (the light bar follows the analog mode by them); whether they are

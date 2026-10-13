@@ -358,23 +358,54 @@ void app_state_path(char *out, size_t size, int slot)
     path_join(out, size, app.paths.states, file);
 }
 
+/* The BIOS a region will run, from the choice in Console (core): that file when it is in bios/ (OpenBIOS is built into
+ * the core, so it needs no file); with Auto, or a file that is gone, what the core does: the BIOS the folder holds, or
+ * OpenBIOS when it holds none. */
+static void bios_for_region(const char *key, char *out, size_t size)
+{
+    for (int i = 0; i < SS_OPT_COUNT; ++i)
+    {
+        if (strcmp(SS_OPTS[i].key, key) != 0)
+            continue;
+        const char *file = ss_opt_value(i, app.global.ss_opt[i]); /* "" is Auto */
+        char path[SwanStationPS5_PATH_MAX];
+        path_join(path, sizeof(path), app.paths.bios, file);
+        if (file[0] && access(path, R_OK) == 0)
+        {
+            str_copy(out, size, file);
+            return;
+        }
+        if (strcmp(file, "openbios.bin") == 0)
+        {
+            str_copy(out, size, "OpenBIOS");
+            return;
+        }
+        str_copy(out, size, "OpenBIOS");
+        DIR *d = opendir(app.paths.bios); /* Auto, or a file that is not there: the core uses what the folder holds */
+        if (d)
+        {
+            struct dirent *e;
+            while ((e = readdir(d)))
+                if (str_icmp(path_ext(e->d_name), "bin") == 0)
+                {
+                    str_copy(out, size, e->d_name);
+                    break;
+                }
+            closedir(d);
+        }
+        return;
+    }
+    str_copy(out, size, "?");
+}
+
+/* Settings > About > BIOS: the one each region will run */
 void app_describe_bios(char *out, size_t size)
 {
-    DIR *d = opendir(app.paths.bios);
-    out[0] = '\0';
-    if (d)
-    {
-        struct dirent *e;
-        while ((e = readdir(d)))
-            if (str_icmp(path_ext(e->d_name), "bin") == 0)
-            {
-                snprintf(out, size, tr("Real BIOS found: %.60s"), e->d_name);
-                break;
-            }
-        closedir(d);
-    }
-    if (!out[0])
-        str_copy(out, size, tr("No BIOS file in bios/, using OpenBios"));
+    char j[64], u[64], p[64];
+    bios_for_region("swanstation_BIOS_PathNTSCJ", j, sizeof(j));
+    bios_for_region("swanstation_BIOS_PathNTSCU", u, sizeof(u));
+    bios_for_region("swanstation_BIOS_PathPAL", p, sizeof(p));
+    snprintf(out, size, "NTSC-J: %s  \xc2\xb7  NTSC-U: %s  \xc2\xb7  PAL: %s", j, u, p);
 }
 
 void app_restart_covers(void)
@@ -685,11 +716,11 @@ static void draw_achievement(void)
     static char title[96], detail[192];
     static uint64_t shown_at;
     const uint64_t length = 4500000;
-    static bool showing;
+    static bool showing, quiet;
     uint64_t now = plat_ticks_us();
     if (!showing || now > shown_at + length)
     {
-        showing = ra_next_message(title, sizeof(title), detail, sizeof(detail));
+        showing = ra_next_message(title, sizeof(title), detail, sizeof(detail), &quiet);
         if (!showing)
             return;
         /* pop-ups off: messages that arrive during play are dropped, not shown */
@@ -699,8 +730,8 @@ static void draw_achievement(void)
             return;
         }
         shown_at = now;
-        /* opened by the disc daemon for a disc put in: no sound for the first seconds (signed in, game loaded...) */
-        if (!(opened_by_daemon && now - app_started_us < 25000000u))
+        /* quiet: the summary shown when a game opens; the sound is for the rest */
+        if (!quiet)
             sfx_play(SFX_SELECT);
     }
     float t = (float)(now - shown_at) / 1e6f, total = length / 1e6f;
@@ -2042,6 +2073,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); ++i)
         make_dirs(dirs[i]);
     bios_use_legacy_dir();
+    bios_choices_scan(app.paths.bios); /* before the settings are read: the BIOS options list the folder's files */
     char probe[SwanStationPS5_PATH_MAX];
     path_join(probe, sizeof(probe), app.paths.root, ".write-test");
     FILE *pf = fopen(probe, "w");

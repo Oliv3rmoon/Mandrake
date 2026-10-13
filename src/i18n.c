@@ -371,11 +371,10 @@ static const Entry ENTRIES[] = {
       "ストレージを利用できません"}},
     {{"SwanStationPS5 can't open /data/SwanStationPS5", "SwanStationPS5 ne peut pas ouvrir /data/SwanStationPS5", "O SwanStationPS5 não consegue abrir /data/SwanStationPS5",
       "SwanStationPS5 no puede abrir /data/SwanStationPS5", "SwanStationPS5 は /data/SwanStationPS5 を開けません"}},
-    {{"Real BIOS found: %.60s", "BIOS réel trouvé : %.60s", "BIOS real encontrado: %.60s",
-      "BIOS real encontrado: %.60s", "実機 BIOS: %.60s"}},
-    {{"No BIOS file in bios/, using OpenBios", "Aucun BIOS dans bios/, OpenBios utilisé",
-      "Nenhum BIOS em bios/, a usar OpenBios", "No hay BIOS en bios/, usando OpenBios",
-      "bios/ に BIOS がないため OpenBios を使用"}},
+    {{"Detect automatically", "Détection automatique", "Detetar automaticamente", "Detectar automáticamente",
+      "自動検出"}},
+    {{"OpenBIOS (built into the core)", "OpenBIOS (intégré au cœur)", "OpenBIOS (integrada no núcleo)", "OpenBIOS (interna del núcleo)",
+      "OpenBIOS(コア内蔵)"}},
 
     /* ---- in-game menu */
     {{"Resume", "Reprendre", "Continuar", "Continuar", "再開"}},

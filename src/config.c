@@ -91,9 +91,11 @@ static bool config_apply(Settings *s, const char *path)
             /* a SwanStation core option, by name and value (so reordering the table keeps saved files valid) */
             for (int i = 0; i < SS_OPT_COUNT; ++i)
                 if (strcmp(key, SS_OPTS[i].key) == 0)
-                    for (int v = 0; v < SS_OPTS[i].count; ++v)
-                        if (strcmp(value, SS_OPTS[i].values[v]) == 0)
-                            s->ss_opt[i] = v;
+                {
+                    int v = ss_opt_find(i, value, true); /* a BIOS file not seen in the folder is kept by its name */
+                    if (v >= 0)
+                        s->ss_opt[i] = v;
+                }
         }
         else if (strcmp(key, "smooth") == 0)
             s->smooth = as_bool(value);
@@ -415,8 +417,8 @@ bool config_save(const Settings *s, const char *path)
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         int v = s->ss_opt[i];
-        if (v >= 0 && v < SS_OPTS[i].count && v != SS_OPTS[i].def) /* only what differs from the default */
-            fprintf(f, "%s=%s\n", SS_OPTS[i].key, SS_OPTS[i].values[v]);
+        if (v >= 0 && v < ss_opt_count(i) && v != SS_OPTS[i].def) /* only what differs from the default */
+            fprintf(f, "%s=%s\n", SS_OPTS[i].key, ss_opt_value(i, v));
     }
     for (int i = 0; i < SS_OPT_COUNT && s->aspect_before_wide >= 0; ++i)
         if (strcmp(SS_OPTS[i].key, "swanstation_Display_AspectRatio") == 0 && s->aspect_before_wide < SS_OPTS[i].count)

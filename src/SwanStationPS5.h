@@ -9,6 +9,7 @@
 #define SwanStationPS5_H
 
 #include <stdbool.h>
+#include "core/bios_choices.h"
 #include "core/swanstation_options.h"
 #include <stddef.h>
 #include <stdint.h>

@@ -46,6 +46,7 @@ typedef struct
 {
     char title[96];
     char detail[192];
+    bool quiet; /* shown without the sound */
 } Message;
 
 static Message messages[MESSAGES];
@@ -75,7 +76,7 @@ bool ra_tracker(char *title, size_t title_size, char *progress, size_t progress_
     return on;
 }
 
-static void post(const char *title, const char *detail)
+static void post_ex(const char *title, const char *detail, bool quiet)
 {
     SwanStationPS5_log("ra: %s - %s", title, detail);
     if (!msg_lock)
@@ -86,11 +87,17 @@ static void post(const char *title, const char *detail)
         Message *m = &messages[(msg_head + msg_count++) % MESSAGES];
         str_copy(m->title, sizeof(m->title), title);
         str_copy(m->detail, sizeof(m->detail), detail);
+        m->quiet = quiet;
     }
     SDL_UnlockMutex(msg_lock);
 }
 
-bool ra_next_message(char *title, size_t title_size, char *detail, size_t detail_size)
+static void post(const char *title, const char *detail)
+{
+    post_ex(title, detail, false);
+}
+
+bool ra_next_message(char *title, size_t title_size, char *detail, size_t detail_size, bool *quiet)
 {
     if (!msg_lock)
         return false;
@@ -100,6 +107,7 @@ bool ra_next_message(char *title, size_t title_size, char *detail, size_t detail
     {
         str_copy(title, title_size, messages[msg_head].title);
         str_copy(detail, detail_size, messages[msg_head].detail);
+        *quiet = messages[msg_head].quiet;
         msg_head = (msg_head + 1) % MESSAGES;
         --msg_count;
     }
@@ -456,7 +464,7 @@ static void RC_CCONV on_login(int result, const char *error, rc_client_t *c, voi
     (void)userdata;
     signed_in = result == RC_OK;
     if (signed_in)
-        post("RetroAchievements", tr("Signed in."));
+        post_ex("RetroAchievements", tr("Signed in."), true); /* the sound is for the unlocks */
     else
         post(tr("RetroAchievements sign-in failed"), error ? error : tr("check the token"));
 }
@@ -533,7 +541,7 @@ static void RC_CCONV on_game_loaded(int result, const char *error, rc_client_t *
                  hardcore ? tr(" (hardcore)") : "");
     else
         snprintf(detail, sizeof(detail), tr("%s has no achievements yet"), g ? g->title : tr("This game"));
-    post("RetroAchievements", detail);
+    post_ex("RetroAchievements", detail, true); /* the game just opened: the sound is for the unlocks */
 }
 
 /* The image rcheevos reads when the core can't hand it sectors: the first

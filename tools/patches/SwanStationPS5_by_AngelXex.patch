@@ -411,6 +411,24 @@ index 5e2b93f0..a1141a72 100644
    void SetCapabilities();
    void DestroyResources();
  
+diff --git a/src/core/host_interface.cpp b/src/core/host_interface.cpp
+index 1d6f503c..2a55300b 100644
+--- a/src/core/host_interface.cpp
++++ b/src/core/host_interface.cpp
+@@ -129,7 +129,13 @@ std::optional<std::vector<uint8_t>> HostInterface::GetBIOSImage(ConsoleRegion re
+   std::optional<BIOS::Image> image = BIOS::LoadImageFromFile(
+     StringUtil::StdStringFromFormat("%s" FS_OSPATH_SEPARATOR_STR "%s", bios_dir.c_str(), bios_name.c_str()).c_str());
+   if (!image.has_value())
++  {
++    // OpenBIOS is built into the core: with no openbios.bin file in the folder, choosing it must not fall to whichever
++    // BIOS is there. Nothing returned makes System::Boot load its built-in copy.
++    if (bios_name == "openbios.bin")
++      return std::nullopt;
+     return FindBIOSImageInDirectory(region, bios_dir.c_str());
++  }
+   return image;
+ }
+ 
 diff --git a/src/core/host_interface.h b/src/core/host_interface.h
 index 918acd79..0c7efa2c 100644
 --- a/src/core/host_interface.h

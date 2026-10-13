@@ -502,8 +502,8 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                      false,
                      (int)(offsetof(Settings, ss_opt) + (size_t)i * sizeof(int)),
                      false,
-                     SS_OPTS[i].labels,
-                     SS_OPTS[i].count,
+                     ss_opt_labels(i),
+                     ss_opt_count(i),
                      0};
             rows[n++] = r;
             first = false;
@@ -569,8 +569,26 @@ static const Game *scope_game(void)
     return app.game ? app.game : app.settings_game;
 }
 
+/* The BIOS rows list what the folder holds: a file added since is appended to the choices */
+static void refresh_bios_rows(void)
+{
+    ensure_rows();
+    bios_choices_scan(app.paths.bios);
+    for (int t = 0; t < TAB_COUNT; ++t)
+        for (int k = 0; k < TABS[t].count; ++k)
+        {
+            Row *r = (Row *)&TABS[t].rows[k];
+            if (!is_swanstation_row(r))
+                continue;
+            int i = (r->offset - (int)offsetof(Settings, ss_opt)) / (int)sizeof(int);
+            if (ss_opt_is_bios(i))
+                r->count = ss_opt_count(i);
+        }
+}
+
 void settings_opened(void)
 {
+    refresh_bios_rows();
     S.cursor = -1;
     S.remap = false;
     S.players = false;

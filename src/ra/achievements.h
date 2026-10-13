@@ -60,7 +60,7 @@ bool ra_warning(bool *emulator, bool *version);
 void ra_game_summary(char *out, size_t size);
 
 /* Messages for the UI (unlocks, leaderboards...). Returns false when empty. */
-bool ra_next_message(char *title, size_t title_size, char *detail, size_t detail_size);
+bool ra_next_message(char *title, size_t title_size, char *detail, size_t detail_size, bool *quiet);
 
 /* While playing: the counted achievement that just moved (18/80 dragons).
  * False when there's nothing to show. */
