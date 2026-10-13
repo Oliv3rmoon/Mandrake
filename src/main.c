@@ -599,6 +599,11 @@ static void question_draw(void)
 /* ---------------------------------------------------------------- achievements banner */
 
 static bool opened_by_daemon;  /* the disc daemon started the app (payload/discd.c leaves <root>/daemon-launch) */
+/* A home-screen forwarder (the PS5 Forwarder Format) starts the app with --rom <path> and maybe --exit-after-game:
+ * that game starts at once, and with the flag the app closes when it ends. */
+static char launch_rom[SwanStationPS5_PATH_MAX];
+static bool exit_after_game;
+static bool started_from_argument;
 static uint64_t app_started_us;
 
 /* Top right, one message at a time: slides in, holds, fades. */
@@ -1478,6 +1483,38 @@ void app_stop_game(void)
     app.game_has_own = false;
     app.settings = app.global;
     app.screen = SCREEN_LIBRARY;
+    if (started_from_argument && exit_after_game)
+    {
+        SwanStationPS5_log("forwarder: the game ended, closing (--exit-after-game)");
+        app.quit_requested = true;
+    }
+}
+
+/* The library game a forwarder's --rom names: that file, else the game in the folder holding it (or in that folder).
+ * -1 when none. */
+static int game_for_launch_path(const char *path)
+{
+    for (int i = 0; i < app.library.count; ++i)
+        if (strcmp(app.library.games[i].path, path) == 0)
+            return i;
+    char folder[SwanStationPS5_PATH_MAX];
+    str_copy(folder, sizeof(folder), path);
+    size_t length = strlen(folder);
+    while (length > 1 && folder[length - 1] == '/')
+        folder[--length] = '\0';
+    for (int i = 0; i < app.library.count; ++i)
+        if (strcmp(app.library.games[i].folder, folder) == 0)
+            return i;
+    char *slash = strrchr(folder, '/');
+    if (slash && slash != folder)
+    {
+        *slash = '\0';
+        for (int i = 0; i < app.library.count; ++i)
+            if (strcmp(app.library.games[i].folder, folder) == 0 &&
+                strcmp(app.library.games[i].folder, app.paths.games) != 0)
+                return i;
+    }
+    return -1;
 }
 
 /* Settings from the shelf: the game under the cursor can have its own, as from the game's menu */
@@ -1887,8 +1924,15 @@ static void count_play_time(void)
 
 /* ---------------------------------------------------------------- main */
 
-int main(void)
+int main(int argc, char **argv)
 {
+    for (int i = 1; i < argc; ++i)
+    {
+        if (strcmp(argv[i], "--rom") == 0 && i + 1 < argc)
+            str_copy(launch_rom, sizeof(launch_rom), argv[++i]);
+        else if (strcmp(argv[i], "--exit-after-game") == 0)
+            exit_after_game = true;
+    }
     /* First thing: proves the loader accepted the title and main() runs. (Turned off: the notice showed on screen.)
     plat_notify("SwanStationPS5 " SwanStationPS5_VERSION " starting...");
     */
@@ -2030,6 +2074,19 @@ int main(void)
     if (!app.storage_error[0])
         app_rescan();
     shelf_select_game(app.global.last_game);
+    if (launch_rom[0] && !app.storage_error[0])
+    {
+        const int index = game_for_launch_path(launch_rom);
+        SwanStationPS5_log("forwarder: --rom %s -> %s%s", launch_rom,
+                           index >= 0 ? app.library.games[index].path : "not in the library",
+                           exit_after_game ? " (exit after the game)" : "");
+        if (index >= 0)
+        {
+            shelf_select_game(index);
+            app_start_game(index, false);
+            started_from_argument = app.screen == SCREEN_GAME;
+        }
+    }
     SwanStationPS5_log("build: %s %s", __DATE__, __TIME__);
     /* (Turned off: the notice showed on screen.)
     plat_notify("SwanStationPS5 ready");
