@@ -122,6 +122,7 @@ typedef struct
     bool ra_popups;       /* achievement unlock banners while playing */
     bool ra_tracker;      /* the progress card when a counted achievement moves */
     int ra_popup_style;   /* 0 banner, 1 compact, 2 big trophy */
+    int bios_start;       /* Start BIOS boots this region's BIOS: 0 NTSC-U (default), 1 NTSC-J, 2 PAL; not saved */
     int lightbar;         /* 0 left to the system, 1 player colours, 2 the game's cover colour, 3 red in analog mode / off in digital */
     int stick_deadzone;   /* 0 off, 1..4: 5, 10, 15, 20 % of the stick's travel ignored */
     int stick_response;   /* 0 normal, 1 precise (slow near the centre), 2 quick */

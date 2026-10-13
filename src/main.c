@@ -1540,9 +1540,13 @@ void app_start_bios(void)
     host_set_gun(0);
     host_set_special(0);
     host_set_fixes(0);
-    SwanStationPS5_log("start: BIOS with no disc");
+    static const char *const boot_regions[] = {"NTSC-U", "NTSC-J", "PAL"};
+    const char *boot_region = boot_regions[app.global.bios_start >= 0 && app.global.bios_start < 3 ? app.global.bios_start : 0];
+    host_set_region_override(boot_region); /* the BIOS the console's choice for that region names */
+    SwanStationPS5_log("start: BIOS with no disc (%s)", boot_region);
     if (!host_load("", "", &app.paths, &app.settings, error, sizeof(error)))
     {
+        host_set_region_override(NULL);
         controls_stop();
         app_toast(error);
         return;
@@ -1560,6 +1564,7 @@ void app_start_bios(void)
 
 void app_stop_game(void)
 {
+    host_set_region_override(NULL);
     play_save_resume(false);
     play_rewind_reset();
     int unlocked, total;

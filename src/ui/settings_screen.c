@@ -129,6 +129,7 @@ static const char *const SHADERS[] = {"Off", "LCD3x", "CRT Royale", "CRT Basic",
                                       "NTSC 320px S-Video", "NTSC 320px Composite", "NTSC 256px S-Video",
                                       "NTSC 256px Composite"};
 static const char *const POPUP_STYLES[] = {"Banner", "Compact", "Big trophy"};
+static const char *const BIOS_START_REGIONS[] = {"NTSC-U/C (US, Canada)", "NTSC-J (Japan)", "PAL (Europe, Australia)"};
 static const char *const LIGHTBARS[] = {"System", "Player colours", "Game cover colour", "Analog mode"};
 static const char *const PLAYERS[] = {"1 or 2", "Up to 4 (multitap)"};
 static const char *const DEADZONES[] = {"Off", "5%", "10%", "15%", "20%"};
@@ -454,6 +455,51 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
     if (aspect >= 0)
         rows[n].group = NULL; /* "Picture" is now on the aspect row */
     n += base_count;
+    /* the three BIOS choices and the BIOS to start go above "Start BIOS", at the top of the SwanStationPS5 group */
+    if (base == SYSTEM)
+    {
+        for (int k = 0; k < n; ++k)
+        {
+            if (strcmp(rows[k].name, "Start BIOS") != 0)
+                continue;
+            memmove(rows + k + 4, rows + k, sizeof(Row) * (size_t)(n - k));
+            rows[k + 4].group = NULL;
+            int placed = 0;
+            for (int i = 0; i < SS_OPT_COUNT && placed < 3; ++i)
+            {
+                if (!ss_opt_is_bios(i))
+                    continue;
+                static const char *const bios_names[] = {"NTSC-J BIOS", "NTSC-U BIOS", "PAL BIOS"}; /* the table's order */
+                Row r = {placed == 0 ? "SwanStationPS5" : NULL,
+                         bios_names[placed],
+                         "Which BIOS the games of this region run: detect it automatically, the OpenBIOS built into the core, or a file of the BIOS folder. It applies when the next game starts.",
+                         K_CHOICE,
+                         APPLY_NEXT_GAME,
+                         SP_NONE,
+                         true, /* global_only: the console's BIOS is the same for every game */
+                         (int)(offsetof(Settings, ss_opt) + (size_t)i * sizeof(int)),
+                         false,
+                         ss_opt_labels(i),
+                         ss_opt_count(i),
+                         0};
+                rows[k + placed++] = r;
+            }
+            Row start = {NULL,
+                         "BIOS to start",
+                         "The console whose BIOS Start BIOS boots: it runs the BIOS chosen above for that region. NTSC-U unless you change it here; it goes back to NTSC-U every time SwanStationPS5 opens.",
+                         K_CHOICE,
+                         APPLY_NOW,
+                         SP_NONE,
+                         true,
+                         INT_FIELD(bios_start),
+                         BIOS_START_REGIONS,
+                         3,
+                         0};
+            rows[k + 3] = start;
+            n += 4;
+            break;
+        }
+    }
     /* the custom aspect ratio goes above "Integer scaling", opening the "Screen fit" group */
     if (custom[0] >= 0 && custom[1] >= 0)
     {
@@ -491,6 +537,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
         for (int i = 0; i < SS_OPT_COUNT; ++i)
         {
             if (SS_OPTS[i].category != categories[c] || n >= MAX_ROWS || is_aspect_option(i) || is_widescreen_option(i) ||
+                ss_opt_is_bios(i) || /* they go with Start BIOS, in SwanStationPS5 */
                 (base == DISPLAY && custom[0] >= 0 && is_custom_aspect_option(i)))
                 continue;
             Row r = {first ? groups[categories[c]] : NULL,
@@ -714,17 +761,17 @@ static int read_value(const Row *r)
     return r->is_bool ? (*(const bool *)base ? 1 : 0) : *(const int *)base - r->base;
 }
 
-/* One of the three BIOS options: the console's, the same for every game */
-static bool is_bios_row(const Row *r)
+/* A choice or switch that is the same for every game, seen from "This game": it shows "Global setting." and can't be
+ * changed there (it is changed in "All games") */
+static bool row_locked(const Row *r)
 {
-    return is_swanstation_row(r) &&
-           ss_opt_is_bios((r->offset - (int)offsetof(Settings, ss_opt)) / (int)sizeof(int));
+    return r->global_only && S.game_scope && scope_game() && (r->kind == K_CHOICE || r->kind == K_TOGGLE);
 }
 
 static void write_value(const Row *r, int v)
 {
-    if (is_bios_row(r) && S.game_scope && scope_game())
-        return; /* in "This game" they show the console's choice and can't be changed */
+    if (row_locked(r))
+        return;
     switch (r->special)
     {
     case SP_HDTEX:
@@ -1571,13 +1618,24 @@ static void draw_rows(void)
             continue;
         bool sel = i == S.cursor;
         bool dimmed = r->global_only && S.game_scope && scope_game();
-        text_draw(x + 30, ry + 21, 28, FONT_REGULAR, (dimmed && !sel) ? TH_TEXT_DIM : TH_TEXT, ALIGN_LEFT,
+        const bool locked = row_locked(r);
+        text_draw(x + 30, ry + 21, 28, FONT_REGULAR, (dimmed && (locked || !sel)) ? TH_TEXT_DIM : TH_TEXT, ALIGN_LEFT,
                   tr(row_name(r)));
         if (dimmed)
             icon_draw(ICON_WORLD, x + 40 + text_width(28, FONT_REGULAR, tr(row_name(r))), ry + 24, 24,
                       TH_TEXT_DIM);
         float right = x + w - 28;
         char buf[SwanStationPS5_PATH_MAX + 64];
+        if (locked)
+        {
+            /* greyed out, with a lock: not editable here */
+            const char *label = tr("Global setting.");
+            float pw = text_width(22, FONT_REGULAR, label) + 84;
+            draw_rrect(right - pw, ry + 15, pw, 46, 23, argb_alpha(TH_PILL, 0.55f));
+            icon_draw(ICON_LOCK, right - pw + 18, ry + 25, 26, TH_TEXT_DIM);
+            text_draw(right - 20, ry + 25, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_RIGHT, label);
+            continue;
+        }
         switch (r->kind)
         {
         case K_CHOICE:

@@ -195,6 +195,13 @@ static void register_variables(const struct retro_variable *vars)
 #if defined(SwanStationPS5_VULKAN)
 /* SwanStation (DuckStation): the Vulkan renderer, the recompiler with LUT
  * fastmem (MMap does not survive a title's sandbox). */
+static const char *region_override;
+
+void host_set_region_override(const char *region)
+{
+    region_override = region;
+}
+
 static void apply_swanstation_options(const Settings *s)
 {
     static const char *const regions[] = {"Auto", "NTSC-U", "PAL"};
@@ -205,7 +212,7 @@ static void apply_swanstation_options(const Settings *s)
     bool pgxp = s->pgxp && !(game_fixes & GDB_NO_PGXP);
     set_option("swanstation_GPU_Renderer", session_renderer == 1 ? "Software" : "Vulkan");
     set_option("swanstation_GPU_ResolutionScale", scales[level - 1]);
-    set_option("swanstation_Console_Region", regions[s->region % REGION_COUNT]);
+    set_option("swanstation_Console_Region", region_override ? region_override : regions[s->region % REGION_COUNT]);
     set_option("swanstation_GPU_TrueColor", s->true_colour ? "true" : "false");
     set_option("swanstation_GPU_PGXPEnable", pgxp ? "true" : "false");
     set_option("swanstation_BIOS_PatchFastBoot", s->boot_intro ? "false" : "true");
