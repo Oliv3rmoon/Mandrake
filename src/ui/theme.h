@@ -34,7 +34,8 @@ enum ThemeBackdrop
     BACKDROP_STAGE, /* a lit band behind the covers, the 1.1 backdrop */
     BACKDROP_GRID,  /* a dark room and a glowing grid floor */
     BACKDROP_FLAT,  /* an even ground, lighter at the top */
-    BACKDROP_LAMP   /* a warm pool of light from above */
+    BACKDROP_LAMP,  /* a warm pool of light from above */
+    BACKDROP_FLOOR  /* a wall that lightens to the middle and, from there, a much darker floor */
 };
 
 typedef struct

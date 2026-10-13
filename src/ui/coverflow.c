@@ -374,6 +374,23 @@ static void make_backdrop(uint8_t *grey, int W, int H, int style, bool light)
                 v = light ? 0.99f - t * 0.05f : 0.42f - t * 0.08f;
                 v *= 1.0f - dx * dx * (light ? 0.02f : 0.12f);
                 break;
+            case BACKDROP_FLOOR:
+            {
+                /* a wall, and a floor that begins to darken where the farthest cases of a full row would stand (the sixth
+                 * beside the middle one is drawn at 0.35 and its base is at 0.57 of the screen's height) and goes on
+                 * darkening, a little at a time, towards the front, where the middle case stands (at 0.72): no edge, a
+                 * smooth fall from 0.56 to a dark grey (0.20) */
+                const float horizon = 0.57f;
+                if (t < horizon)
+                    v = 0.34f + 0.22f * (t / horizon);
+                else
+                {
+                    float u = (t - horizon) / (1.0f - horizon);
+                    v = 0.56f - 0.36f * (u * u * (3.0f - 2.0f * u));
+                }
+                v *= 1.0f - dx * dx * 0.25f;
+                break;
+            }
             case BACKDROP_LAMP:
             {
                 /* a warm pool of light from a lamp above the shelf */
