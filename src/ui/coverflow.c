@@ -376,17 +376,21 @@ static void make_backdrop(uint8_t *grey, int W, int H, int style, bool light)
                 break;
             case BACKDROP_FLOOR:
             {
-                /* a wall, and a floor that darkens from where the farthest case of a full row touches it: the fifth beside
-                 * the middle one (the sixth has faded out) is drawn at 0.39 of the middle one's size and its base is at
-                 * 0.58 of the screen's height. From there it falls at once, a little more slowly as it nears the front,
-                 * where the middle case stands (at 0.72): no edge, down to a very dark grey (0.06) at the very front */
+                /* dark, lighter, lighter, dark: the floor's fall (from the middle of the screen to the front) copied and
+                 * turned over to the top, so the top half is the bottom half upside down. The fall begins where the
+                 * farthest case of a full row touches the floor: the fifth beside the middle one is drawn at 0.39 of the
+                 * middle one's size and its base is at 0.58 of the screen's height (0.42 from the top, by the copy). A
+                 * band of 0.56 between, then no edge, down to a very dark grey (0.06) at the front and a dark grey (0.24) at the top */
                 const float horizon = 0.58f;
-                if (t < horizon)
-                    v = 0.34f + 0.22f * (t / horizon);
+                const float m = t < 0.5f ? 1.0f - t : t; /* the bottom half's position, for both halves */
+                if (m < horizon)
+                    v = 0.56f;
                 else
                 {
-                    float u = (t - horizon) / (1.0f - horizon);
-                    v = 0.56f - 0.50f * (1.0f - powf(1.0f - u, 1.45f));
+                    float u = (m - horizon) / (1.0f - horizon);
+                    /* the floor goes down to 0.06; the top, the same fall but only to 0.24 (about what the tags stand on) */
+                    const float fall = t < 0.5f ? 0.32f : 0.50f;
+                    v = 0.56f - fall * (1.0f - powf(1.0f - u, 1.45f));
                 }
                 v *= 1.0f - dx * dx * 0.25f;
                 break;
