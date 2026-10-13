@@ -51,7 +51,7 @@ int tips_for(const Game *g, const Settings *settings, char lines[][TIP_LEN], int
     int n = 0;
     (void)settings;
     if (g->discs > 1 && n < max)
-        snprintf(lines[n++], TIP_LEN, tr("%d discs: while playing, hold the {Touchpad} and press {R1} to swap."), g->discs);
+        snprintf(lines[n++], TIP_LEN, tr("%d discs: in the game, SwanStationPS5 menu > Disc."), g->discs);
     if (g->folder[0] && has_manual(g) && n < max)
         str_copy(lines[n++], TIP_LEN, tr("Has a manual: in the game, SwanStationPS5 menu > Manual."));
 

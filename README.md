@@ -266,7 +266,6 @@ The log shows the result: `storage: unlocked`, or `storage: sandboxed (...)` wit
 | Hold the touchpad + L2 | Rewind (turn on *Settings → System → Rewind*) |
 | Hold the touchpad + Square | Screenshot (in `/data/SwanStationPS5/screenshots`) |
 | Hold the touchpad + Triangle / Circle | Start or pause / reset the speedrun timer |
-| Hold the touchpad + R1 | Next disc |
 | R3 (light gun games) | Re-centre the aim |
 | Left stick | Analog stick; on digital-only games it also drives the D-pad (*Left stick as D-pad* in Settings) |
 

@@ -1606,11 +1606,11 @@ static void game_screen(PadState *pads)
     speed_changed = fast || back;
     if (touch && (fast || back || chord))
         touch_used[0] = true; /* a combo, not Select or the menu */
-    /* touchpad + Square: screenshot; + Triangle / Circle: timer; + R1: next disc */
+    /* touchpad + Square: screenshot; + Triangle / Circle: timer */
     static uint32_t combo_all_prev;
     uint32_t newly = touch ? all & ~combo_all_prev : 0;
     combo_all_prev = all;
-    const uint32_t combo_keys = BIT(BTN_SQUARE) | BIT(BTN_TRIANGLE) | BIT(BTN_CIRCLE) | BIT(BTN_R1);
+    const uint32_t combo_keys = BIT(BTN_SQUARE) | BIT(BTN_TRIANGLE) | BIT(BTN_CIRCLE);
     if (touch && !chord && (all & combo_keys))
         touch_used[0] = true;
     if (newly & BIT(BTN_SQUARE))
@@ -1631,17 +1631,6 @@ static void game_screen(PadState *pads)
         timer.seconds = 0;
         timer.shown = false;
         app_toast("Timer reset");
-    }
-    if ((newly & BIT(BTN_R1)) && !chord && !(all & BIT(BTN_L1)) && host_disc_count() > 1)
-    {
-        int next = (host_disc_index() + 1) % host_disc_count();
-        if (host_disc_select(next))
-        {
-            char msg[64];
-            snprintf(msg, sizeof(msg), tr("Disc %d of %d inserted"), next + 1, host_disc_count());
-            app_toast(msg);
-            sfx_play(SFX_SELECT);
-        }
     }
     /* The touchpad is also the shortcuts' key, so Select waits this long to be sure no shortcut
      * follows; after it, holding the touchpad holds Select until a shortcut is used. */
