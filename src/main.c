@@ -493,7 +493,11 @@ void app_save_settings(void)
         path_join(dir, sizeof(dir), app.paths.user, "game-settings");
         make_dirs(dir);
         app_game_config_path(path, sizeof(path), own_game);
-        config_save(&app.settings, path);
+        Settings own = app.settings;
+        for (int i = 0; i < SS_OPT_COUNT; ++i)
+            if (ss_opt_is_bios(i))
+                own.ss_opt[i] = SS_OPTS[i].def; /* there is no BIOS per game: the file does not carry it */
+        config_save(&own, path);
     }
     if (app.global.cover_style != covers_style_loaded ||
         app.global.cover_download != covers_download_loaded)

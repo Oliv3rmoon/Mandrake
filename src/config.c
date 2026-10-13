@@ -301,6 +301,9 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
         return false;
     }
     /* these always follow the console-wide settings */
+    for (int i = 0; i < SS_OPT_COUNT; ++i)
+        if (ss_opt_is_bios(i)) /* the console's BIOS is not the game's: the file neither lists nor changes it */
+            out->ss_opt[i] = global->ss_opt[i];
     out->last_game = global->last_game;
     out->cover_style = global->cover_style;
     out->cover_download = global->cover_download;

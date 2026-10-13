@@ -499,7 +499,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                      K_CHOICE,
                      ss_needs_reload(SS_OPTS[i].key) ? APPLY_NEXT_GAME : APPLY_NOW,
                      SP_NONE,
-                     false,
+                     ss_opt_is_bios(i), /* global_only: the console's BIOS is the same for every game */
                      (int)(offsetof(Settings, ss_opt) + (size_t)i * sizeof(int)),
                      false,
                      ss_opt_labels(i),
@@ -714,8 +714,17 @@ static int read_value(const Row *r)
     return r->is_bool ? (*(const bool *)base ? 1 : 0) : *(const int *)base - r->base;
 }
 
+/* One of the three BIOS options: the console's, the same for every game */
+static bool is_bios_row(const Row *r)
+{
+    return is_swanstation_row(r) &&
+           ss_opt_is_bios((r->offset - (int)offsetof(Settings, ss_opt)) / (int)sizeof(int));
+}
+
 static void write_value(const Row *r, int v)
 {
+    if (is_bios_row(r) && S.game_scope && scope_game())
+        return; /* in "This game" they show the console's choice and can't be changed */
     switch (r->special)
     {
     case SP_HDTEX:
