@@ -1900,8 +1900,9 @@ static void count_play_time(void)
 
 int main(void)
 {
-    /* First thing: proves the loader accepted the title and main() runs. */
+    /* First thing: proves the loader accepted the title and main() runs. (Turned off: the notice showed on screen.)
     plat_notify("SwanStationPS5 " SwanStationPS5_VERSION " starting...");
+    */
     char root[SwanStationPS5_PATH_MAX];
     plat_default_root(root, sizeof(root));
     config_paths(&app.paths, root);
@@ -2041,7 +2042,9 @@ int main(void)
         app_rescan();
     shelf_select_game(app.global.last_game);
     SwanStationPS5_log("build: %s %s", __DATE__, __TIME__);
+    /* (Turned off: the notice showed on screen.)
     plat_notify("SwanStationPS5 ready");
+    */
 
     bool quit = false;
     PadState pads[SwanStationPS5_MAX_PADS];

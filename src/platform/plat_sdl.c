@@ -21,6 +21,7 @@
 #include "ps5_video.h"
 #include "vk/vk_present.h"
 #include <sys/mman.h>
+#include <sys/stat.h>
 int sceKernelSendNotificationRequest(uint32_t device, void *request, size_t size, int blocking);
 int sceSystemServiceHideSplashScreen(void);
 int SwanStationPS5_elevate(const char **route); /* elevation_shim.cpp */
@@ -376,6 +377,41 @@ void plat_set_unlock_disabled(bool disabled)
     }
 }
 
+#if defined(__PROSPERO__)
+/* How the storage was unlocked, remembered between starts: the way that worked last time goes first. */
+enum { UNLOCK_ROUTE_NONE, UNLOCK_ROUTE_HEN, UNLOCK_ROUTE_LAPY };
+#define UNLOCK_ROUTE_FILE "/data/SwanStationPS5/cache/unlock-route"
+
+static int unlock_route_remembered(void)
+{
+    char word[16] = "";
+    FILE *f = fopen(UNLOCK_ROUTE_FILE, "r");
+    if (!f)
+        return UNLOCK_ROUTE_NONE;
+    if (!fgets(word, sizeof(word), f))
+        word[0] = 0;
+    fclose(f);
+    return strncmp(word, "lapy", 4) == 0 ? UNLOCK_ROUTE_LAPY : strncmp(word, "hen", 3) == 0 ? UNLOCK_ROUTE_HEN : UNLOCK_ROUTE_NONE;
+}
+
+static void unlock_route_remember(int route)
+{
+    if (route == UNLOCK_ROUTE_NONE)
+    {
+        remove(UNLOCK_ROUTE_FILE);
+        return;
+    }
+    if (unlock_route_remembered() == route)
+        return;
+    mkdir("/data/SwanStationPS5/cache", 0777); /* the folder may not exist yet at the very first start */
+    FILE *f = fopen(UNLOCK_ROUTE_FILE, "w");
+    if (!f)
+        return;
+    fputs(route == UNLOCK_ROUTE_LAPY ? "lapy\n" : "hen\n", f);
+    fclose(f);
+}
+#endif
+
 bool plat_prepare_storage(char *error, size_t size)
 {
 #if defined(__PROSPERO__)
@@ -397,15 +433,46 @@ bool plat_prepare_storage(char *error, size_t size)
         snprintf(error, size, "unlock turned off in Settings");
         return ps5_data_listable();
     }
+    /* The way that worked at the last start goes first, so a console that always answers the same way does not wait
+     * for the others to stay silent (each takes a second or more). If it fails, the usual order runs. */
+    const bool lapy_first = !ps5_data_listable() && unlock_route_remembered() == UNLOCK_ROUTE_LAPY;
+    const char *route = "none";
+    int status = -1;
+    bool lapy_tried = false;
+    if (lapy_first)
+    {
+        /* a loaded LegacyJB / etaHEN answers a short request at once, and is faster than the helper */
+        if (ps5_unlock_quick() == UNLOCK_OK)
+        {
+            unlock_route_remember(UNLOCK_ROUTE_HEN);
+            return true;
+        }
+        status = SwanStationPS5_elevate(&route);
+        lapy_tried = true;
+        if (status == 0 && ps5_data_listable())
+            return true;
+    }
     /* 1. etaHEN's jailbreak-on-demand (answered on 13.60). */
     UnlockResult hen = ps5_unlock_etahen();
-    if (hen == UNLOCK_OK || hen == UNLOCK_ALREADY)
+    if (hen == UNLOCK_ALREADY)
         return true;
-    /* 2. The boilerplate's Lapy helper through the ELF loader (6.02/12.70). */
-    const char *route = "none";
-    int status = SwanStationPS5_elevate(&route);
-    if (status == 0 && ps5_data_listable())
+    if (hen == UNLOCK_OK)
+    {
+        unlock_route_remember(UNLOCK_ROUTE_HEN);
         return true;
+    }
+    /* 2. The boilerplate's Lapy helper through the ELF loader (6.02/12.70). A request is made once per process, so
+     * not again when it already went first. */
+    if (!lapy_tried)
+    {
+        status = SwanStationPS5_elevate(&route);
+        if (status == 0 && ps5_data_listable())
+        {
+            unlock_route_remember(UNLOCK_ROUTE_LAPY);
+            return true;
+        }
+    }
+    unlock_route_remember(UNLOCK_ROUTE_NONE); /* nothing answered: forget the old way */
     /* 3. Sandboxed: files in /data still open and save, folders can't be listed. */
     snprintf(error, size, "%s; Lapy code %d via %s", ps5_unlock_describe(hen), status,
              route);
