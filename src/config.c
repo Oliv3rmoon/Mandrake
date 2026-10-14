@@ -20,7 +20,7 @@ void config_defaults(Settings *s)
     s->internal_res = 9; /* 9x (4K) */
     s->cd_speed = 1;
     s->frame_pacing = true; /* Video sync */
-    s->true_colour = true; /* as DuckStation: its default dithering mode is True Color */
+    s->true_colour = true; /* True Color is on by default */
     s->upscale = 2;
     s->upscale_filter = UPSCALE_XBR;
     s->region = REGION_AUTO;
