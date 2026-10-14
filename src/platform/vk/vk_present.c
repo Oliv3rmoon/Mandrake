@@ -132,7 +132,9 @@ static struct
     float game_tex[2], game_lines;
     /* frame generation (fg_bridge.h): the game drawn into the interpolator's frame,
      * the frame halfway to the previous one shown first, then this one */
-    bool fg_wanted; /* Settings > Display > Frame generation */
+    bool fg_wanted; /* Settings > Display > Generate frames */
+    uint32_t fg_max; /* the frames it may generate between two of the game's: 1 (x2) or 3 (x4) */
+    uint32_t fg_n;   /* and the ones generated for the game's last new frame */
     bool fsr_wanted; /* Settings > Display > FSR 1 */
     FgInterpolator *fg;
     uint32_t fg_w, fg_h;
@@ -301,10 +303,27 @@ static bool create_surface(char *error, size_t size)
     /* 60 Hz; 120 for frame generation when it was on at start and the TV has it */
     if (at60 >= 0)
         best = at60;
+    if (want_high_refresh && at120 < 0)
+    {
+        uint64_t area = 0;
+        for (uint32_t i = 0; i < mode_count; ++i)
+        {
+            const VkDisplayModeParametersKHR *p = &modes[i].parameters;
+            uint64_t a = (uint64_t)p->visibleRegion.width * p->visibleRegion.height;
+            if (p->refreshRate >= 119000 && p->refreshRate <= 121000 && a > area)
+            {
+                area = a;
+                at120 = (int)i;
+            }
+        }
+        if (at120 >= 0)
+            SwanStationPS5_log("vulkan: no 120 Hz mode at the usual size, using %ux%u", modes[at120].parameters.visibleRegion.width,
+                               modes[at120].parameters.visibleRegion.height);
+    }
     if (want_high_refresh && at120 >= 0)
         best = at120;
     else if (want_high_refresh)
-        SwanStationPS5_log("vulkan: no 120 Hz mode (frame generation needs a 120 Hz TV)");
+        SwanStationPS5_log("vulkan: no 120 Hz mode (the TV or the console has none), staying at 60 Hz");
     if (best < 0)
     {
         if (mode_count == 0)
@@ -816,9 +835,10 @@ static void game_info(float info[4], int sh, float w, float h, float tw, float t
 
 /* ---------------------------------------------------------------- frame generation */
 
-void vkp_set_framegen(bool on, double core_hz, double speed, bool nominal)
+void vkp_set_framegen(int generated, double core_hz, double speed, bool nominal)
 {
-    V.fg_wanted = on;
+    V.fg_wanted = generated > 0;
+    V.fg_max = generated > 0 ? (uint32_t)(generated > 3 ? 3 : generated) : 1;
     V.core_hz = core_hz;
     V.speed = speed;
     V.nominal = nominal;
@@ -827,6 +847,11 @@ void vkp_set_framegen(bool on, double core_hz, double speed, bool nominal)
 double vkp_display_hz(void)
 {
     return V.display_hz;
+}
+
+int vkp_framegen_times(void)
+{
+    return V.fg_wanted && V.fg_engaged && V.fg_made ? (int)V.fg_n + 1 : 0;
 }
 
 double vkp_framegen_hz(void)
@@ -1022,7 +1047,7 @@ static VkImageView fg_new_frame(VkCommandBuffer cb, int f)
     vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &mb, 0, NULL, 0,
                          NULL);
-    bool made = ssfg_record(V.fg, cb, V.fg_reset || !V.fg_have);
+    bool made = ssfg_record_n(V.fg, cb, V.fg_reset || !V.fg_have, V.fg_n);
     V.fg_reset = false;
     V.fg_have = true;
     V.fg_real = target;
@@ -1807,7 +1832,7 @@ static void present_frame(bool ui, const uint32_t *pixels, size_t pitch_bytes)
             V.fg_counted = false;
             FgDecision d = ssfg_pacing_frame(V.fg_pacing, vsyncs, already, V.core_hz > 20.0 ? V.core_hz : 59.94,
                                              V.display_hz > 20.0 ? V.display_hz : 59.94, ts.tv_sec + ts.tv_nsec * 1e-9,
-                                             V.speed > 0.0 ? V.speed : 100.0, V.nominal);
+                                             V.speed > 0.0 ? V.speed : 100.0, V.nominal, V.fg_max);
             /* the log of the pacing, off until it is needed again:
             if (d.state != V.fg_state)
                 SwanStationPS5_log("framegen: %s (the game's frames: %.2f vsyncs, %.2f refreshes of %.2f Hz)",
@@ -1824,6 +1849,7 @@ static void present_frame(bool ui, const uint32_t *pixels, size_t pitch_bytes)
                     V.fg_reset = true;
                 record = true;
                 presents = d.presents;
+                V.fg_n = d.generated;
             }
             else
             {
@@ -1865,8 +1891,8 @@ static void present_frame(bool ui, const uint32_t *pixels, size_t pitch_bytes)
             if (V.fg_hold > 0 && V.fg_made && V.fg)
             {
                 /* the frame between the game's last two, as many presents as the pacing gives it */
+                fg_show = ssfg_generated_view(V.fg, V.fg_n > 1 && V.fg_hold <= V.fg_n ? V.fg_n - V.fg_hold : 0);
                 --V.fg_hold;
-                fg_show = ssfg_output_view(V.fg);
                 generated = true;
             }
             else

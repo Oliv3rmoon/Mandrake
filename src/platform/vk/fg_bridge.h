@@ -27,6 +27,9 @@ VkImage ssfg_frame_image(FgInterpolator *fg);
 VkImageView ssfg_frame_view(FgInterpolator *fg);
 bool ssfg_record(FgInterpolator *fg, VkCommandBuffer cmd, bool reset);
 VkImageView ssfg_output_view(FgInterpolator *fg);
+/* like ssfg_record with `generated` frames between the game's (1 to 3); ssfg_generated_view(i) is the i-th of them */
+bool ssfg_record_n(FgInterpolator *fg, VkCommandBuffer cmd, bool reset, uint32_t generated);
+VkImageView ssfg_generated_view(FgInterpolator *fg, uint32_t i);
 /* once the frame was shown: it becomes the previous one */
 void ssfg_advance(FgInterpolator *fg);
 
@@ -38,6 +41,7 @@ typedef struct
     bool engaged;       /* frames are generated: the interpolator takes this new frame */
     bool reset;         /* the interpolator starts over (a gap, a pause) */
     uint32_t presents;  /* presents of the generated frame before the game's, for this frame */
+    uint32_t generated; /* the frames generated between two of the game's: 1, or 2 and 3 with a present each */
     int state;          /* 0 warming, 1 no room, 2 unsteady, 3 not nominal, 4 paused, 5 generating */
     double vsyncs;      /* the median of the last frames' length, in vsyncs */
     double refreshes;   /* and in the display's refreshes */
@@ -48,7 +52,7 @@ void ssfg_pacing_destroy(FgPacing *pacing);
 /* One new frame of the game: vsyncs since the last new one, presents already made in them, the console's and the
  * display's rates (Hz), the time (s), the emulation's speed (% of its target) and whether the speed is normal. */
 FgDecision ssfg_pacing_frame(FgPacing *pacing, uint32_t vsyncs, uint32_t already, double core_hz, double display_hz,
-                             double now, double speed, bool nominal);
+                             double now, double speed, bool nominal, uint32_t max_generated);
 const char *ssfg_pacing_state_name(int state);
 /* After a frame: the safety net's news for the log (NULL for none) */
 const char *ssfg_pacing_event(FgPacing *pacing);

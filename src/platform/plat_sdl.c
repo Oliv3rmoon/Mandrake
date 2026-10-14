@@ -1262,12 +1262,21 @@ double plat_framegen_hz(void)
 #endif
 }
 
-void plat_set_framegen(bool on, double core_hz, double speed, bool nominal)
+int plat_framegen_times(void)
 {
 #if defined(__PROSPERO__)
-    vkp_set_framegen(on, core_hz, speed, nominal);
+    return vkp_framegen_times();
 #else
-    (void)on, (void)core_hz, (void)speed, (void)nominal;
+    return 0;
+#endif
+}
+
+void plat_set_framegen(int generated, double core_hz, double speed, bool nominal)
+{
+#if defined(__PROSPERO__)
+    vkp_set_framegen(generated, core_hz, speed, nominal);
+#else
+    (void)generated, (void)core_hz, (void)speed, (void)nominal;
 #endif
 }
 
@@ -1302,6 +1311,19 @@ void plat_want_high_refresh(bool on)
 {
 #if defined(__PROSPERO__)
     vkp_want_high_refresh(on);
+    if (!on)
+    {
+        extern int sceVideoOutOpen(int32_t user, int32_t bus, int32_t index, const void *parameter);
+        extern int sceVideoOutClose(int32_t handle);
+        extern int sceVideoOutConfigureOutput(int32_t handle, uint32_t mode, const void *a, const void *b, const void *c);
+        int handle = sceVideoOutOpen(0xff, 0, 0, NULL);
+        if (handle >= 0)
+        {
+            int rc = sceVideoOutConfigureOutput(handle, 1, NULL, NULL, NULL);
+            sceVideoOutClose(handle);
+            SwanStationPS5_log("screen: 60 Hz output restored (0x%08x)", (unsigned)rc);
+        }
+    }
 #else
     (void)on;
 #endif

@@ -17,7 +17,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.3.0"
+#define SwanStationPS5_VERSION "1.3.1"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -158,7 +158,8 @@ typedef struct
     bool fsr;             /* FSR 1 scales the picture before the shader */
     char usb_folder[48];  /* a folder name looked for on USB drives: /mnt/usb0/<name> and /mnt/usb1/<name> (empty: none) */
     bool frame_pacing;    /* Video sync: one game frame per screen refresh, the sound stretched by a hair to keep up; off: synchronised to the sound */
-    bool framegen;        /* frame interpolation: a frame between two of the game's (120 Hz screen, from the next start) */
+    int video_out;        /* picture output to the TV: 0 60 Hz, 1 120 Hz (from the next start) */
+    int framegen;         /* generated frames: 0 off, 1 one between two of the game's (x2), 2 three (x4, a 30 fps game on a 120 Hz screen) */
     int aspect_before_wide; /* the aspect ratio (index) the widescreen hack replaced with 16:9, or -1; saved by value */
     int ss_opt[SS_OPT_COUNT]; /* SwanStation's own core options: the chosen value's index in SS_OPTS[i].values */
 } Settings;

@@ -18,6 +18,14 @@ void SwanStationPS5_log_open(const char *path)
 {
     if (log_file)
         fclose(log_file);
+    char old_path[SwanStationPS5_PATH_MAX];
+    size_t n = strlen(path);
+    if (n > 4 && !strcmp(path + n - 4, ".log") && n + 5 < sizeof(old_path))
+    {
+        snprintf(old_path, sizeof(old_path), "%.*s.old.log", (int)(n - 4), path);
+        remove(old_path);
+        rename(path, old_path);
+    }
     log_file = fopen(path, "w");
 }
 

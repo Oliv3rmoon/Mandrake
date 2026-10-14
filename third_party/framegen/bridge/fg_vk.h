@@ -21,7 +21,7 @@
     X(vkDestroyPipelineLayout) X(vkDestroyQueryPool) X(vkDestroySampler) X(vkDestroyShaderModule) \
     X(vkFreeMemory) X(vkGetBufferMemoryRequirements) X(vkGetImageMemoryRequirements)               \
     X(vkGetQueryPoolResults) X(vkMapMemory) X(vkUnmapMemory) X(vkUpdateDescriptorSets)            \
-    X(vkCmdWriteTimestamp)
+    X(vkCmdWriteTimestamp) X(vkCmdCopyImage)
 
 #define FG_VK_DECLARE(name) extern PFN_##name name;
 FG_VK_INSTANCE_FUNCS(FG_VK_DECLARE)

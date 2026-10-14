@@ -254,8 +254,10 @@ static bool config_apply(Settings *s, const char *path)
             s->fast_effects = as_bool(value);
         else if (strcmp(key, "frame_pacing") == 0)
             s->frame_pacing = as_bool(value);
+        else if (strcmp(key, "video_out") == 0)
+            s->video_out = atoi(value) % 2;
         else if (strcmp(key, "framegen") == 0)
-            s->framegen = as_bool(value);
+            s->framegen = as_bool(value) ? 1 : atoi(value) == 2 ? 2 : 0;
         else if (strcmp(key, "usb_folder") == 0)
             snprintf(s->usb_folder, sizeof(s->usb_folder), "%s", value);
         else if (strcmp(key, "fsr") == 0)
@@ -433,8 +435,8 @@ bool config_save(const Settings *s, const char *path)
             s->msaa, s->texture_filter, s->filter_2d, s->supersampling, s->deinterlace, s->pal60, s->game_fixes);
     fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\nnegcon=%d\njewel_cases=%d\ncase_lighting=%d\ndisc_install_only=%d\n",
             s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->negcon, s->jewel_cases, s->case_lighting, s->disc_install_only);
-    fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nfsr=%d\nframe_pacing=%d\n", s->touch_mouse, s->run_ahead,
-            s->fast_effects, s->framegen, s->fsr, s->frame_pacing);
+    fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nvideo_out=%d\nfsr=%d\nframe_pacing=%d\n", s->touch_mouse, s->run_ahead,
+            s->fast_effects, s->framegen, s->video_out, s->fsr, s->frame_pacing);
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         int v = s->ss_opt[i];

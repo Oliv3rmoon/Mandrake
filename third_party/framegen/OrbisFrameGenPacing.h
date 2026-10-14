@@ -45,6 +45,7 @@ namespace orbis_fg
 		bool engaged = false;  // frames are generated for the game now: the interpolator takes every new frame
 		bool reset = false;    // the interpolator's last frame is no neighbour of this one (a gap, a pause): it starts over
 		uint32_t presents = 0; // presents of the generated frame before the game's, for this frame (0: none this time)
+		uint32_t generated = 1; // SwanStationPS5: the frames generated between the game's two (1 to 3), each presented once when more than 1
 	};
 
 	// Where the pacing is, for the log.
@@ -91,7 +92,8 @@ namespace orbis_fg
 		// the last one was given here (its own game frame and any repeat presented after it), the PS2's and the display's rates
 		// in Hz, `now` in seconds (any steady clock), the emulation's speed in percent of its target, and whether the limiter is
 		// at normal speed.
-		Decision Frame(uint32_t vsyncs, uint32_t already, double ps2_hz, double display_hz, double now, double speed, bool nominal)
+		Decision Frame(uint32_t vsyncs, uint32_t already, double ps2_hz, double display_hz, double now, double speed, bool nominal,
+			uint32_t max_generated = 1)
 		{
 			Decision d;
 			if (vsyncs == 0)
@@ -143,6 +145,10 @@ namespace orbis_fg
 			Second(now, speed);
 
 			const bool warm = m_count >= kWindow;
+			// SwanStationPS5: with more than one frame asked for, the game's frames need a refresh for each of them and one for
+			// their own (30 fps on 120 Hz: three generated and the game's), kept down to a little less
+			m_multi = max_generated > 1 && warm &&
+			          m_refreshes >= static_cast<double>(max_generated + 1) - (m_multi ? 0.4 : 0.03);
 			m_room = warm && m_refreshes >= (m_room ? kDisengage : kEngage);
 			// vk-285-135: steady enough, with the same hysteresis (the state just before says which threshold).
 			const bool was_generating = m_state == State::Generating || m_state == State::Paused || m_state == State::NotNominal;
@@ -161,6 +167,11 @@ namespace orbis_fg
 			const uint32_t fit = static_cast<uint32_t>(now_refreshes + 0.03);
 			const uint32_t left = fit > already ? fit - already : 0;
 			d.presents = std::min(m_repeats, left);
+			if (m_multi && left >= max_generated)
+			{
+				d.generated = max_generated;
+				d.presents = max_generated;
+			}
 			d.reset = m_reset;
 			m_reset = false;
 			if (d.presents > 0)
@@ -295,6 +306,7 @@ namespace orbis_fg
 		double m_refreshes = 0.0;
 		uint32_t m_repeats = 1;
 		bool m_room = false;
+		bool m_multi = false;
 		bool m_reset = true;
 		bool m_generated_this_second = false;
 		State m_state = State::Warming;

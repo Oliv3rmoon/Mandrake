@@ -60,7 +60,8 @@ int plat_pad_battery(int port); /* 0..100, -1 when unknown */
 void plat_set_colour(int brightness, int colour, int sharpen);
 void plat_set_fsr(bool on); /* FSR 1 before the shader (Vulkan) */
 double plat_framegen_hz(void); /* the display's rate while frames are being generated, else 0 */
-void plat_set_framegen(bool on, double core_hz, double speed, bool nominal); /* frame interpolation (Vulkan) */
+int plat_framegen_times(void); /* the frames shown for each of the game's while frames are being generated, else 0 */
+void plat_set_framegen(int generated, double core_hz, double speed, bool nominal); /* frame interpolation (Vulkan) */
 void plat_want_high_refresh(bool on); /* before plat_init: the 120 Hz mode */
 bool plat_gpu_ui_active(void); /* the shelf and the menus are drawn by the GPU (always, once the GPU layer opens) */
 bool plat_set_output(int resolution); /* 0 1080p, 1 1440p, 2 4K, at once (the GPU interface only); false when it can't be done */

@@ -836,7 +836,7 @@ void app_draw_game(uint8_t dim)
     {
         double core_hz = host_fps();
         double speed = app.fps > 1.0f && core_hz > 1.0 ? app.fps * 100.0 / core_hz : 100.0;
-        plat_set_framegen(app.settings.framegen, core_hz, speed, !speed_changed);
+        plat_set_framegen(app.settings.framegen == 2 ? 3 : app.settings.framegen, core_hz, speed, !speed_changed);
     }
     plat_draw_game(&view, play_widescreen_active() ? 16.0f / 9.0f : host_aspect(), dim);
     bezel_draw(&view, dim);
@@ -1895,8 +1895,9 @@ static void game_screen(PadState *pads)
     if (timer.running)
         timer.seconds += app.dt;
     update_lightbars();
-    static uint64_t emu_us;
-    static int emu_frames;
+    static uint64_t emu_us, loops_since;
+    static int emu_frames, loops;
+    ++loops;
     /* what the pacing did, for comparing Optimal frame pacing on and off: refreshes by frames run, the sound's stretch */
     static int refreshes_by_runs[3], optimal_refreshes, pace_refreshes;
     static double ratio_min = 2.0, ratio_max = 0.0;
@@ -1968,8 +1969,18 @@ static void game_screen(PadState *pads)
     {
         SwanStationPS5_log("emu: %.1f ms per emulated frame, %.1f fps measured, the game's own frames %u new, %u repeated",
                   emu_us / 1000.0 / emu_frames, app.fps, host_frames_new(), host_frames_repeated());
+        {
+            double core_hz = host_fps();
+            SwanStationPS5_log("speed: game at %.1f%% (%.1f of %.2f fps), screen %.2f Hz, %.1f presents a second, Generate frames %s, frames shown for each of the game's: %d",
+                               core_hz > 1.0 ? app.fps * 100.0 / core_hz : 0.0, app.fps, core_hz, plat_display_hz(),
+                               loops_since && now > loops_since ? loops * 1000000.0 / (double)(now - loops_since) : 0.0,
+                               app.settings.framegen == 2 ? "x4" : app.settings.framegen ? "x2" : "off",
+                               plat_framegen_times() > 1 ? plat_framegen_times() : 1);
+        }
         emu_us = 0;
         emu_frames = 0;
+        loops = 0;
+        loops_since = now;
         if (pace_refreshes)
         {
             SwanStationPS5_log("pacing: %s, %d refreshes: %d with no frame, %d with one, %d with two or more; sound speed %.4f to %.4f",
@@ -2012,20 +2023,19 @@ static void game_screen(PadState *pads)
     if (app.settings.show_fps)
     {
         char f[64];
-        int at;
-        if (app.real_fps > 0.0f && app.fps - app.real_fps >= 1.0f)
-            at = snprintf(f, sizeof(f), "%.1f FPS (%s %.1f)", app.fps, tr("game"), app.real_fps);
-        else
-            at = snprintf(f, sizeof(f), "%.1f FPS", app.fps);
-        /* frame interpolation at work: the rate of the screen */
         double fg_hz = plat_framegen_hz();
-        if (fg_hz > 1.0 && at > 0 && at < (int)sizeof(f) - 12)
+        if (fg_hz > 1.0)
         {
-            /* the frames the eye gets: each of the game's own and one generated, up to the screen's rate (25 -> 50) */
+            /* frames being generated: the frames the eye gets, each of the game's own and those generated, up to the screen's rate (25 -> 50) */
             double own = app.real_fps > 1.0f ? app.real_fps : app.fps;
-            double shown = own * 2.0 < fg_hz ? own * 2.0 : fg_hz;
-            snprintf(f + at, sizeof(f) - (size_t)at, " | FG %.0f", shown);
+            int times = plat_framegen_times();
+            double shown = own * (times > 1 ? times : 2) < fg_hz ? own * (times > 1 ? times : 2) : fg_hz;
+            snprintf(f, sizeof(f), "%.0f FPS (%s %.1f)", shown, tr("game"), own);
         }
+        else if (app.real_fps > 0.0f && app.fps - app.real_fps >= 1.0f)
+            snprintf(f, sizeof(f), "%.1f FPS (%s %.1f)", app.fps, tr("game"), app.real_fps);
+        else
+            snprintf(f, sizeof(f), "%.1f FPS", app.fps);
         float w = text_width(26, FONT_BOLD, f) + 40;
         draw_rrect(24, 24, w, 52, 26, 0xb0000000u);
         text_draw(44, 36, 26, FONT_BOLD, TH_GOOD, ALIGN_LEFT, f);
@@ -2103,7 +2113,27 @@ int main(int argc, char **argv)
         (!config_peek_string(app.paths.config, "version", saved_version, sizeof(saved_version)) ||
          strcmp(saved_version, SwanStationPS5_VERSION) != 0);
     /* frame interpolation wants the 120 Hz mode, chosen when the screen opens */
-    plat_want_high_refresh(config_peek_bool(app.paths.config, "framegen"));
+    char video_out[8] = "";
+    config_peek_string(app.paths.config, "video_out", video_out, sizeof(video_out));
+    const bool high_refresh = atoi(video_out) == 1;
+    if (high_refresh)
+    {
+        static const char *const params[] = {"/mnt/sandbox/PPSA98510_000/app0/sce_sys/param.json", "/app0/sce_sys/param.json",
+                                             "/data/homebrew/PPSA98510/sce_sys/param.json"};
+        for (size_t i = 0; i < sizeof(params) / sizeof(params[0]); ++i)
+        {
+            FILE *f = fopen(params[i], "rb");
+            if (!f)
+                continue;
+            fclose(f);
+            setenv("PS5_VIDEOOUT_PARAM_JSON", params[i], 0);
+            SwanStationPS5_log("screen: param.json for the 120 Hz mode: %s", params[i]);
+            break;
+        }
+    }
+    else
+        setenv("PS5_VIDEOOUT_PARAM_JSON", "/nonexistent", 1);
+    plat_want_high_refresh(high_refresh);
     plat_want_output(2); /* always 4K (1080p when the TV lacks the mode) */
 
     if (!plat_init())
@@ -2305,7 +2335,18 @@ int main(int argc, char **argv)
             if (app.settings_preview && app.game)
             {
                 app.settings_preview_time += app.dt;
-                app_draw_game(255); /* the game stays paused: its picture, with the settings as they are now */
+                /* the game keeps running, without the pad: its picture, with the settings as they are now */
+                PadState idle[SwanStationPS5_MAX_PADS];
+                memcpy(idle, pads, sizeof(idle));
+                for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
+                {
+                    idle[i].buttons = 0;
+                    idle[i].lx = idle[i].ly = idle[i].rx = idle[i].ry = 0;
+                    idle[i].l2 = idle[i].r2 = 0;
+                    idle[i].touching = false;
+                    idle[i].mouse_dx = idle[i].mouse_dy = 0;
+                }
+                game_screen(idle);
                 {
                     const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f,
                                 slide = (1.0f - in) * (1.0f - in) * 80.0f;

@@ -147,6 +147,8 @@ static const char *const __attribute__((unused)) MSAA[] = {"Off", "2x", "4x", "8
 static const char *const __attribute__((unused)) TEXTURE_FILTERS[] = {"Off", "Bilinear", "xBR", "SABR", "JINC2", "3-point"};
 static const char *const __attribute__((unused)) DEINTERLACERS[] = {"Weave", "Bob", "Motion-adaptive"};
 static const char *const AUTOSAVES[] = {"Off", "Every 5 minutes", "Every 10 minutes", "Every 15 minutes"};
+static const char *const FRAMEGENS[] = {"Off", "x2", "x4"};
+static const char *const VIDEO_OUTS[] = {"60 Hz", "120 Hz"};
 static const char *const SORTS[] = {"Title", "Recently played", "Most played", "Region"};
 
 static const Row DISPLAY[] = {
@@ -167,9 +169,9 @@ static const Row DISPLAY[] = {
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(sharpen), SHARPENS, 3, 0},
     {NULL, "Crop black edges", "Hides the black lines many games leave at the top and bottom, which an old TV hid. Pair with Stretch to fill the screen.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(crop_edges), CROPS, 3, 0},
-    {NULL, "Double frames",
-     "Doubles the game's real frames with AMD FSR 3's frame interpolation: from 30 to 60 fps, or from 60 to 120 fps if your screen supports it; if not, it stays at 60 fps. It works at once, except 60 to 120 fps, which needs it turned on before the app starts.",
-     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(framegen), OFF_ON, 2, 0},
+    {NULL, "Generate frames",
+     "Adds frames AMD FSR 3 makes between the game's own, so motion looks smoother. x2: one between each two, so 30 fps shows at 60 and, with Video output at 120 Hz, 60 fps shows at 120. x4: three between each two, only with Video output at 120 Hz: a 30 fps game shows at 120. With Video output at 60 Hz it only doubles. Each extra frame adds a little input lag. It works at once. Video output is changed above and applies the next time the app starts.",
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(framegen), FRAMEGENS, 3, 0},
     {NULL, "Load HD textures",
      "Loads HD texture packs. Over FTP, go to /data/SwanStationPS5/cache/ and create the folder textures if it doesn't exist, then create your game's folder inside it, for example \"SCUS-94900\" (Crash Bandicoot), and put the pack's PNG files there. Needs the GPU renderer. Takes effect with the next game.",
      K_TOGGLE, APPLY_NEXT_GAME, SP_HDTEX, false, NO_FIELD, OFF_ON, 2, 0},
@@ -189,7 +191,7 @@ static const Row DISPLAY[] = {
      APPLY_NOW, SP_NONE, false, INT_FIELD(brightness), BRIGHTNESS, 4, 0},
     {NULL, "Colours", "Vivid: richer colours. Soft: gentler. Warm and Cool shift the tint. Black and white, for fun.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(colour), COLOURS, 6, 0},
-    {"Overlay", "Show FPS", "Frames per second in the corner while you play. If the game repeats pictures (a 30 fps game on a 60 fps core), its own rate shows in brackets: 60.0 FPS (game 30.0). While frames are being doubled, FG and the frames you actually see are added: | FG 50.", K_TOGGLE, APPLY_NOW,
+    {"Overlay", "Show FPS", "Frames per second in the corner while you play. If the game repeats pictures (a 30 fps game on a 60 fps core), its own rate shows in brackets: 60.0 FPS (game 30.0). While frames are being generated, the number is the frames you actually see: 100 FPS (game 25.0).", K_TOGGLE, APPLY_NOW,
      SP_NONE, false, BOOL_FIELD(show_fps), OFF_ON, 2, 0},
 };
 
@@ -424,10 +426,25 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
     for (int c = 0; c < ncat; ++c)
         for (int i = 0; i < SS_OPT_COUNT; ++i)
             extra += SS_OPTS[i].category == categories[c];
-    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 4));
+    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 5));
     if (!rows)
         return;
     int n = 0;
+    if (base == DISPLAY)
+    {
+        Row v = {"Picture",
+                 "Video output",
+                 "The refresh rate the picture is sent to your TV at: 60 Hz or 120 Hz. 120 Hz needs a TV that supports it; if not, it stays at 60 Hz. It takes effect the next time the app starts.",
+                 K_CHOICE,
+                 APPLY_NEXT_LAUNCH,
+                 SP_NONE,
+                 true,
+                 INT_FIELD(video_out),
+                 VIDEO_OUTS,
+                 2,
+                 0};
+        rows[n++] = v;
+    }
     if (aspect >= 0)
     {
         Row r = {"Picture",
@@ -442,6 +459,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                  SS_OPTS[aspect].labels,
                  SS_OPTS[aspect].count,
                  0};
+        r.group = base == DISPLAY ? NULL : r.group;
         rows[n++] = r;
         if (wide >= 0)
         {
@@ -636,8 +654,26 @@ static void refresh_bios_rows(void)
         }
 }
 
+static void sync_framegen_rows(void)
+{
+    for (int t = 0; t < TAB_COUNT; ++t)
+        for (int k = 0; k < TABS[t].count; ++k)
+        {
+            Row *r = (Row *)&TABS[t].rows[k];
+            if (r->offset != (int)offsetof(Settings, framegen))
+                continue;
+            r->count = app.global.video_out == 1 ? 3 : 2;
+            if (app.global.framegen >= r->count)
+                app.global.framegen = r->count - 1;
+            if (app.settings.framegen >= r->count)
+                app.settings.framegen = r->count - 1;
+        }
+}
+
 void settings_opened(void)
 {
+    ensure_rows();
+    sync_framegen_rows();
     refresh_bios_rows();
     S.cursor = -1;
     S.remap = false;
@@ -1842,6 +1878,7 @@ void settings_screen(uint32_t pressed)
         app_draw_toast();
         return;
     }
+    sync_framegen_rows();
     if (S.cursor < 0 || S.cursor >= tab()->count)
         first_selectable();
 
