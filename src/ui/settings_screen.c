@@ -413,10 +413,15 @@ static bool is_widescreen_option(int i)
     return strcmp(SS_OPTS[i].key, "swanstation_GPU_WidescreenHack") == 0;
 }
 
+static bool is_texture_filter_option(int i)
+{
+    return strcmp(SS_OPTS[i].key, "swanstation_GPU_TextureFilter") == 0;
+}
+
 static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, const int *categories, int ncat)
 {
     static char groups[SSC_COUNT][48];
-    int extra = 0, aspect = -1, wide = -1, custom[2] = {-1, -1};
+    int extra = 0, aspect = -1, wide = -1, tfilter = -1, custom[2] = {-1, -1};
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         if (base == DISPLAY && is_aspect_option(i))
@@ -425,11 +430,13 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
             wide = i;
         if (base == DISPLAY && is_custom_aspect_option(i))
             custom[custom[0] < 0 ? 0 : 1] = i;
+        if (base == DISPLAY && is_texture_filter_option(i))
+            tfilter = i;
     }
     for (int c = 0; c < ncat; ++c)
         for (int i = 0; i < SS_OPT_COUNT; ++i)
             extra += SS_OPTS[i].category == categories[c];
-    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 4));
+    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 5));
     if (!rows)
         return;
     int n = 0;
@@ -456,6 +463,17 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
             r.offset = (int)(offsetof(Settings, ss_opt) + (size_t)wide * sizeof(int));
             r.labels = SS_OPTS[wide].labels;
             r.count = SS_OPTS[wide].count;
+            rows[n++] = r;
+        }
+        if (tfilter >= 0)
+        {
+            r.group = NULL;
+            r.name = SS_OPTS[tfilter].label;
+            r.help = SS_OPTS[tfilter].help;
+            r.offset = (int)(offsetof(Settings, ss_opt) + (size_t)tfilter * sizeof(int));
+            r.apply = ss_needs_reload(SS_OPTS[tfilter].key) ? APPLY_NEXT_GAME : APPLY_NOW;
+            r.labels = ss_opt_labels(tfilter);
+            r.count = ss_opt_count(tfilter);
             rows[n++] = r;
         }
     }
@@ -545,7 +563,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
         for (int i = 0; i < SS_OPT_COUNT; ++i)
         {
             if (SS_OPTS[i].category != categories[c] || n >= MAX_ROWS || is_aspect_option(i) || is_widescreen_option(i) ||
-                ss_opt_is_bios(i) || /* they go with Start BIOS, in SwanStationPS5 */
+                is_texture_filter_option(i) || ss_opt_is_bios(i) || /* they go with Start BIOS, in SwanStationPS5 */
                 (base == DISPLAY && custom[0] >= 0 && is_custom_aspect_option(i)))
                 continue;
             Row r = {first ? groups[categories[c]] : NULL,

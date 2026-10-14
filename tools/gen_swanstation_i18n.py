@@ -629,6 +629,13 @@ VALUES = {
     "Warning": ("Avertissement", "Aviso", "Advertencia"),
     "xBR (No Edge Blending)": ("xBR (sans fondu des bords)", "xBR (sem mistura de arestas)",
                                "xBR (sin mezcla de bordes)"),
+    "MMPX Basic": ("MMPX Basique", "MMPX Básico", "MMPX Básico"),
+    "MMPX Basic (No Edge Blending)": ("MMPX Basique (sans fondu des bords)", "MMPX Básico (sem mistura de arestas)",
+                                      "MMPX Básico (sin mezcla de bordes)"),
+    "MMPX 3.0 (No Edge Blending)": ("MMPX 3.0 (sans fondu des bords)", "MMPX 3.0 (sem mistura de arestas)",
+                                    "MMPX 3.0 (sin mezcla de bordes)"),
+    "MMPX 3.2 (No Edge Blending)": ("MMPX 3.2 (sans fondu des bords)", "MMPX 3.2 (sem mistura de arestas)",
+                                    "MMPX 3.2 (sin mezcla de bordes)"),
     "100% (Default)": ("100 % (par défaut)", "100% (predefinição)", "100% (predeterminado)"),
 }
 

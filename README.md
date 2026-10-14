@@ -288,8 +288,8 @@ It also shows the time and how long you've been playing.
 
 | Section | Settings |
 |---|---|
-| Display | Aspect ratio, shader (sharp bilinear, CRT Basic, LCD3x, CRT Royale, NTSC), crop black edges, integer scaling, smooth final scaling, scanlines, border, game artwork border, brightness, colours, FPS counter, load HD textures, double frames, and SwanStation's display options |
-| Graphics | Internal resolution (native to 16x), PGXP, true colour, supersampling, and SwanStation's enhancement options (MSAA, texture filter, widescreen hack, PGXP details...) |
+| Display | Aspect ratio, texture filtering (including MMPX), shader (sharp bilinear, CRT Basic, LCD3x, CRT Royale, NTSC), crop black edges, integer scaling, smooth final scaling, scanlines, border, game artwork border, brightness, colours, FPS counter, load HD textures, double frames, and SwanStation's display options |
+| Graphics | Internal resolution (native to 16x), PGXP, true colour, supersampling, and SwanStation's enhancement options (MSAA, PGXP details...) |
 | Controls | Controller (digital or DualShock), left stick as D-pad, vibration, light bar, players (multitap), player order, dead zone, stick response, rumble feel, trigger effects, gas and brake on R2 / L2, light gun, button mapping, and SwanStation's controller port options |
 | Achievements | Account, your profile, unlock pop-ups and their style, progress tracker, hardcore mode |
 | Library | Theme, cover style, download missing covers, sort, your library, memory cards, rescan |
@@ -407,6 +407,7 @@ SwanStationPS5 started as a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) b
 * **Swordpdf**, for [PS5SX2](https://github.com/Swordpdf/PS5SX2). Its shelf and project page inspired SwanStationPS5's, and studying it and the other PS5 emulator ports showed how a native emulator title runs on the console.
 * **Swordpdf and AMD**, for the frame interpolation behind *Generate frames*: [PS5SX2](https://github.com/Swordpdf/PS5SX2)'s port of AMD FSR 3 (FidelityFX SDK), as first integrated in PSXS5 by SynoPiia.
 * **Al-Azif**, for [ps-disc-detect](https://github.com/Al-Azif/ps-disc-detect) (GPL-3.0): the disc installation follows its way of reaching the drive through the CAM pass-through and of dumping a CD to `.bin` and `.cue` with `READ CD`. And **Swordpdf**, for [PS5SX2](https://github.com/Swordpdf/PS5SX2)'s disc code and its rule that a command only counts as done when the drive handed over every byte.
+* **crashGG** ([github.com/crashGG](https://github.com/crashGG)), for MMPX 3.0 and MMPX 3.2, the texture filters of the same names, and **Morgan McGuire and Mara Gagiu**, for [MMPX](https://casual-effects.com/research/McGuire2021PixelArt/), the pixel art filter they are built on (MMPX Basic).
 * **Hans-Kristian Arntzen (Themaister)**, for the NTSC shaders, **TroggleMonkey and Hyllian** for CRT Royale and **Gigaherz** for LCD3x.
 * **Sam Lantinga and the SDL contributors** for [SDL2](https://www.libsdl.org/), **Daniel Stenberg** for [curl](https://curl.se/), **Sean Barrett** for [stb](https://github.com/nothings/stb), **Rasmus Andersson** for the [Inter](https://github.com/rsms/inter) font, **Google and Adobe** for [Noto Sans JP](https://github.com/notofonts/noto-cjk) (the Japanese text), and **Doug Lea** for [dlmalloc](https://gee.cs.oswego.edu/dl/html/malloc.html).
 * **Microsoft's [DirectXTex](https://github.com/microsoft/DirectXTex)**, **[Pillow](https://python-pillow.org/)** and **[7-Zip](https://www.7-zip.org/)**, for the art pipeline and the PC tool.

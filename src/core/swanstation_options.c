@@ -41,8 +41,8 @@ static const char *const v18[] = {"true", "false"};
 static const char *const l18[] = {"Enabled", "Disabled"};
 static const char *const v19[] = {"true", "false"};
 static const char *const l19[] = {"Enabled", "Disabled"};
-static const char *const v20[] = {"Nearest", "Bilinear", "BilinearBinAlpha", "JINC2", "JINC2BinAlpha", "xBR", "xBRBinAlpha"};
-static const char *const l20[] = {"Nearest-Neighbor", "Bilinear", "Bilinear (No Edge Blending)", "JINC2", "JINC2 (No Edge Blending)", "xBR", "xBR (No Edge Blending)"};
+static const char *const v20[] = {"Nearest", "Bilinear", "BilinearBinAlpha", "JINC2", "JINC2BinAlpha", "xBR", "xBRBinAlpha", "MMPX", "MMPXBinAlpha", "MMPX30", "MMPX30BinAlpha", "MMPX32", "MMPX32BinAlpha"};
+static const char *const l20[] = {"Nearest-Neighbor", "Bilinear", "Bilinear (No Edge Blending)", "JINC2", "JINC2 (No Edge Blending)", "xBR", "xBR (No Edge Blending)", "MMPX Basic", "MMPX Basic (No Edge Blending)", "MMPX 3.0", "MMPX 3.0 (No Edge Blending)", "MMPX 3.2", "MMPX 3.2 (No Edge Blending)"};
 static const char *const v21[] = {"true", "false"};
 static const char *const l21[] = {"Enabled", "Disabled"};
 static const char *const v22[] = {"true", "false"};
@@ -233,7 +233,7 @@ const SsOpt SS_OPTS[SS_OPT_COUNT] = {
      SSC_ENHANCEMENT, 2, 1, v19, l19},
     {"swanstation_GPU_TextureFilter", "Texture Filtering",
      "Smooths out the blockyness of magnified textures on 3D object by using bilinear filtering. Will have a greater effect on higher resolution scales. Only applies to the hardware renderers.",
-     SSC_ENHANCEMENT, 7, 0, v20, l20},
+     SSC_ENHANCEMENT, 13, 0, v20, l20},
     {"swanstation_GPU_WidescreenHack", "Widescreen Hack",
      "Increases the field of view from 4:3 to the chosen display aspect ratio in 3D games. For 2D games, or games which use pre-rendered backgrounds, this enhancement will not work as expected.",
      SSC_ENHANCEMENT, 2, 1, v21, l21},
