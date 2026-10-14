@@ -610,7 +610,7 @@ static struct
     uint32_t pad_prev[SwanStationPS5_MAX_PADS];
     int remap_cursor;
     float tab_x, tab_w, sel_y, scroll, scope_x, remap_y;
-    float switch_t[16];
+    float switch_t[MAX_ROWS];
 } S;
 
 /* The game whose own settings the "This game" side edits: the running one, or the shelf's (Settings opened from the shelf) */
@@ -1647,7 +1647,7 @@ static void draw_rows(void)
             break;
         case K_TOGGLE:
         {
-            float *st = &S.switch_t[i < 16 ? i : 15];
+            float *st = &S.switch_t[i < MAX_ROWS ? i : MAX_ROWS - 1];
             anim_approach(st, (float)read_value(r), app.dt, TH_SNAP);
             draw_switch(right - 40 * 2.1f, ry + 18, 40, *st);
             break;
