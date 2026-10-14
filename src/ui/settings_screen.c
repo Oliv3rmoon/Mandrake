@@ -177,6 +177,8 @@ static const Row DISPLAY[] = {
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(integer_scale), OFF_ON, 2, 0},
     {NULL, "Smooth final scaling", "Softens the last step up to your TV's resolution.", K_TOGGLE,
      APPLY_NOW, SP_NONE, false, BOOL_FIELD(smooth), OFF_ON, 2, 0},
+    {NULL, "Video sync", "On: the game is synchronised to the screen: one frame per refresh, so motion is smoother, and the sound is sped up or slowed down by a hair (under 0.5 %), which may bring a barely noticeable change in pitch. Off: it is synchronised to the sound: the audio is exact, but now and then a frame is repeated or skipped. It only works when the screen's rate and the game's are nearly equal (60 Hz screen and an NTSC game); otherwise the sound sync is used.",
+     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(frame_pacing), OFF_ON, 2, 0},
     {"Look", "CRT scanlines", "Dark lines between the picture's lines, like an old TV.", K_CHOICE, APPLY_NOW,
      SP_NONE, false, INT_FIELD(crt), CRT_LEVELS, 3, 0},
     {NULL, "Border", "What surrounds a 4:3 picture: black, the current background, or a TV.", K_CHOICE, APPLY_NOW,
@@ -194,8 +196,6 @@ static const Row DISPLAY[] = {
 static const Row GRAPHICS[] = {
     {"Rendering", "Renderer", "The GPU draws fast, with higher internal resolutions and the shaders. The CPU draws at native resolution only. Takes effect with the next game.",
      K_CHOICE, APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(renderer), RENDERERS, 2, 0},
-    {NULL, "Video sync", "On: the game is synchronised to the screen: one frame per refresh, so motion is smoother, and the sound is sped up or slowed down by a hair (under 0.5 %), which may bring a barely noticeable change in pitch. Off: it is synchronised to the sound: the audio is exact, but now and then a frame is repeated or skipped. It only works when the screen's rate and the game's are nearly equal (60 Hz screen and an NTSC game); otherwise the sound sync is used.",
-     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(frame_pacing), OFF_ON, 2, 0},
     {NULL, "Internal resolution", "Draws 3D at a higher resolution: sharper polygons.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(internal_res), INTERNAL, 16, 1},
     {NULL, "Precise geometry (PGXP)", "Stops polygons wobbling and textures warping.",
