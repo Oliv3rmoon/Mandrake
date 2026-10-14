@@ -17,7 +17,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.2.8"
+#define SwanStationPS5_VERSION "1.2.9"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -73,6 +73,7 @@ enum UpscaleFilter
 enum RegionMode
 {
     REGION_AUTO = 0,
+    REGION_NTSC_J, /* the core's order: Auto, NTSC-J, NTSC-U, PAL */
     REGION_NTSC,
     REGION_PAL,
     REGION_COUNT
@@ -83,13 +84,13 @@ typedef struct
     bool integer_scale; /* whole-number scale factors only */
     bool smooth;      /* bilinear for the final scale to the screen */
     int renderer;     /* SwanStation: 0 Vulkan (the GPU), 1 Software (the CPU) */
-    int internal_res; /* 1..5 = native, 2x, 4x, 8x, 16x */
+    int internal_res; /* the core's scale, 1..16 (1 native) */
     int upscale;      /* 1..4: prescale before the final scale */
     int upscale_filter; /* enum UpscaleFilter */
     bool show_fps;
     int region;       /* enum RegionMode */
     bool dithering;
-    bool cd_fast;     /* faster CD reads (shorter loads, rare glitches) */
+    int cd_speed;     /* CD read speed-up, 1..10 (1 off): shorter loads, rare glitches */
     bool analog;      /* DualShock instead of digital pad */
     int state_slot;   /* 0..9 */
     int last_game;    /* library cursor */
@@ -152,10 +153,11 @@ typedef struct
     bool jewel_cases;     /* the shelf shows 3D jewel cases; off: the flat covers with a reflection, as in 1.1.8 */
     bool negcon;          /* racing games that take a NeGcon: analog gas and brake on R2 / L2 */
     bool touch_mouse;     /* mouse games: the touchpad moves the pointer */
-    int run_ahead;        /* 0 off, 1 or 2 frames less input lag */
+    int run_ahead;        /* 0 off, 1 to 10 frames less input lag */
     bool fast_effects;    /* screen effects on the GPU, without the software copy */
     bool fsr;             /* FSR 1 scales the picture before the shader */
     char usb_folder[48];  /* a folder name looked for on USB drives: /mnt/usb0/<name> and /mnt/usb1/<name> (empty: none) */
+    bool frame_pacing;    /* Video sync: one game frame per screen refresh, the sound stretched by a hair to keep up (DuckStation's Optimal Frame Pacing); off: synchronised to the sound */
     bool framegen;        /* frame interpolation: a frame between two of the game's (120 Hz screen, from the next start) */
     int aspect_before_wide; /* the aspect ratio (index) the widescreen hack replaced with 16:9, or -1; saved by value */
     int ss_opt[SS_OPT_COUNT]; /* SwanStation's own core options: the chosen value's index in SS_OPTS[i].values */

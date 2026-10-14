@@ -41,6 +41,8 @@ typedef struct
     int game_index;           /* its library index */
     enum Screen screen;
     enum Screen settings_return;
+    bool settings_preview;    /* Settings opened from a game: the touchpad hides it and the game runs, to see the changes live */
+    float settings_preview_time; /* seconds since the preview began (its notice fades out) */
     char storage_error[256];
     bool sandboxed;           /* /data can't be listed: library.txt is the library */
     bool unlock_setting;      /* Settings > System > Unlock /data with etaHEN */
@@ -87,6 +89,7 @@ void app_close_shelf_settings(void);
 /* Screens: each handles input and draws one frame. */
 void shelf_screen(uint32_t pressed);
 void settings_screen(uint32_t pressed);
+bool settings_preview_allowed(void); /* the main settings view (not the button-mapping, players or profiles pages) */
 void menu_screen(uint32_t pressed);
 void cheats_screen(uint32_t pressed);
 void achievements_screen(uint32_t pressed);

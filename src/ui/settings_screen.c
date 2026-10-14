@@ -109,11 +109,12 @@ static const char *row_help(const Row *r)
 
 static const char *const OFF_ON[] = {"Off", "On"};
 static const char *const RENDERERS[] = {"GPU (Recommended)", "CPU"};
-static const char *const INTERNAL[] = {"Native", "2x", "4x", "8x", "16x"};
+static const char *const INTERNAL[] = {"Native", "2x", "3x (720p)", "4x", "5x (1080p)", "6x (1440p)", "7x", "8x", "9x (4K)", "10x", "11x", "12x", "13x", "14x", "15x", "16x"};
+static const char *const CD_SPEEDS[] = {"Off", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x"};
 /* unused while the Emulator row is commented out */
 static const __attribute__((unused)) char *const UPSCALE[] = {"Off", "2x", "3x", "4x"};
 static const char *const FILTERS[] = {"Sharp pixels", "Smooth pixels (Scale2x)", "xBR (smoothest)"};
-static const char *const REGIONS[] = {"Auto", "NTSC (60 Hz)", "PAL (50 Hz)"};
+static const char *const REGIONS[] = {"Auto", "NTSC-J (60 Hz)", "NTSC-U (60 Hz)", "PAL (50 Hz)"};
 static const char *const PADS[] = {"Digital pad", "DualShock (analog)"};
 /* the pre-rendered 3D box covers are no longer used: the covers are always flat
 static const char *const COVER_STYLES[] = {"Flat", "3D box"}; */
@@ -141,7 +142,7 @@ static const char *const __attribute__((unused)) OVERCLOCKS[] = {"Off", "A littl
 static const char *const BRIGHTNESS[] = {"Darker", "Normal", "Brighter", "Brightest"};
 static const char *const COLOURS[] = {"Natural", "Vivid", "Soft", "Warm", "Cool", "Black and white"};
 static const char *const SHARPENS[] = {"Off", "Light", "Strong"};
-static const char *const RUN_AHEADS[] = {"Off", "1 frame", "2 frames"};
+static const char *const RUN_AHEADS[] = {"Off", "1 frame", "2 frames", "3 frames", "4 frames", "5 frames", "6 frames", "7 frames", "8 frames", "9 frames", "10 frames"};
 static const char *const __attribute__((unused)) MSAA[] = {"Off", "2x", "4x", "8x", "16x"};
 static const char *const __attribute__((unused)) TEXTURE_FILTERS[] = {"Off", "Bilinear", "xBR", "SABR", "JINC2", "3-point"};
 static const char *const __attribute__((unused)) DEINTERLACERS[] = {"Weave", "Bob", "Motion-adaptive"};
@@ -193,8 +194,10 @@ static const Row DISPLAY[] = {
 static const Row GRAPHICS[] = {
     {"Rendering", "Renderer", "The GPU draws fast, with higher internal resolutions and the shaders. The CPU draws at native resolution only. Takes effect with the next game.",
      K_CHOICE, APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(renderer), RENDERERS, 2, 0},
+    {NULL, "Video sync", "On: the game is synchronised to the screen: one frame per refresh, so motion is smoother, and the sound is sped up or slowed down by a hair (under 0.5 %), which may bring a barely noticeable change in pitch. Off: it is synchronised to the sound: the audio is exact, but now and then a frame is repeated or skipped. It only works when the screen's rate and the game's are nearly equal (60 Hz screen and an NTSC game); otherwise the sound sync is used.",
+     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(frame_pacing), OFF_ON, 2, 0},
     {NULL, "Internal resolution", "Draws 3D at a higher resolution: sharper polygons.",
-     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(internal_res), INTERNAL, 5, 1},
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(internal_res), INTERNAL, 16, 1},
     {NULL, "Precise geometry (PGXP)", "Stops polygons wobbling and textures warping.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(pgxp), OFF_ON, 2, 0},
     {NULL, "True colour", "Draws in 32-bit colour, without the dot pattern or colour banding. Pairs well with a high internal resolution.",
@@ -294,10 +297,10 @@ static const Row SYSTEM[] = {
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_install_only), OFF_ON, 2, 0},
     {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ and /mnt/usb1/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx and /mnt/usb1/psx. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
-    {"Emulation", "Region", "Auto follows the disc; force 50 or 60 Hz if a game misbehaves.", K_CHOICE,
+    {"Emulation", "Region", "Auto follows the disc; force 50 or 60 Hz, or the Japanese console, if a game misbehaves.", K_CHOICE,
      APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(region), REGIONS, 3, 0},
-    {NULL, "Fast CD loading", "Shorter loading screens; videos still play at normal speed. Rarely, a game glitches.", K_TOGGLE, APPLY_NOW,
-     SP_NONE, false, BOOL_FIELD(cd_fast), OFF_ON, 2, 0},
+    {NULL, "Fast CD loading", "Shorter loading screens; the higher, the faster. Rarely, a game glitches.", K_CHOICE, APPLY_NOW,
+     SP_NONE, false, INT_FIELD(cd_speed), CD_SPEEDS, 10, 1},
     {NULL, "PS1 startup intro", "Shows the PlayStation logo and sound before the game, as a real console does. Needs your own BIOS.",
      K_TOGGLE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(boot_intro), OFF_ON, 2, 0},
     {NULL, "Known game fixes", "Turns off, for that game only, the settings DuckStation's game database says it breaks with (PGXP, widescreen, upscaling, filtering).",
@@ -306,8 +309,8 @@ static const Row SYSTEM[] = {
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(quick_resume), OFF_ON, 2, 0},
     {NULL, "Rewind", "Keeps the last 8 seconds so you can go back ({Touchpad} + {L2}). Uses about 200 MB of memory.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(rewind), OFF_ON, 2, 0},
-    {NULL, "Run-ahead", "Answers your buttons 1 or 2 frames sooner, for fighting games and platformers. It runs extra frames: at high internal resolutions some games may slow down. It is not used while Double frames is on.",
-     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(run_ahead), RUN_AHEADS, 3, 0},
+    {NULL, "Run-ahead", "Answers your buttons 1 to 10 frames sooner, for fighting games and platformers. It runs extra frames: at high internal resolutions some games may slow down. It is not used while Double frames is on.",
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(run_ahead), RUN_AHEADS, 11, 0},
     {NULL, "Auto-save", "Saves the game by itself every few minutes into three auto-save slots (the oldest is replaced). Load one from the SwanStationPS5 menu > Auto-saves.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(autosave), AUTOSAVES, 4, 0},
     {"People", "Who's playing", "Profiles: each person keeps their own memory cards, save states, settings, play time, favourites and RetroAchievements sign-in. Games and covers are shared.",
@@ -1804,6 +1807,11 @@ static void set_scope(bool game)
     sfx_play(SFX_CLICK);
 }
 
+bool settings_preview_allowed(void)
+{
+    return !S.remap && !S.players && !S.who;
+}
+
 void settings_screen(uint32_t pressed)
 {
     if (app.game)
@@ -1914,17 +1922,17 @@ void settings_screen(uint32_t pressed)
     draw_help(r);
     if (scope_game() && app.game_has_own && S.game_scope)
     {
-        static const int glyphs[] = {GLYPH_CROSS, GLYPH_CIRCLE, GLYPH_TRIANGLE, GLYPH_SQUARE};
-        static const char *const labels[] = {"Change", "Back", "Default", "Use all-games settings"};
-        app_draw_hints(glyphs, labels, 4, NULL);
+        static const int glyphs[] = {GLYPH_CROSS, GLYPH_CIRCLE, GLYPH_TRIANGLE, GLYPH_SQUARE, GLYPH_TOUCHPAD};
+        static const char *const labels[] = {"Change", "Back", "Default", "Use all-games settings", "Preview"};
+        app_draw_hints(glyphs, labels, app.game ? 5 : 4, NULL);
         const HintCombo right[1] = {{{GLYPH_L1, GLYPH_R1}, 2, '/', "Tabs"}};
         app_draw_hints_right(right, 1);
     }
     else
     {
-        static const int glyphs[] = {GLYPH_CROSS, GLYPH_CIRCLE, GLYPH_TRIANGLE};
-        static const char *const labels[] = {"Change", "Back", "Default"};
-        app_draw_hints(glyphs, labels, 3, NULL);
+        static const int glyphs[] = {GLYPH_CROSS, GLYPH_CIRCLE, GLYPH_TRIANGLE, GLYPH_TOUCHPAD};
+        static const char *const labels[] = {"Change", "Back", "Default", "Preview"};
+        app_draw_hints(glyphs, labels, app.game ? 4 : 3, NULL);
         const HintCombo right[1] = {{{GLYPH_L1, GLYPH_R1}, 2, '/', "Tabs"}};
         app_draw_hints_right(right, 1);
     }

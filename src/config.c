@@ -17,7 +17,10 @@ void config_defaults(Settings *s)
     memset(s, 0, sizeof(*s));
     s->language = plat_system_language(); /* until the ini says otherwise: the console's */
     s->smooth = false; /* sharp pixels; "Smooth final scaling" is opt-in */
-    s->internal_res = 4; /* 8x (1 native, 2 2x, 3 4x, 4 8x, 5 16x) */
+    s->internal_res = 9; /* 9x (4K) */
+    s->cd_speed = 1;
+    s->frame_pacing = true; /* Video sync */
+    s->true_colour = true; /* as DuckStation: its default dithering mode is True Color */
     s->upscale = 2;
     s->upscale_filter = UPSCALE_XBR;
     s->region = REGION_AUTO;
@@ -106,8 +109,10 @@ static bool config_apply(Settings *s, const char *path)
             s->region = atoi(value) % REGION_COUNT;
         else if (strcmp(key, "dithering") == 0)
             s->dithering = as_bool(value);
-        else if (strcmp(key, "cd_fast") == 0)
-            s->cd_fast = as_bool(value);
+        else if (strcmp(key, "cd_speed") == 0)
+            s->cd_speed = atoi(value) >= 1 && atoi(value) <= 10 ? atoi(value) : 1;
+        else if (strcmp(key, "cd_fast") == 0) /* before 1.2.9: on was 4x */
+            s->cd_speed = as_bool(value) ? 4 : 1;
         else if (strcmp(key, "analog") == 0)
             s->analog = as_bool(value);
         else if (strcmp(key, "state_slot") == 0)
@@ -118,10 +123,16 @@ static bool config_apply(Settings *s, const char *path)
             s->stick_dpad = atoi(value) % STICK_DPAD_COUNT;
         else if (strcmp(key, "integer_scale") == 0)
             s->integer_scale = as_bool(value);
-        else if (strcmp(key, "internal_res") == 0)
+        else if (strcmp(key, "internal_scale") == 0)
         {
             int r = atoi(value);
-            s->internal_res = r >= 1 && r <= 5 ? r : 1;
+            s->internal_res = r >= 1 && r <= 16 ? r : 1;
+        }
+        else if (strcmp(key, "internal_res") == 0) /* before 1.2.9: 1..5 = 1x, 2x, 4x, 8x, 16x */
+        {
+            static const int scales[] = {1, 1, 2, 4, 8, 16};
+            int r = atoi(value);
+            s->internal_res = r >= 1 && r <= 5 ? scales[r] : 1;
         }
         else if (strcmp(key, "upscale") == 0)
             s->upscale = atoi(value) >= 1 && atoi(value) <= 4 ? atoi(value) : 1;
@@ -238,9 +249,11 @@ static bool config_apply(Settings *s, const char *path)
         else if (strcmp(key, "touch_mouse") == 0)
             s->touch_mouse = as_bool(value);
         else if (strcmp(key, "run_ahead") == 0)
-            s->run_ahead = atoi(value) % 3;
+            s->run_ahead = atoi(value) % 11;
         else if (strcmp(key, "fast_effects") == 0)
             s->fast_effects = as_bool(value);
+        else if (strcmp(key, "frame_pacing") == 0)
+            s->frame_pacing = as_bool(value);
         else if (strcmp(key, "framegen") == 0)
             s->framegen = as_bool(value);
         else if (strcmp(key, "usb_folder") == 0)
@@ -394,12 +407,12 @@ bool config_save(const Settings *s, const char *path)
     fprintf(f,
             "# SwanStationPS5 settings\n"
             "smooth=%d\nshow_fps=%d\nregion=%d\n"
-            "dithering=%d\ncd_fast=%d\nanalog=%d\nstate_slot=%d\nlast_game=%d\n"
+            "dithering=%d\ncd_speed=%d\nanalog=%d\nstate_slot=%d\nlast_game=%d\n"
             "cover_style=%d\ncover_download=%d\nui_sound=%d\nui_volume=%d\n"
-            "integer_scale=%d\ninternal_res=%d\nupscale=%d\nupscale_filter=%d\nstick_dpad=%d\nlanguage=%d\n"
+            "integer_scale=%d\ninternal_scale=%d\nupscale=%d\nupscale_filter=%d\nstick_dpad=%d\nlanguage=%d\n"
             "vibration=%d\nsort_mode=%d\nshelf_category=%d\nbackground=%d\n",
             s->smooth, s->show_fps, s->region, s->dithering,
-            s->cd_fast, s->analog, s->state_slot, s->last_game, s->cover_style,
+            s->cd_speed, s->analog, s->state_slot, s->last_game, s->cover_style,
             s->cover_download, s->ui_sound, s->ui_volume, s->integer_scale, s->internal_res, s->upscale,
             s->upscale_filter, s->stick_dpad, s->language, s->vibration,
             s->sort_mode, s->shelf_category, s->background);
@@ -420,8 +433,8 @@ bool config_save(const Settings *s, const char *path)
             s->msaa, s->texture_filter, s->filter_2d, s->supersampling, s->deinterlace, s->pal60, s->game_fixes);
     fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\nnegcon=%d\njewel_cases=%d\ncase_lighting=%d\ndisc_install_only=%d\n",
             s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->negcon, s->jewel_cases, s->case_lighting, s->disc_install_only);
-    fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nfsr=%d\n", s->touch_mouse, s->run_ahead,
-            s->fast_effects, s->framegen, s->fsr);
+    fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nfsr=%d\nframe_pacing=%d\n", s->touch_mouse, s->run_ahead,
+            s->fast_effects, s->framegen, s->fsr, s->frame_pacing);
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         int v = s->ss_opt[i];

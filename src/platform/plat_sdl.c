@@ -1022,10 +1022,58 @@ void plat_audio_close(void)
     audio_rate = 0;
 }
 
+static double audio_ratio = 1.0, audio_pos; /* Optimal frame pacing: the sound is stretched by a hair (linear) */
+static int16_t audio_last[2];
+
+void plat_audio_set_ratio(double ratio)
+{
+    audio_ratio = ratio;
+}
+
 void plat_audio_push(const int16_t *frames, size_t frame_count)
 {
-    if (audio_device && frame_count)
+    if (!audio_device || !frame_count)
+        return;
+    if (audio_ratio > 0.9999 && audio_ratio < 1.0001)
+    {
+        audio_pos = 0;
+        audio_last[0] = frames[frame_count * 2 - 2];
+        audio_last[1] = frames[frame_count * 2 - 1];
         SDL_QueueAudio(audio_device, frames, (Uint32)(frame_count * 4));
+        return;
+    }
+    /* s[0] is the last frame of the block before, s[1..n] this block's; out[k] is read at audio_pos + k * ratio */
+    static int16_t *out;
+    static size_t out_cap;
+    size_t need = (size_t)((double)frame_count / audio_ratio) + 3;
+    if (need > out_cap)
+    {
+        free(out);
+        out = malloc(need * 4);
+        out_cap = out ? need : 0;
+        if (!out)
+            return;
+    }
+    size_t n = 0;
+    double p = audio_pos;
+    while (p < (double)frame_count && n < out_cap)
+    {
+        size_t i = (size_t)p;
+        double f = p - (double)i;
+        for (int c = 0; c < 2; ++c)
+        {
+            double a = i == 0 ? audio_last[c] : frames[(i - 1) * 2 + c];
+            double b = frames[i * 2 + c];
+            out[n * 2 + c] = (int16_t)(a + (b - a) * f);
+        }
+        ++n;
+        p += audio_ratio;
+    }
+    audio_pos = p - (double)frame_count;
+    audio_last[0] = frames[frame_count * 2 - 2];
+    audio_last[1] = frames[frame_count * 2 - 1];
+    if (n)
+        SDL_QueueAudio(audio_device, out, (Uint32)(n * 4));
 }
 
 size_t plat_audio_queued_frames(void)
@@ -1193,6 +1241,15 @@ void plat_set_fsr(bool on)
     vkp_set_fsr(on);
 #else
     (void)on;
+#endif
+}
+
+double plat_display_hz(void)
+{
+#if defined(__PROSPERO__)
+    return vkp_display_hz();
+#else
+    return 0.0;
 #endif
 }
 

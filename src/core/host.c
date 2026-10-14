@@ -204,19 +204,22 @@ void host_set_region_override(const char *region)
 
 static void apply_swanstation_options(const Settings *s)
 {
-    static const char *const regions[] = {"Auto", "NTSC-U", "PAL"};
-    static const char *const scales[] = {"1", "2", "4", "8", "16"};
-    int level = s->internal_res >= 1 && s->internal_res <= 5 ? s->internal_res : 1;
+    static const char *const regions[] = {"Auto", "NTSC-J", "NTSC-U", "PAL"};
+    int level = s->internal_res >= 1 && s->internal_res <= 16 ? s->internal_res : 1;
     if (game_fixes & GDB_NO_UPSCALING)
         level = 1;
+    char scale[8], cd_speed[8];
+    snprintf(scale, sizeof(scale), "%d", level);
+    int cd = s->cd_speed >= 1 && s->cd_speed <= 10 && !(game_fixes & GDB_NO_CD_SPEEDUP) ? s->cd_speed : 1;
+    snprintf(cd_speed, sizeof(cd_speed), "%d", cd);
     bool pgxp = s->pgxp && !(game_fixes & GDB_NO_PGXP);
     set_option("swanstation_GPU_Renderer", session_renderer == 1 ? "Software" : "Vulkan");
-    set_option("swanstation_GPU_ResolutionScale", scales[level - 1]);
+    set_option("swanstation_GPU_ResolutionScale", scale);
     set_option("swanstation_Console_Region", region_override ? region_override : regions[s->region % REGION_COUNT]);
     set_option("swanstation_GPU_TrueColor", s->true_colour ? "true" : "false");
     set_option("swanstation_GPU_PGXPEnable", pgxp ? "true" : "false");
     set_option("swanstation_BIOS_PatchFastBoot", s->boot_intro ? "false" : "true");
-    set_option("swanstation_CDROM_ReadSpeedup", s->cd_fast && !(game_fixes & GDB_NO_CD_SPEEDUP) ? "4" : "1");
+    set_option("swanstation_CDROM_ReadSpeedup", cd_speed);
     /* every other SwanStation option comes from Settings > (Display, Graphics, Controls, System) */
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {

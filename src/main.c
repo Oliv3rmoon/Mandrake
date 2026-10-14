@@ -1850,6 +1850,23 @@ static void game_screen(PadState *pads)
         runs = 2;
     else if (queued > per_frame * 5)
         runs = 0;
+    /* Optimal frame pacing: one frame per refresh, the sound stretched (at most 0.5 %) to keep the queue where it is.
+     * Only when the screen's rate and the core's are within 3 % (else 0 and 2 frames per refresh, as before). */
+    double sound_ratio = 1.0;
+    bool optimal_active = false;
+    {
+        const double display_hz = plat_display_hz(), core_hz = host_fps();
+        if (app.settings.frame_pacing && !app.settings.framegen && !back && !fast && display_hz > 20.0 && core_hz > 20.0 &&
+            display_hz > core_hz * 0.97 && display_hz < core_hz * 1.03)
+        {
+            runs = 1;
+            optimal_active = true;
+            const double target = (double)per_frame * 3.0;
+            double error = ((double)queued - target) / target * 0.05; /* too full: play a little faster */
+            sound_ratio = 1.0 + (error < -0.005 ? -0.005 : error > 0.005 ? 0.005 : error);
+        }
+    }
+    plat_audio_set_ratio(sound_ratio);
     static bool rewind_hint;
     if (back)
     {
@@ -1880,6 +1897,20 @@ static void game_screen(PadState *pads)
     update_lightbars();
     static uint64_t emu_us;
     static int emu_frames;
+    /* what the pacing did, for comparing Optimal frame pacing on and off: refreshes by frames run, the sound's stretch */
+    static int refreshes_by_runs[3], optimal_refreshes, pace_refreshes;
+    static double ratio_min = 2.0, ratio_max = 0.0;
+    if (!back && !fast)
+    {
+        ++refreshes_by_runs[runs < 0 ? 0 : runs > 2 ? 2 : runs];
+        ++pace_refreshes;
+        optimal_refreshes += optimal_active;
+        if (optimal_active)
+        {
+            ratio_min = sound_ratio < ratio_min ? sound_ratio : ratio_min;
+            ratio_max = sound_ratio > ratio_max ? sound_ratio : ratio_max;
+        }
+    }
     uint64_t emu_start = plat_ticks_us();
     /* Run-ahead: run the real frame, keep it, run 1 or 2 more to show where the
      * game is about to be (silently), then go back to the real one. What's on
@@ -1939,6 +1970,17 @@ static void game_screen(PadState *pads)
                   emu_us / 1000.0 / emu_frames, app.fps, host_frames_new(), host_frames_repeated());
         emu_us = 0;
         emu_frames = 0;
+        if (pace_refreshes)
+        {
+            SwanStationPS5_log("pacing: %s, %d refreshes: %d with no frame, %d with one, %d with two or more; sound speed %.4f to %.4f",
+                               optimal_refreshes * 2 > pace_refreshes ? "optimal" : "usual", pace_refreshes,
+                               refreshes_by_runs[0], refreshes_by_runs[1], refreshes_by_runs[2],
+                               optimal_refreshes ? ratio_min : 1.0, optimal_refreshes ? ratio_max : 1.0);
+            refreshes_by_runs[0] = refreshes_by_runs[1] = refreshes_by_runs[2] = 0;
+            optimal_refreshes = pace_refreshes = 0;
+            ratio_min = 2.0;
+            ratio_max = 0.0;
+        }
     }
     fps_frames += runs;
     if (now - fps_window_start >= 1000000)
@@ -2249,7 +2291,37 @@ int main(int argc, char **argv)
             game_screen(pads);
             break;
         case SCREEN_MENU: menu_screen(pressed); break;
-        case SCREEN_SETTINGS: settings_screen(pressed); break;
+        case SCREEN_SETTINGS:
+            if (app.game && !app.settings_preview && (pressed & BIT(BTN_MENU)) && settings_preview_allowed())
+            {
+                app.settings_preview = true;
+                app.settings_preview_time = 0;
+            }
+            else if (app.settings_preview && (pressed & BIT(BTN_MENU)))
+            {
+                app.settings_preview = false;
+                sfx_play(SFX_BACK);
+            }
+            if (app.settings_preview && app.game)
+            {
+                app.settings_preview_time += app.dt;
+                app_draw_game(255); /* the game stays paused: its picture, with the settings as they are now */
+                {
+                    const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f,
+                                slide = (1.0f - in) * (1.0f - in) * 80.0f;
+                    const float w = 660, h = 116, x = (plat_width() - w) * 0.5f, y = -slide;
+                    draw_rrect(x, y - TH_RADIUS, w, h + TH_RADIUS, TH_RADIUS, argb_alpha(TH_CARD_A(0xf0), in));
+                    icon_draw(ICON_DEVICE_TV, x + 30, y + 30, 56, argb_alpha(TH_TEXT, in));
+                    text_draw_fit(x + 120, y + 20, 30, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 140,
+                                  tr("Preview"));
+                    text_draw(x + 120, y + 66, 22, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT,
+                              tr("Press {Touchpad} to return to settings..."));
+                }
+                app_draw_toast();
+            }
+            else
+                settings_screen(pressed);
+            break;
         case SCREEN_CHEATS: cheats_screen(pressed); break;
         case SCREEN_ACHIEVEMENTS: achievements_screen(pressed); break;
         case SCREEN_MEMCARDS: memcards_screen(pressed); break;
@@ -2272,6 +2344,8 @@ int main(int argc, char **argv)
             cheats_apply(&app.cheats);
             play_widescreen(); /* the file may hold the game's widescreen code */
         }
+        if (app.screen != SCREEN_SETTINGS)
+            app.settings_preview = false;
         if (app.screen != SCREEN_GAME)
             ra_idle();
         draw_achievement();

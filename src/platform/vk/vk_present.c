@@ -824,6 +824,11 @@ void vkp_set_framegen(bool on, double core_hz, double speed, bool nominal)
     V.nominal = nominal;
 }
 
+double vkp_display_hz(void)
+{
+    return V.display_hz;
+}
+
 double vkp_framegen_hz(void)
 {
     return V.fg_wanted && V.fg_engaged && V.fg_made ? V.display_hz : 0.0;
