@@ -36,7 +36,7 @@ void config_defaults(Settings *s)
     s->update_check = true;
     snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/usb0/psx and /mnt/usb1/psx */
     s->bezel = false; /* the game's artwork frame, when there is one */
-    s->theme = 1; /* Neon Arcade (THEME_NEON in ui/theme.h) */
+    s->theme = THEME_GRAYRAT; /* Grayrat (ui/theme.h) */
     s->pgxp = true; /* no wobbling polygons */
     s->ra_popups = true;
     s->hd_textures = true;
