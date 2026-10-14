@@ -179,6 +179,9 @@ static const Row DISPLAY[] = {
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(integer_scale), OFF_ON, 2, 0},
     {NULL, "Smooth final scaling", "Softens the last step up to your TV's resolution.", K_TOGGLE,
      APPLY_NOW, SP_NONE, false, BOOL_FIELD(smooth), OFF_ON, 2, 0},
+    {NULL, "Video output",
+     "The refresh rate the picture is sent to your TV at: 60 Hz or 120 Hz. 120 Hz needs a TV that supports it; if not, it stays at 60 Hz. It takes effect the next time the app starts.",
+     K_CHOICE, APPLY_NEXT_LAUNCH, SP_NONE, true, INT_FIELD(video_out), VIDEO_OUTS, 2, 0},
     {NULL, "Video sync", "On: the game is synchronised to the screen: one frame per refresh, so motion is smoother, and the sound is sped up or slowed down by a hair (under 0.5 %), which may bring a barely noticeable change in pitch. Off: it is synchronised to the sound: the audio is exact, but now and then a frame is repeated or skipped. It only works when the screen's rate and the game's are nearly equal (60 Hz screen and an NTSC game); otherwise the sound sync is used.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(frame_pacing), OFF_ON, 2, 0},
     {"Look", "CRT scanlines", "Dark lines between the picture's lines, like an old TV.", K_CHOICE, APPLY_NOW,
@@ -426,25 +429,10 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
     for (int c = 0; c < ncat; ++c)
         for (int i = 0; i < SS_OPT_COUNT; ++i)
             extra += SS_OPTS[i].category == categories[c];
-    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 5));
+    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 4));
     if (!rows)
         return;
     int n = 0;
-    if (base == DISPLAY)
-    {
-        Row v = {"Picture",
-                 "Video output",
-                 "The refresh rate the picture is sent to your TV at: 60 Hz or 120 Hz. 120 Hz needs a TV that supports it; if not, it stays at 60 Hz. It takes effect the next time the app starts.",
-                 K_CHOICE,
-                 APPLY_NEXT_LAUNCH,
-                 SP_NONE,
-                 true,
-                 INT_FIELD(video_out),
-                 VIDEO_OUTS,
-                 2,
-                 0};
-        rows[n++] = v;
-    }
     if (aspect >= 0)
     {
         Row r = {"Picture",
@@ -459,7 +447,6 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                  SS_OPTS[aspect].labels,
                  SS_OPTS[aspect].count,
                  0};
-        r.group = base == DISPLAY ? NULL : r.group;
         rows[n++] = r;
         if (wide >= 0)
         {
