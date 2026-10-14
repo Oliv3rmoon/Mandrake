@@ -6,7 +6,7 @@
  *
  * The database (data/resources/gamedb.yaml in github.com/stenzek/duckstation)
  * isn't part of SwanStationPS5: the console downloads it once and keeps a compact
- * index, <root>/cache/gamedb-3.txt (one line per serial, sorted), refreshed
+ * index, <root>/cache/gamedb-4.txt (one line per serial, sorted), refreshed
  * after a month. Until it's there, every lookup simply finds nothing.
  */
 #include "gamedb.h"
@@ -56,6 +56,21 @@ static const struct
     {"DisableAutoAnalogMode", GDB_NO_AUTO_ANALOG},
     {"DisableCDROMReadSpeedup", GDB_NO_CD_SPEEDUP},
     {"DisableCDROMSpeedupOnMDEC", GDB_NO_CD_SPEEDUP},
+    {"ForceRecompilerICache", GDB_ICACHE},
+    {"ForcePGXPVertexCache", GDB_PGXP_VCACHE},
+    {"DisablePGXPCulling", GDB_NO_PGXP_CULL},
+    {"DisableTrueColor", GDB_NO_TRUE_COLOR},
+    {"ForceSoftwareRendererForReadbacks", GDB_SW_READBACKS},
+};
+
+/* the database's own settings for a disc that are applied, and the short name each has in the index */
+static const struct
+{
+    const char *name, *tag;
+} SETTINGS[] = {
+    {"displayActiveStartOffset", "as"}, {"displayActiveEndOffset", "ae"}, {"displayLineStartOffset", "ls"},
+    {"dmaMaxSliceTicks", "ds"},         {"dmaHaltTicks", "dh"},           {"gpuPGXPTolerance", "pt"},
+    {"gpuPGXPPreserveProjFP", "pp"},
 };
 
 typedef struct
@@ -66,6 +81,7 @@ typedef struct
     char name[128], genre[64], developer[64], publisher[64];
     int year, min_players, max_players;
     unsigned flags;
+    char settings[128]; /* "as=-8;ds=100;...", from SETTINGS */
 } Record;
 
 static void unquote(char *out, size_t size, const char *v)
@@ -99,8 +115,8 @@ static void write_record(FILE *out, const Record *r)
         char serial[16];
         if (!disc_format_serial(k < 0 ? r->serial : r->codes[k], serial, sizeof(serial)))
             continue;
-        fprintf(out, "%s\t%s\t%s\t%d\t%s\t%s\t%d\t%d\t%x\n", serial, r->name, r->genre, r->year, r->developer,
-                r->publisher, r->min_players, r->max_players, r->flags);
+        fprintf(out, "%s\t%s\t%s\t%d\t%s\t%s\t%d\t%d\t%x\t%s\n", serial, r->name, r->genre, r->year,
+                r->developer, r->publisher, r->min_players, r->max_players, r->flags, r->settings);
     }
 }
 
@@ -165,6 +181,27 @@ static bool build_index(const char *yaml, const char *index)
                 for (size_t i = 0; i < sizeof(WORDS) / sizeof(WORDS[0]); ++i)
                     if (!strcmp(item, WORDS[i].name))
                         r.flags |= WORDS[i].flag;
+            continue;
+        }
+        if (!strncmp(line, "    ", 4) && !strcmp(section, "settings"))
+        {
+            char *colon = strchr(line, ':');
+            if (!colon)
+                continue;
+            *colon = '\0';
+            char value[32];
+            unquote(value, sizeof(value), colon + 1);
+            if (!strcmp(value, "true"))
+                str_copy(value, sizeof(value), "1");
+            else if (!strcmp(value, "false"))
+                str_copy(value, sizeof(value), "0");
+            for (size_t i = 0; i < sizeof(SETTINGS) / sizeof(SETTINGS[0]); ++i)
+                if (!strcmp(line + 4, SETTINGS[i].name) && value[0])
+                {
+                    size_t used = strlen(r.settings);
+                    snprintf(r.settings + used, sizeof(r.settings) - used, "%s%s=%s", used ? ";" : "", SETTINGS[i].tag,
+                             value);
+                }
             continue;
         }
         if (!strncmp(line, "    ", 4) && !strcmp(section, "metadata"))
@@ -282,9 +319,9 @@ static void load(void)
     while (fgets(line, sizeof(line), f))
     {
         line[strcspn(line, "\r\n")] = '\0';
-        char *field[9] = {0};
+        char *field[10] = {0};
         char *p = line;
-        for (int i = 0; i < 9 && p; ++i)
+        for (int i = 0; i < 10 && p; ++i)
         {
             field[i] = p;
             p = strchr(p, '\t');
@@ -313,6 +350,34 @@ static void load(void)
         g->min_players = atoi(field[6]);
         g->max_players = atoi(field[7]);
         g->flags = (unsigned)strtoul(field[8], NULL, 16);
+        for (char *tag = field[9] ? field[9] : (char *)""; *tag;)
+        {
+            char *end = strchr(tag, ';');
+            if (end)
+                *end = '\0';
+            const char *eq = strchr(tag, '=');
+            if (eq && eq - tag == 2)
+            {
+                int n = atoi(eq + 1);
+                if (!strncmp(tag, "as", 2))
+                    g->active_start = n, g->set |= GDT_ACTIVE_START;
+                else if (!strncmp(tag, "ae", 2))
+                    g->active_end = n, g->set |= GDT_ACTIVE_END;
+                else if (!strncmp(tag, "ls", 2))
+                    g->line_start = n, g->set |= GDT_LINE_START;
+                else if (!strncmp(tag, "ds", 2))
+                    g->dma_slice = n, g->set |= GDT_DMA_SLICE;
+                else if (!strncmp(tag, "dh", 2))
+                    g->dma_halt = n, g->set |= GDT_DMA_HALT;
+                else if (!strncmp(tag, "pt", 2))
+                    g->pgxp_tolerance = (float)atof(eq + 1), g->set |= GDT_PGXP_TOLERANCE;
+                else if (!strncmp(tag, "pp", 2))
+                    g->pgxp_proj = n != 0, g->set |= GDT_PGXP_PROJ;
+            }
+            if (!end)
+                break;
+            tag = end + 1;
+        }
     }
     fclose(f);
     SwanStationPS5_log("gamedb: %d discs known", game_count);
@@ -320,7 +385,7 @@ static void load(void)
 
 void gamedb_start(void)
 {
-    path_join(index_path, sizeof(index_path), app.paths.root, "cache/gamedb-3.txt");
+    path_join(index_path, sizeof(index_path), app.paths.root, "cache/gamedb-4.txt");
     path_join(yaml_path, sizeof(yaml_path), app.paths.root, "cache/gamedb.yaml");
     char dir[SwanStationPS5_PATH_MAX];
     path_join(dir, sizeof(dir), app.paths.root, "cache");

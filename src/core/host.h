@@ -6,6 +6,7 @@
 #define SwanStationPS5_HOST_H
 
 #include "../SwanStationPS5.h"
+#include "../gamedb.h"
 
 /* serial: the disc's (SLUS-00662), for the emulator choice and the memory
  * card; may be empty. */
@@ -30,7 +31,7 @@ void host_set_special(int device);
 bool host_analog_mode(int port); /* the controller in this port is in analog mode (the core said so) */
 void host_apply_devices(const Settings *settings); /* the controller types, while a game runs */
 /* Known fixes for the next host_load (GDB_* from gamedb.h): settings the game breaks with. */
-void host_set_fixes(unsigned flags);
+void host_set_fixes(unsigned flags, const GameInfo *info);
 /* How hard the game is rumbling this player's controller now, 0..1. */
 float host_rumble_level(int port);
 void host_run_frame(void);

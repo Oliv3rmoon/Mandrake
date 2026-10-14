@@ -1414,8 +1414,11 @@ static const Entry ENTRIES[] = {
       "欧州版ゲームを北米版と同じ60Hzで動かし、滑らかで本来の速さになります。一部のゲームは不具合が出ます。"}},
     {{"Known game fixes", "Correctifs connus", "Correções conhecidas", "Correcciones conocidas",
       "既知の修正"}},
-    {{"Turns off, for that game only, the settings DuckStation's game database says it breaks with (PGXP, widescreen, upscaling, filtering).", "Désactive, pour ce jeu seulement, les réglages qui le cassent selon la base de jeux de DuckStation (PGXP, écran large, résolution, filtrage).", "Desliga, só para esse jogo, as definições que o estragam segundo a base de jogos do DuckStation (PGXP, ecrã panorâmico, resolução, filtragem).", "Desactiva, solo para ese juego, los ajustes que lo rompen según la base de juegos de DuckStation (PGXP, pantalla ancha, resolución, filtrado).",
-      "DuckStationのゲームデータベースで不具合があるとされる設定(PGXP、ワイド、高解像度、フィルタ)を、そのゲームだけオフにします。"}},
+    {{"For that game only, applies what the game database knows it needs: turns off the settings it breaks with (PGXP, widescreen, upscaling, filtering) and turns on what it requires (CPU cache, PGXP options, screen and DMA timing).",
+      "Pour ce jeu seulement, applique ce que la base de jeux sait qu'il lui faut : désactive les réglages qui le cassent (PGXP, écran large, résolution, filtrage) et active ce qu'il exige (cache du CPU, options PGXP, réglages d'écran et de DMA).",
+      "Só para esse jogo, aplica o que a base de jogos sabe que ele precisa: desliga as definições com que falha (PGXP, ecrã largo, resolução, filtragem) e liga o que exige (cache do CPU, opções do PGXP, ajustes de ecrã e de DMA).",
+      "Solo para ese juego, aplica lo que la base de datos de juegos sabe que necesita: desactiva los ajustes con los que falla (PGXP, pantalla ancha, resolución, filtrado) y activa lo que exige (caché de la CPU, opciones de PGXP, ajustes de pantalla y de DMA).",
+      "そのゲームだけ、ゲームデータベースが把握している必要な設定を適用します。不具合の出る設定(PGXP、ワイド、高解像度、フィルタ)をオフにし、必要な設定(CPUキャッシュ、PGXPの各オプション、画面とDMAのタイミング)をオンにします。"}},
     /* ---- 2.2: controllers, picture, run-ahead */
     {{"Run-ahead", "Anticipation", "Antecipação", "Anticipación",
       "先読み"}},

@@ -308,7 +308,7 @@ static const Row SYSTEM[] = {
      SP_NONE, false, INT_FIELD(cd_speed), CD_SPEEDS, 10, 1},
     {NULL, "PS1 startup intro", "Shows the PlayStation logo and sound before the game, as a real console does. Needs your own BIOS.",
      K_TOGGLE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(boot_intro), OFF_ON, 2, 0},
-    {NULL, "Known game fixes", "Turns off, for that game only, the settings DuckStation's game database says it breaks with (PGXP, widescreen, upscaling, filtering).",
+    {NULL, "Known game fixes", "For that game only, applies what the game database knows it needs: turns off the settings it breaks with (PGXP, widescreen, upscaling, filtering) and turns on what it requires (CPU cache, PGXP options, screen and DMA timing).",
      K_TOGGLE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(game_fixes), OFF_ON, 2, 0},
     {"Playing", "Quick resume", "Saves when you leave a game, so the shelf can offer Continue.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(quick_resume), OFF_ON, 2, 0},

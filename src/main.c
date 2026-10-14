@@ -1481,9 +1481,9 @@ void app_start_game(int index, bool resume)
          * games that use the sticks get it in analog mode (Gran Turismo...) */
         if (info && (info->flags & GDB_ANALOG) && !(info->flags & GDB_NO_AUTO_ANALOG))
             fixes |= GDB_ANALOG;
-        host_set_fixes(fixes);
-        if (fixes)
-            SwanStationPS5_log("start: known fixes %x (DuckStation's database)", fixes);
+        host_set_fixes(fixes, info && app.settings.game_fixes ? info : NULL);
+        if (fixes || (info && app.settings.game_fixes && info->set))
+            SwanStationPS5_log("start: known fixes %x, values %x (game database)", fixes, info ? info->set : 0u);
     }
     SwanStationPS5_log("start: %s (%s) from %s%s", shelf_game_title(g), g->serial, g->path,
               app.game_has_own ? " with its own settings" : "");
@@ -1582,7 +1582,7 @@ void app_start_bios(void)
     app.play_seconds = 0;
     host_set_gun(0);
     host_set_special(0);
-    host_set_fixes(0);
+    host_set_fixes(0, NULL);
     static const char *const boot_regions[] = {"NTSC-U", "NTSC-J", "PAL"};
     const char *boot_region = boot_regions[app.global.bios_start >= 0 && app.global.bios_start < 3 ? app.global.bios_start : 0];
     host_set_region_override(boot_region); /* the BIOS the console's choice for that region names */

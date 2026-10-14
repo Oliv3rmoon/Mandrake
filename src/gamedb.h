@@ -29,9 +29,26 @@ enum
     GDB_NO_MULTITAP = 1u << 15,
     GDB_NO_AUTO_ANALOG = 1u << 16, /* must start in digital mode */
     GDB_NO_CD_SPEEDUP = 1u << 17,  /* breaks with Fast CD loading */
+    GDB_ICACHE = 1u << 18,         /* needs the recompiler's instruction cache */
+    GDB_PGXP_VCACHE = 1u << 19,    /* PGXP needs the vertex cache */
+    GDB_NO_PGXP_CULL = 1u << 20,   /* PGXP culling correction breaks it */
+    GDB_NO_TRUE_COLOR = 1u << 21,
+    GDB_SW_READBACKS = 1u << 22,   /* needs the software renderer for VRAM readbacks */
+};
+enum
+{
+    /* values of the database's own settings for a disc, in GameInfo.set */
+    GDT_ACTIVE_START = 1u << 0,
+    GDT_ACTIVE_END = 1u << 1,
+    GDT_LINE_START = 1u << 2,
+    GDT_DMA_SLICE = 1u << 3,
+    GDT_DMA_HALT = 1u << 4,
+    GDT_PGXP_TOLERANCE = 1u << 5,
+    GDT_PGXP_PROJ = 1u << 6,
 };
 #define GDB_FIXES (GDB_NO_WIDESCREEN | GDB_NO_PGXP | GDB_PGXP_CPU | GDB_NO_UPSCALING | GDB_NO_TEXTURE_FILTER | \
-                   GDB_NO_SPRITE_FILTER | GDB_DEINTERLACE | GDB_NO_MULTITAP | GDB_NO_CD_SPEEDUP)
+                   GDB_NO_SPRITE_FILTER | GDB_DEINTERLACE | GDB_NO_MULTITAP | GDB_NO_CD_SPEEDUP | GDB_ICACHE | GDB_PGXP_VCACHE | \
+                   GDB_NO_PGXP_CULL | GDB_NO_TRUE_COLOR | GDB_SW_READBACKS)
 
 typedef struct
 {
@@ -39,6 +56,10 @@ typedef struct
     char name[128], genre[64], developer[64], publisher[64];
     int year, min_players, max_players; /* 0 when unknown */
     unsigned flags;                     /* GDB_* */
+    unsigned set;                       /* GDT_*: which of the values below the database gives */
+    int active_start, active_end, line_start, dma_slice, dma_halt;
+    float pgxp_tolerance;
+    bool pgxp_proj;
 } GameInfo;
 
 /* At start: downloads the database when there's no index yet (or it's a month

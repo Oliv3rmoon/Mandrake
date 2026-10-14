@@ -5,7 +5,7 @@
 #
 #   tools/build-swanstation.sh   -> build/swanstation-ps5/libswanstation.a
 #
-# Source: third_party/swanstation + tools/patches/SwanStationPS5_by_AngelXex.patch. The
+# Source: third_party/swanstation + tools/patches/SSPS5.patch. The
 # port is that one patch: the x64 recompiler's code buffer comes from
 # ps5platform/exec.h instead of an RWX mmap a title cannot make, the 48 MiB
 # in-image code buffer is dropped, and the 4 GiB MMap fastmem scheme (aliased
@@ -39,7 +39,7 @@ archive="$out/libswanstation_hw.a"
 
 # SwanStationPS5's changes live as patches (the submodule stays pristine); each is
 # applied once.
-for patch in "$root"/tools/patches/SwanStationPS5_by_AngelXex.patch; do
+for patch in "$root"/tools/patches/SSPS5.patch; do
     [[ -f $patch ]] || continue
     if git -C "$core" apply --ignore-whitespace --reverse --check "$patch" 2>/dev/null; then
         continue # already applied
@@ -50,7 +50,7 @@ done
 
 # Rebuild only when the source revision, this script or a patch changed.
 stamp="$out/.stamp"
-want="$(git -C "$core" rev-parse HEAD) $(cat "$0" "$root/tools/swanstation-archive.mk" "$root"/tools/patches/SwanStationPS5_by_AngelXex.patch 2>/dev/null | sha256sum | cut -c1-16)"
+want="$(git -C "$core" rev-parse HEAD) $(cat "$0" "$root/tools/swanstation-archive.mk" "$root"/tools/patches/SSPS5.patch 2>/dev/null | sha256sum | cut -c1-16)"
 if [[ ! -f $out/libswanstation.a || ! -f $stamp || $(cat "$stamp") != "$want" ]]; then
     echo "==> [swanstation] building SwanStation ($jobs jobs)"
     make -C "$core" -f Makefile.libretro clean >/dev/null 2>&1 || true

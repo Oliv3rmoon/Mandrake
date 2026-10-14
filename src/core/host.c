@@ -126,6 +126,7 @@ static bool disk_available;
 static bool loaded;
 static size_t state_size; /* host_state_size(), measured once per game */
 static unsigned game_fixes; /* GDB_* fixes for the next game (gamedb.h) */
+static GameInfo game_info;  /* the database's values for it (GDT_* in .set), empty when there are none */
 static int session_renderer; /* Settings > Graphics > Renderer as the game was loaded: it cannot change while playing */
 static int lid_open_frames;   /* frames left before the lid closes after a disc change */
 static bool speculative;      /* run-ahead's look-ahead frames: run, drawn, not heard or felt */
@@ -202,6 +203,56 @@ void host_set_region_override(const char *region)
     region_override = region;
 }
 
+static void set_option_int(const char *key, int value)
+{
+    char text[16];
+    snprintf(text, sizeof(text), "%d", value);
+    set_option(key, text);
+}
+
+/* What the game database knows the game needs, over the player's own settings: what it breaks with is turned off
+ * (the rest is in apply_swanstation_options) and what it requires is turned on, with its screen and DMA timings. */
+static void apply_game_fixes(void)
+{
+    if (!game_fixes && !game_info.set)
+        return;
+    if (game_fixes & GDB_NO_WIDESCREEN)
+        set_option("swanstation_GPU_WidescreenHack", "false");
+    if (game_fixes & GDB_PGXP_CPU)
+        set_option("swanstation_GPU_PGXPCPU", "true");
+    if (game_fixes & GDB_NO_TEXTURE_FILTER)
+        set_option("swanstation_GPU_TextureFilter", "Nearest");
+    if (game_fixes & GDB_ICACHE)
+        set_option("swanstation_CPU_RecompilerICache", "true");
+    if (game_fixes & GDB_PGXP_VCACHE)
+        set_option("swanstation_GPU_PGXPVertexCache", "true");
+    if (game_fixes & GDB_NO_PGXP_CULL)
+        set_option("swanstation_GPU_PGXPCulling", "false");
+    if (game_fixes & GDB_NO_TRUE_COLOR)
+        set_option("swanstation_GPU_TrueColor", "false");
+    if (game_fixes & GDB_SW_READBACKS)
+        set_option("swanstation_GPU_UseSoftwareRendererForReadbacks", "true");
+    const GameInfo *g = &game_info;
+    if (g->set & GDT_ACTIVE_START)
+        set_option_int("swanstation_Display_ActiveStartOffset", g->active_start);
+    if (g->set & GDT_ACTIVE_END)
+        set_option_int("swanstation_Display_ActiveEndOffset", g->active_end);
+    if (g->set & GDT_LINE_START)
+        set_option_int("swanstation_Display_LineStartOffset", g->line_start);
+    if (g->set & GDT_DMA_SLICE)
+        set_option_int("swanstation_DMA_MaxSliceTicks", g->dma_slice);
+    if (g->set & GDT_DMA_HALT)
+        set_option_int("swanstation_DMA_HaltTicks", g->dma_halt);
+    if (g->set & GDT_PGXP_TOLERANCE)
+    {
+        char text[16];
+        snprintf(text, sizeof(text), "%.2f", g->pgxp_tolerance);
+        set_option("swanstation_GPU_PGXPTolerance", text);
+    }
+    if (g->set & GDT_PGXP_PROJ)
+        set_option("swanstation_GPU_PGXPPreserveProjFP", g->pgxp_proj ? "true" : "false");
+}
+
 static void apply_swanstation_options(const Settings *s)
 {
     static const char *const regions[] = {"Auto", "NTSC-J", "NTSC-U", "PAL"};
@@ -235,8 +286,10 @@ static void apply_swanstation_options(const Settings *s)
         set_option(SS_OPTS[i].key, value);
     }
     set_option("swanstation_CPU_FastmemMode", "LUT");
+    apply_game_fixes();
     /* controls: Settings > Controls decides these, not the core's own rows */
-    set_option("swanstation_ControllerPorts_MultitapMode", s->multitap ? "Port1Only" : "Disabled");
+    set_option("swanstation_ControllerPorts_MultitapMode",
+               s->multitap && !(game_fixes & GDB_NO_MULTITAP) ? "Port1Only" : "Disabled");
     set_option("swanstation_Controller_EnableRumble", "true"); /* Vibration off mutes it in rumble_cb */
     const char *stick_dpad = s->analog && s->stick_dpad == STICK_DPAD_AUTO ? "true" : "false";
     for (int port = 1; port <= 4; ++port)
@@ -423,9 +476,12 @@ void host_set_special(int device)
     special_device = device;
 }
 
-void host_set_fixes(unsigned flags)
+void host_set_fixes(unsigned flags, const GameInfo *info)
 {
     game_fixes = flags;
+    memset(&game_info, 0, sizeof(game_info));
+    if (info)
+        game_info = *info;
 }
 static int rumble_feel;          /* Settings > Controls > Rumble feel */
 static uint16_t rumble_strong[SwanStationPS5_MAX_PADS], rumble_weak[SwanStationPS5_MAX_PADS];
