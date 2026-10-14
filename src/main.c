@@ -16,6 +16,7 @@
 #include "gamedb.h"
 #include "profiles.h"
 #include "covers.h"
+#include "disceta.h"
 #include "discimport.h"
 #include "i18n.h"
 #include "platform/platform.h"
@@ -1363,8 +1364,18 @@ static void disc_auto_frame(void)
 
 static void import_draw(void)
 {
+    static Eta eta;
+    static int eta_next;
+    static long eta_left_s;
+    static double eta_at;
+    const double now = SDL_GetTicks() / 1000.0;
     if (discimport_state() != DI_RUNNING)
+    {
+        eta = (Eta){0};
+        eta_next = 0;
+        eta_left_s = -1;
         return;
+    }
     const char *title = discimport_title();
     char msg[200];
     if (title[0])
@@ -1381,6 +1392,26 @@ static void import_draw(void)
     float p = discimport_permille() / 1000.0f;
     char pct[16];
     snprintf(pct, sizeof(pct), "%d%%", discimport_permille() / 10);
+    if (discimport_dumping() && title[0])
+    {
+        if (eta_next == 0)
+        {
+            eta.prev_time = now;
+            eta_next = 5;
+            eta_left_s = -1;
+        }
+        else if (discimport_permille() / 10 >= eta_next)
+        {
+            long l = eta_left(&eta, p, now, discimport_total_sectors());
+            if (l >= 0)
+            {
+                eta_left_s = l;
+                eta_at = now;
+            }
+            while (eta_next <= discimport_permille() / 10)
+                eta_next += 5;
+        }
+    }
     draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
     draw_rrect(x + 32, y + 32, cw, ch, TH_RADIUS_SMALL, TH_DIVIDER);
     if (cover)
@@ -1396,6 +1427,18 @@ static void import_draw(void)
     draw_rrect(tx, y + 108, bar_w, 12, 6, TH_DIVIDER);
     draw_rrect(tx, y + 108, fmaxf(12.0f, bar_w * fminf(p, 1.0f)), 12, 6, TH_FOCUS);
     text_draw(tx + tw_area, y + 94, 26, FONT_REGULAR, TH_TEXT, ALIGN_RIGHT, pct);
+    if (eta_left_s >= 0)
+    {
+        long sec = (long)(eta_left_s - (now - eta_at) + 2) / 5 * 5;
+        char when[64];
+        if (sec < 5)
+            sec = 5;
+        if (sec >= 60)
+            snprintf(when, sizeof(when), tr("%ld min %ld s left"), sec / 60, sec % 60);
+        else
+            snprintf(when, sizeof(when), tr("%ld s left"), sec);
+        text_draw(tx, y + 138, 24, FONT_REGULAR, TH_TEXT_DIM, ALIGN_LEFT, when);
+    }
     /* bottom right: how to cancel */
     const char *cancel = tr("Cancel (hold)");
     const float cancel_w = text_width(22, FONT_REGULAR, cancel);
