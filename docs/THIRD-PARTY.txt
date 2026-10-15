@@ -15,6 +15,11 @@ RADV, Mesa's Vulkan driver for AMD GPUs (PS5 port by Mihawk-99)
   MIT License
   https://gitlab.freedesktop.org/mesa/mesa
 
+libnfs (NFS client, games on NFS servers)
+  LGPL-2.1-or-later (protocol files BSD-2-Clause), used under GPL-3.0: the sources are in third_party/libnfs
+  https://github.com/sahlberg/libnfs - console configuration and fixes from
+  https://github.com/tutifrutas/SwanStationPS5 (from PS5SX2, https://github.com/Swordpdf/PS5SX2)
+
 rcheevos (RetroAchievements)
   MIT License - LICENSE-rcheevos.txt
   https://github.com/RetroAchievements/rcheevos

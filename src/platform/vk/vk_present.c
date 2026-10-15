@@ -1729,10 +1729,14 @@ static VkImageView fsr_scale(VkCommandBuffer cb, int f, int out_w, int out_h)
 static void royale_final(VkCommandBuffer cb, int f, int x, int y, int w, int h)
 {
     VkViewport viewport = {(float)x, (float)y, (float)w, (float)h, 0, 1};
-    VkRect2D scissor = {{x, y}, {(uint32_t)w, (uint32_t)h}};
+    const int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
+    const int x1 = x + w > (int)V.extent.width ? (int)V.extent.width : x + w;
+    const int y1 = y + h > (int)V.extent.height ? (int)V.extent.height : y + h;
+    VkRect2D scissor = {{x0, y0}, {(uint32_t)(x1 > x0 ? x1 - x0 : 0), (uint32_t)(y1 > y0 ? y1 - y0 : 0)}};
     vkCmdSetViewport(cb, 0, 1, &viewport);
     vkCmdSetScissor(cb, 0, 1, &scissor);
-    royale_draw(cb, f, R.n - 1);
+    if (scissor.extent.width && scissor.extent.height)
+        royale_draw(cb, f, R.n - 1);
     viewport = (VkViewport){0, 0, (float)V.extent.width, (float)V.extent.height, 0, 1};
     scissor = (VkRect2D){{0, 0}, V.extent};
     vkCmdSetViewport(cb, 0, 1, &viewport);

@@ -58,6 +58,7 @@ typedef struct
 extern App app;
 
 void app_toast(const char *message); /* translated, shown for 2.5 s */
+void app_nfs_notify(void); /* the next NFS mount says in a notice how it went */
 void app_toast_for(const char *message, float seconds); /* the same, for a chosen time */
 void app_draw_toast(void);
 /* A message in a square box in the middle of the screen, over whatever screen is up. It stays until X is pressed. */
@@ -92,6 +93,8 @@ void settings_screen(uint32_t pressed);
 /* Manual crop (Settings > Display): changes the picture's width / height (percent) and position (thousandths of the
  * screen) in the settings the row edits; reset puts it back as it was drawn by default. */
 void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset);
+bool manual_crop_locked(void);
+void manual_crop_lock(bool on, bool snap);
 bool settings_preview_allowed(void); /* the main settings view (not the button-mapping, players or profiles pages) */
 void menu_screen(uint32_t pressed);
 void cheats_screen(uint32_t pressed);
@@ -135,6 +138,7 @@ struct PlatTexture *shelf_no_cover(void);
 bool shelf_show_game(int library_index); /* moves the cursor to the game (the shelf shows all if its category hides it) */
 bool shelf_play_game(int library_index, bool direct);
 void shelf_library_changed(void); /* after a rescan */
+void shelf_show_all(void);        /* after a rescan the player asked for: the category All, without a filter */
 
 /* Bottom hint bar: pairs of (PadGlyph, label), then an optional right-hand text. */
 void app_draw_hints(const int *glyphs, const char *const *labels, int count, const char *right);

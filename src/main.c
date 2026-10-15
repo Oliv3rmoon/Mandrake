@@ -22,6 +22,7 @@
 #include "platform/platform.h"
 #include "platform/ps5_crash.h"
 #include "platform/vk/vk_probe.h"
+#include "nfs/nfs.h"
 #include "play.h"
 #include "remote.h"
 #include "update.h"
@@ -416,6 +417,14 @@ void app_restart_covers(void)
     covers_download_loaded = app.global.cover_download;
 }
 
+static bool nfs_rescan_from_mount; /* the rescan that follows a mount does not start another */
+static bool nfs_notify;            /* say how the mount went (the player asked for it) */
+
+void app_nfs_notify(void)
+{
+    nfs_notify = true;
+}
+
 void app_rescan(void)
 {
     if (app.settings_game)
@@ -432,7 +441,8 @@ void app_rescan(void)
     static const char *const names[] = {"SwanStationPS5", "PSXS5"};
     static char drive_roots[2 * 2 * 4][SwanStationPS5_PATH_MAX];
     static char usb_roots[2][SwanStationPS5_PATH_MAX];
-    const char *roots[2 + 2 * 2 * 4 + 2];
+    static char nfs_roots[NFS_MAX_SHARES][NFS_PATH_MAX];
+    const char *roots[2 + 2 * 2 * 4 + 2 + NFS_MAX_SHARES];
     int root_count = 0;
     roots[root_count++] = app.paths.games;
     roots[root_count++] = "/data/PSXS5/games";
@@ -453,6 +463,14 @@ void app_rescan(void)
             snprintf(usb_roots[u], SwanStationPS5_PATH_MAX, "/mnt/usb%d/%s", u, app.global.usb_folder);
             roots[root_count++] = usb_roots[u];
         }
+    /* Settings > System > NFS shares: the ones that are not mounted are tried on their own thread, so a rescan never
+     * waits for a server; the library is scanned again (in the main loop) when that is over */
+    if (app.global.nfs_shares[0] && !app.game && !nfs_rescan_from_mount)
+        nfs_mount_begin(8000);
+    const int nfs_first = root_count;
+    const int nfs_count = nfs_rescan_from_mount || app.game ? nfs_mount_points(nfs_roots, NFS_MAX_SHARES) : 0;
+    for (int n = 0; n < nfs_count; ++n)
+        roots[root_count++] = nfs_roots[n];
     char index[SwanStationPS5_PATH_MAX];
     path_join(index, sizeof(index), app.paths.root, "library.txt");
     if (app.sandboxed)
@@ -460,6 +478,7 @@ void app_rescan(void)
         /* Can't list folders: the sync tool's index is the library. */
         if (!library_load_index(&app.library, index))
             app.library.count = 0;
+        library_scan_append(&app.library, roots + nfs_first, nfs_count); /* the shares are listed by the app itself */
     }
     else
     {
@@ -467,7 +486,10 @@ void app_rescan(void)
         if (app.library.count == 0)
             library_load_index(&app.library, index);
     }
-    shelf_library_changed();
+    if (nfs_rescan_from_mount)
+        shelf_library_changed(); /* the shares came up on their own: the player stays where they were */
+    else
+        shelf_show_all();
     app_restart_covers();
 }
 
@@ -1458,6 +1480,21 @@ static void import_draw(void)
     }
 }
 
+static void crop_ratio_text(char *out, size_t size, float r)
+{
+    static const struct
+    {
+        int w, h;
+    } COMMON[] = {{4, 3}, {16, 9}, {3, 2}, {1, 1}, {5, 4}, {8, 7}, {2, 1}, {21, 9}, {10, 7}, {16, 10}, {19, 9}};
+    for (size_t i = 0; i < sizeof(COMMON) / sizeof(COMMON[0]); ++i)
+        if (fabsf(r * COMMON[i].h / COMMON[i].w - 1.0f) < 0.01f)
+        {
+            snprintf(out, size, "%d:%d", COMMON[i].w, COMMON[i].h);
+            return;
+        }
+    snprintf(out, size, "%.2f:1", r);
+}
+
 void app_start_game(int index, bool resume)
 {
     if (index < 0 || index >= app.library.count)
@@ -2275,6 +2312,12 @@ int main(int argc, char **argv)
     }
     config_load(&app.global, app.paths.config);
     app.settings = app.global;
+    if (app.global.nfs_shares[0])
+    {
+        char nfs_error[256];
+        if (!nfs_set_shares(app.global.nfs_shares, nfs_error, sizeof(nfs_error)))
+            SwanStationPS5_log("nfs: %s", nfs_error);
+    }
     i18n_set(app.global.language);
     theme_apply(app.global.theme);
     stats_load(app.paths.user);
@@ -2369,6 +2412,7 @@ int main(int argc, char **argv)
             {
                 app.settings_preview = true;
                 app.settings_preview_time = 0;
+                manual_crop_lock(true, false);
             }
             else if (app.settings_preview && (pressed & BIT(BTN_MENU)))
             {
@@ -2396,6 +2440,8 @@ int main(int argc, char **argv)
                     const bool move = (pads[app_nav_pad()].buttons & BIT(BTN_R1)) != 0;
                     const int up = (pressed & BIT(BTN_UP)) != 0, down = (pressed & BIT(BTN_DOWN)) != 0,
                               left = (pressed & BIT(BTN_LEFT)) != 0, right = (pressed & BIT(BTN_RIGHT)) != 0;
+                    if (pressed & BIT(BTN_L1))
+                        manual_crop_lock(!manual_crop_locked(), true);
                     if (pressed & BIT(BTN_SQUARE))
                         manual_crop_edit(0, 0, 0, 0, true);
                     else if (move)
@@ -2407,7 +2453,7 @@ int main(int argc, char **argv)
                 if (app.settings.manual_crop)
                 {
                     const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f;
-                    const float w = 900, h = 250, x = (plat_width() - w) * 0.5f, y = plat_height() - h - 36 + (1.0f - in) * 60.0f;
+                    const float w = 900, h = 286, x = (plat_width() - w) * 0.5f, y = plat_height() - h - 36 + (1.0f - in) * 60.0f;
                     char values[96];
                     draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_CARD_A(0xf0), in));
                     text_draw_fit(x + 36, y + 22, 26, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72,
@@ -2418,11 +2464,27 @@ int main(int argc, char **argv)
                                   tr("{Left} {Right}  Stretch or narrow the picture horizontally"));
                     text_draw_fit(x + 36, y + 138, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
                                   tr("{R1} + {Up} {Down} {Left} {Right}  Move the picture"));
-                    text_draw_fit(x + 36, y + 174, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
+                    {
+                        const char *label = tr("{L1}  Keep the aspect ratio:");
+                        text_draw_fit(x + 36, y + 174, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
+                                      label);
+                        text_draw(x + 36 + text_width(24, FONT_REGULAR, label) + 12, y + 177, 22, FONT_BOLD,
+                                  argb_alpha(TH_TEXT, in), ALIGN_LEFT, tr(manual_crop_locked() ? "On" : "Off"));
+                    }
+                    text_draw_fit(x + 36, y + 210, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
                                   tr("{Square}  Back to the original area"));
                     snprintf(values, sizeof(values), "%d%% x %d%%   %+d, %+d", app.settings.mc_w, app.settings.mc_h,
                              app.settings.mc_x, app.settings.mc_y);
-                    text_draw_fit(x + 36, y + 210, 22, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72, values);
+                    if (manual_crop_locked())
+                    {
+                        char ratio[24];
+                        crop_ratio_text(ratio, sizeof(ratio),
+                                        (play_widescreen_active() ? 16.0f / 9.0f : host_aspect()) * app.settings.mc_w /
+                                            app.settings.mc_h);
+                        size_t used = strlen(values);
+                        snprintf(values + used, sizeof(values) - used, "   %s", ratio);
+                    }
+                    text_draw_fit(x + 36, y + 246, 22, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72, values);
                 }
                 {
                     const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f,
@@ -2456,6 +2518,52 @@ int main(int argc, char **argv)
         count_play_time();
         remote_frame();
         /* a game's cheat file arrived from libretro-database */
+        if (nfs_connection_lost() && app.game)
+        {
+            app_stop_game();
+            app_toast("NFS communication was lost.");
+            app_rescan();
+        }
+        if (nfs_mount_finished() && !app.game)
+        {
+            nfs_rescan_from_mount = true;
+            app_rescan();
+            nfs_rescan_from_mount = false;
+            if (nfs_notify)
+            {
+                nfs_notify = false;
+                char detail[400], message[500];
+                const int why = nfs_first_failure(detail, sizeof(detail));
+                switch (why)
+                {
+                case NFS_FAIL_NONE: app_toast("NFS share connected."); break;
+                case NFS_FAIL_NO_ANSWER: app_toast_for(tr("NFS share not connected: the server did not answer."), 6.0f); break;
+                case NFS_FAIL_REFUSED: app_toast_for(tr("NFS share not connected: the server refused the mount."), 6.0f); break;
+                case NFS_FAIL_NO_FOLDER: app_toast_for(tr("NFS share not connected: the folder is not on the server."), 6.0f); break;
+                case NFS_FAIL_CONNECT:
+                    app_toast_for(tr("NFS share not connected: the connection was refused or could not be made."), 6.0f);
+                    break;
+                case NFS_FAIL_CLOSED:
+                    app_toast_for(tr("NFS share not connected: the server closed the connection."), 6.0f);
+                    break;
+                case NFS_FAIL_NAME:
+                    app_toast_for(tr("NFS share not connected: the server's name could not be found."), 6.0f);
+                    break;
+                case NFS_FAIL_DENIED:
+                    app_toast_for(tr("NFS share not connected: the server denies access to this console."), 6.0f);
+                    break;
+                case NFS_FAIL_NOT_EXPORTED:
+                    snprintf(message, sizeof(message), "%s %.300s",
+                             tr("NFS share not connected: that folder is not exported by the server. It exports:"), detail);
+                    app_toast_for(message, 8.0f);
+                    break;
+                default:
+                    snprintf(message, sizeof(message), "%s %.300s", tr("NFS share not connected:"), detail);
+                    app_toast_for(message, 6.0f);
+                    break;
+                }
+            }
+        }
         if (cheats_fetch_finished() && app.game && !ra_hardcore() &&
             cheats_load(&app.cheats, app.game, app.paths.cheats))
         {

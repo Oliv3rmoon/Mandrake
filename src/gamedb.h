@@ -62,6 +62,9 @@ typedef struct
     bool pgxp_proj;
 } GameInfo;
 
+/* The index the app keeps (the payload reads it too). */
+#define GAMEDB_INDEX_FILE "gamedb.txt"
+
 /* At start: downloads the database when there's no index yet (or it's a month
  * old), on a thread. */
 void gamedb_start(void);

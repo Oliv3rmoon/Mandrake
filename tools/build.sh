@@ -291,6 +291,19 @@ if [[ ${APP_VULKAN:-0} == 1 ]]; then
     for input in "${link_inputs[@]}"; do
         [[ $input == -lz || $input == */libz.a ]] || kept+=("$input")
     done
+    # The SDK platform layer wraps fclose and fflush (its open_memstream) and src/nfs/nfs.cpp wraps them too: the
+    # SDK's two are kept in a copy of the archive under other names, which nfs.cpp calls for every FILE that is
+    # not one of its own.
+    platform_archive="$build/libps5platform-nfs.a"
+    cp "$sdk_root/target/lib/libps5platform.a" "$platform_archive"
+    "${LLVM_OBJCOPY:-$(command -v llvm-objcopy-18 || command -v llvm-objcopy)}" \
+        --redefine-sym __wrap_fclose=ps5_memstream_fclose \
+        --redefine-sym __wrap_fflush=ps5_memstream_fflush "$platform_archive"
+    for i in "${!radv_link_inputs[@]}"; do
+        [[ ${radv_link_inputs[i]} == "$sdk_root/target/lib/libps5platform.a" ]] &&
+            radv_link_inputs[i]="$platform_archive"
+    done
+    ninja_inputs+=("$platform_archive")
     link_inputs=("${kept[@]}" "${radv_link_inputs[@]}")
     linker_options+=(--error-limit=0)
     # AGC lives in system modules the SDK has no stubs for: tiny link-only

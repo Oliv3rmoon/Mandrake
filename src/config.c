@@ -76,7 +76,7 @@ static bool config_apply(Settings *s, const char *path)
     FILE *f = fopen(path, "r");
     if (!f)
         return false;
-    char line[256];
+    char line[1024]; /* long enough for nfs_shares */
     bool seen_vibration = false;
     int old_rumble = -1, old_strength = -1;
     while (fgets(line, sizeof(line), f))
@@ -276,6 +276,8 @@ static bool config_apply(Settings *s, const char *path)
             s->framegen = as_bool(value) ? 1 : atoi(value) == 2 ? 2 : 0;
         else if (strcmp(key, "usb_folder") == 0)
             snprintf(s->usb_folder, sizeof(s->usb_folder), "%s", value);
+        else if (strcmp(key, "nfs_shares") == 0)
+            snprintf(s->nfs_shares, sizeof(s->nfs_shares), "%s", value);
         else if (strcmp(key, "fsr") == 0)
             s->fsr = as_bool(value);
         else if (strcmp(key, "rewind") == 0)
@@ -352,6 +354,7 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
     out->remote = global->remote;
     out->update_check = global->update_check;
     snprintf(out->usb_folder, sizeof(out->usb_folder), "%s", global->usb_folder);
+    snprintf(out->nfs_shares, sizeof(out->nfs_shares), "%s", global->nfs_shares);
     out->quick_resume = global->quick_resume;
     return true;
 }
@@ -437,7 +440,7 @@ bool config_save(const Settings *s, const char *path)
     fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\n",
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
             s->update_check);
-    fprintf(f, "renderer=%d\nusb_folder=%s\n", s->renderer, s->usb_folder);
+    fprintf(f, "renderer=%d\nusb_folder=%s\nnfs_shares=%s\n", s->renderer, s->usb_folder, s->nfs_shares);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,
             s->crop_edges);

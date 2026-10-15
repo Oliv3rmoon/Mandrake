@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define GAMEDB_INDEX "/data/SwanStationPS5/cache/gamedb-3.txt"
+#define GAMEDB_INDEX "/data/SwanStationPS5/cache/" GAMEDB_INDEX_FILE
 
 /* The app's compact index: one line per serial, tab separated, the serial first and the name second. */
 const GameInfo *gamedb_get(const char *serial)

@@ -8,6 +8,7 @@
 #include "../controls.h"
 #include "../core/host.h"
 #include "../i18n.h"
+#include "../nfs/nfs.h"
 #include "../profiles.h"
 #include "../platform/platform.h"
 #include "../platform/xbr.h"
@@ -75,6 +76,7 @@ enum Special
     SP_WHO,
     SP_HDTEX, /* drives the two core options for texture packs */
     SP_USBFOLDER, /* the games folder on USB drives, typed */
+    SP_NFSHARES,  /* the NFS servers that hold games, typed */
 };
 
 typedef struct
@@ -304,6 +306,8 @@ static const Row SYSTEM[] = {
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_install_only), OFF_ON, 2, 0},
     {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ and /mnt/usb1/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx and /mnt/usb1/psx. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
+    {NULL, "NFS shares", "Games on an NFS server of your network, as nfs:// addresses separated by ';'. Example: nfs://192.168.1.85/psx. The shelf lists them like a drive's; only SwanStationPS5 sees them. The server has to export the folder to the console. Rescan library connects the ones that did not.",
+     K_ACTION, APPLY_NOW, SP_NFSHARES, true, NO_FIELD, NULL, 0, 0},
     {"Emulation", "Region", "Auto follows the disc; force 50 or 60 Hz, or the Japanese console, if a game misbehaves.", K_CHOICE,
      APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(region), REGIONS, 3, 0},
     {NULL, "Fast CD loading", "Shorter loading screens; the higher, the faster. Rarely, a game glitches.", K_CHOICE, APPLY_NOW,
@@ -896,17 +900,48 @@ static void write_value(const Row *r, int v)
     }
 }
 
-void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset)
+static bool mc_locked = true;
+
+bool manual_crop_locked(void)
+{
+    return mc_locked;
+}
+
+static Settings *mc_targets(Settings *list[2])
 {
     const Row *row = NULL;
     for (size_t i = 0; i < sizeof(DISPLAY) / sizeof(DISPLAY[0]); ++i)
         if (DISPLAY[i].offset == (int)offsetof(Settings, manual_crop))
             row = &DISPLAY[i];
     if (!row)
-        return;
-    Settings *list[2] = {target(row), NULL};
+        return NULL;
+    list[0] = target(row);
+    list[1] = NULL;
     if (list[0] == &app.global && (!scope_game() || !app.game_has_own || row->global_only))
         list[1] = &app.settings;
+    return list[0];
+}
+
+static int mc_clamp(int v, int lo, int hi)
+{
+    return v < lo ? lo : v > hi ? hi : v;
+}
+
+void manual_crop_lock(bool on, bool snap)
+{
+    mc_locked = on;
+    Settings *list[2];
+    if (!on || !snap || !mc_targets(list))
+        return;
+    for (int i = 0; i < 2 && list[i]; ++i)
+        list[i]->mc_w = list[i]->mc_h = (list[i]->mc_w + list[i]->mc_h + 1) / 2;
+}
+
+void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset)
+{
+    Settings *list[2];
+    if (!mc_targets(list))
+        return;
     for (int i = 0; i < 2 && list[i]; ++i)
     {
         Settings *s = list[i];
@@ -916,10 +951,25 @@ void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset)
             s->mc_x = s->mc_y = 0;
             continue;
         }
-        s->mc_w = s->mc_w + dw < 25 ? 25 : s->mc_w + dw > 150 ? 150 : s->mc_w + dw;
-        s->mc_h = s->mc_h + dh < 25 ? 25 : s->mc_h + dh > 150 ? 150 : s->mc_h + dh;
-        s->mc_x = s->mc_x + dx < -500 ? -500 : s->mc_x + dx > 500 ? 500 : s->mc_x + dx;
-        s->mc_y = s->mc_y + dy < -500 ? -500 : s->mc_y + dy > 500 ? 500 : s->mc_y + dy;
+        if (mc_locked && (dw || dh))
+        {
+            int w = mc_clamp(s->mc_w + dw + dh, 25, 150), h = (s->mc_h * w + s->mc_w / 2) / s->mc_w;
+            if (h < 25 || h > 150)
+            {
+                int old_h = s->mc_h;
+                h = mc_clamp(h, 25, 150);
+                w = (s->mc_w * h + old_h / 2) / old_h;
+            }
+            s->mc_w = mc_clamp(w, 25, 150);
+            s->mc_h = h;
+        }
+        else
+        {
+            s->mc_w = mc_clamp(s->mc_w + dw, 25, 150);
+            s->mc_h = mc_clamp(s->mc_h + dh, 25, 150);
+        }
+        s->mc_x = mc_clamp(s->mc_x + dx, -500, 500);
+        s->mc_y = mc_clamp(s->mc_y + dy, -500, 500);
     }
 }
 
@@ -941,6 +991,7 @@ static const char *value_label(const Row *r, char *buf, size_t size)
     case SP_CREDITS: return "AngelXex";
     case SP_HOTKEYS: return tr("{Touchpad} + {R2} / {L2}");
     case SP_USBFOLDER: return app.global.usb_folder[0] ? app.global.usb_folder : tr("Off");
+    case SP_NFSHARES: return app.global.nfs_shares[0] ? app.global.nfs_shares : tr("Off");
     case SP_UPDATE:
         switch (update_state())
         {
@@ -1737,7 +1788,7 @@ static void draw_rows(void)
         }
         case K_ACTION:
             icon_draw(ICON_CHEVRON_RIGHT, right - 36, ry + 21, 34, TH_TEXT_SOFT);
-            if (r->special == SP_UPDATE || r->special == SP_USBFOLDER)
+            if (r->special == SP_UPDATE || r->special == SP_USBFOLDER || r->special == SP_NFSHARES)
                 text_draw_fit(right - 50, ry + 24, 22, FONT_REGULAR, TH_TEXT_SOFT, ALIGN_RIGHT, w - 520,
                               value_label(r, buf, sizeof(buf)));
             break;
@@ -1767,6 +1818,42 @@ static void usb_folder_set(const char *text)
     str_copy(app.global.usb_folder, sizeof(app.global.usb_folder), name);
     str_copy(app.settings.usb_folder, sizeof(app.settings.usb_folder), name);
     app_save_settings();
+    app_rescan();
+}
+
+static void nfs_shares_set(const char *text)
+{
+    char list[sizeof(app.global.nfs_shares)];
+    str_copy(list, sizeof(list), text);
+    size_t start = 0, end = strlen(list);
+    while (start < end && (list[start] == ' ' || list[start] == '\t'))
+        ++start;
+    while (end > start && strchr(" \t\r\n;", list[end - 1]))
+        --end;
+    list[end] = '\0';
+    memmove(list, list + start, end - start + 1);
+    for (char *p = list; *p; ++p)
+        if (*p == '\n' || *p == '\r')
+            *p = ';';
+    str_copy(app.global.nfs_shares, sizeof(app.global.nfs_shares), list);
+    str_copy(app.settings.nfs_shares, sizeof(app.settings.nfs_shares), list);
+    app_save_settings();
+    char error[256];
+    if (!nfs_set_shares(list, error, sizeof(error)) && error[0])
+    {
+        char *tab = strchr(error, '\t');
+        char message[400];
+        if (tab)
+        {
+            *tab = '\0';
+            snprintf(message, sizeof(message), "%.200s: %s", error, tr(tab + 1));
+        }
+        else
+            snprintf(message, sizeof(message), "%s", error);
+        app_toast_for(message, 6.0f);
+    }
+    if (list[0])
+        app_nfs_notify();
     app_rescan();
 }
 
@@ -1804,6 +1891,17 @@ static void activate(const Row *r)
     case SP_STATS:
         sfx_play(SFX_SELECT);
         library_stats_open(SCREEN_SETTINGS);
+        return;
+    case SP_NFSHARES:
+        if (app.game)
+        {
+            app_toast("Quit the game first");
+            return;
+        }
+        sfx_play(SFX_SELECT);
+        textinput_open(SCREEN_SETTINGS, "NFS shares",
+                       "Type one or more nfs:// addresses, separated by ';'. Example: nfs://192.168.1.85/psx",
+                       app.global.nfs_shares[0] ? app.global.nfs_shares : "nfs://192.168.1.85/psx", nfs_shares_set);
         return;
     case SP_USBFOLDER:
         sfx_play(SFX_SELECT);
@@ -1864,6 +1962,8 @@ static void activate(const Row *r)
         }
         if (app.storage_error[0])
             return;
+        if (app.global.nfs_shares[0])
+            app_nfs_notify();
         app_rescan();
         char msg[64];
         snprintf(msg, sizeof(msg), tr(app.library.count == 1 ? "Found %d game" : "Found %d games"),

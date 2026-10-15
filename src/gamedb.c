@@ -6,7 +6,7 @@
  *
  * The database (data/resources/gamedb.yaml in github.com/stenzek/duckstation)
  * isn't part of SwanStationPS5: the console downloads it once and keeps a compact
- * index, <root>/cache/gamedb-4.txt (one line per serial, sorted), refreshed
+ * index, <root>/cache/gamedb.txt (one line per serial, sorted), refreshed
  * after a month. Until it's there, every lookup simply finds nothing.
  */
 #include "gamedb.h"
@@ -16,6 +16,7 @@
 #include "net.h"
 
 #include <SDL2/SDL.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +27,9 @@
 #define REFRESH_DAYS 30
 
 static SDL_atomic_t state; /* 0 idle, 1 downloading, 2 a new index is there */
+/* the index's first line: the version of its format */
+#define GAMEDB_HEADER "#v4"
+
 static char yaml_path[SwanStationPS5_PATH_MAX], index_path[SwanStationPS5_PATH_MAX];
 
 static GameInfo *games;
@@ -274,6 +278,7 @@ static bool build_index(const char *yaml, const char *index)
             FILE *sorted = fopen(temp, "w");
             if (sorted)
             {
+                fprintf(sorted, "%s\n", GAMEDB_HEADER);
                 for (int i = 0; i < k; ++i)
                     if (lines[i][0])
                         fprintf(sorted, "%s\n", lines[i]);
@@ -305,6 +310,12 @@ static int fetch_main(void *unused)
 
 /* ---------------------------------------------------------------- lookups */
 
+static bool index_current(FILE *f)
+{
+    char line[16];
+    return fgets(line, sizeof(line), f) && !strncmp(line, GAMEDB_HEADER "\n", sizeof(GAMEDB_HEADER));
+}
+
 static void load(void)
 {
     loaded = true;
@@ -314,6 +325,11 @@ static void load(void)
     FILE *f = fopen(index_path, "r");
     if (!f)
         return;
+    if (!index_current(f))
+    {
+        fclose(f);
+        return;
+    }
     int cap = 0;
     char line[600];
     while (fgets(line, sizeof(line), f))
@@ -383,15 +399,42 @@ static void load(void)
     SwanStationPS5_log("gamedb: %d discs known", game_count);
 }
 
+/* the indexes that carried the format in their name (gamedb-3.txt...) */
+static void remove_old_indexes(const char *dir)
+{
+    DIR *d = opendir(dir);
+    if (!d)
+        return;
+    struct dirent *e;
+    while ((e = readdir(d)))
+    {
+        size_t n = strlen(e->d_name);
+        if (strncmp(e->d_name, "gamedb-", 7) || n < 11 || strcmp(e->d_name + n - 4, ".txt"))
+            continue;
+        char path[SwanStationPS5_PATH_MAX];
+        path_join(path, sizeof(path), dir, e->d_name);
+        remove(path);
+    }
+    closedir(d);
+}
+
 void gamedb_start(void)
 {
-    path_join(index_path, sizeof(index_path), app.paths.root, "cache/gamedb-4.txt");
+    path_join(index_path, sizeof(index_path), app.paths.root, "cache/" GAMEDB_INDEX_FILE);
     path_join(yaml_path, sizeof(yaml_path), app.paths.root, "cache/gamedb.yaml");
     char dir[SwanStationPS5_PATH_MAX];
     path_join(dir, sizeof(dir), app.paths.root, "cache");
     make_dirs(dir);
+    remove_old_indexes(dir);
     struct stat st;
     bool have = stat(index_path, &st) == 0;
+    if (have)
+    {
+        FILE *f = fopen(index_path, "r");
+        have = f && index_current(f);
+        if (f)
+            fclose(f);
+    }
     bool old = have && time(NULL) - st.st_mtime > REFRESH_DAYS * 86400L;
     if ((!have || old) && net_available() && SDL_AtomicCAS(&state, 0, 1))
     {

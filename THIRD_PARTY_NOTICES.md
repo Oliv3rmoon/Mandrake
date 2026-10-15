@@ -164,6 +164,7 @@ No proprietary runtime module, encryption key, or game file is included.
 | [Inter](https://github.com/rsms/inter) | interface font (`assets/fonts`) | SIL Open Font License 1.1 (`assets/fonts/OFL.txt`) |
 | [xlenore/psx-covers](https://github.com/xlenore/psx-covers) | cover art, downloaded at runtime by serial; not bundled | see that repository |
 | [libretro-database](https://github.com/libretro/libretro-database) | `.cht` cheat files, installed by `tools/SwanStationPS5_sync.py`; not bundled | see that repository |
+| [libnfs](https://github.com/sahlberg/libnfs) 18.0.0 by Ronnie Sahlberg, with the console configuration and fixes of [tutifrutas/SwanStationPS5](https://github.com/tutifrutas/SwanStationPS5) (itself from [PS5SX2](https://github.com/Swordpdf/PS5SX2) by Swordpdf) | NFS client for games on NFS servers (`third_party/libnfs`, built by `tools/build-libnfs.sh`; the app's own layer is `src/nfs`) | LGPL-2.1-or-later, its protocol files BSD-2-Clause |
 | [rcheevos](https://github.com/RetroAchievements/rcheevos) v12.5.0 | RetroAchievements client (`third_party/rcheevos`) | MIT |
 | [SDL2](https://www.libsdl.org/) (PacBrew port) | events, controllers, audio, software renderer | zlib |
 | [dlmalloc](https://gee.cs.oswego.edu/dl/html/malloc.html) 2.8.6 by Doug Lea | allocator for the direct-memory heap (`third_party/dlmalloc`) | Public domain (CC0) |

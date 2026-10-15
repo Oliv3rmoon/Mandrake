@@ -106490,6 +106490,40 @@ index 460ea0f0..44f5bb19 100644
    target_sources(core PRIVATE ${RECOMPILER_SRCS}
      cpu_recompiler_code_generator_x64.cpp
    )
+diff --git a/src/core/analog_controller.cpp b/src/core/analog_controller.cpp
+index d852b03c..860aeac8 100644
+--- a/src/core/analog_controller.cpp
++++ b/src/core/analog_controller.cpp
+@@ -33,6 +33,9 @@ void AnalogController::Reset()
+   ResetRumbleConfig();
+ 
+   m_status_byte = 0x5A;
++
++  if (m_aa)
++    SetAnalogMode(true);
+ }
+ 
+ bool AnalogController::DoState(StateWrapper& sw, bool apply_input_state)
+@@ -646,6 +649,7 @@ void AnalogController::LoadSettings(const char* section)
+ {
+   Controller::LoadSettings(section);
+   m_force_analog = g_host_interface->GetBoolSettingValue(section, "ForceAnalog", false);
++  m_aa = g_host_interface->GetBoolSettingValue(section, "AA", false);
+   m_analog_dpad_in_digital_mode = g_host_interface->GetBoolSettingValue(section, "AnalogDPadInDigitalMode", false);
+   m_axis_scale =
+     std::clamp(std::abs(g_host_interface->GetFloatSettingValue(section, "AxisScale", 1.33f)), 0.01f, 1.50f);
+diff --git a/src/core/analog_controller.h b/src/core/analog_controller.h
+index c9566f88..c6ffb0f0 100644
+--- a/src/core/analog_controller.h
++++ b/src/core/analog_controller.h
+@@ -108,6 +108,7 @@ private:
+   uint32_t m_index;
+ 
+   bool m_force_analog = false;
++  bool m_aa = false;
+   bool m_old_force_analog = false;
+   bool m_analog_dpad_in_digital_mode = false;
+   float m_axis_scale = 1.00f;
 diff --git a/src/core/cdrom.cpp b/src/core/cdrom.cpp
 index 590dd1ff..7ad0518f 100644
 --- a/src/core/cdrom.cpp

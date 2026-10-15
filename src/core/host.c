@@ -299,6 +299,8 @@ static void apply_swanstation_options(const Settings *s)
         char key[56];
         snprintf(key, sizeof(key), "swanstation_Controller%d_AnalogDPadInDigitalMode", port);
         set_option(key, stick_dpad);
+        snprintf(key, sizeof(key), "swanstation_Controller%d_AA", port);
+        set_option(key, s->analog && (game_fixes & GDB_ANALOG) ? "true" : "false");
     }
 }
 #endif

@@ -17,17 +17,22 @@ APP_DEFINITIONS ?= SwanStationPS5_HAVE_CURL=1
 endif
 # RetroAchievements: rcheevos (MIT), built by tools/build-rcheevos.sh.
 SwanStationPS5_RCHEEVOS := build/rcheevos-ps5/librcheevos.a
-APP_INCLUDE_PATHS ?= third_party/swanstation/dep/libretro-common/include third_party/stb examples/update-check third_party/rcheevos/include $(SwanStationPS5_VULKAN_INCLUDE)
+# Games on NFS servers: libnfs (LGPL-2.1-or-later), built by tools/build-libnfs.sh.
+SwanStationPS5_LIBNFS := build/libnfs-ps5/libnfs.a
+APP_INCLUDE_PATHS ?= third_party/swanstation/dep/libretro-common/include third_party/stb examples/update-check third_party/rcheevos/include third_party/libnfs/include third_party/libnfs/mount $(SwanStationPS5_VULKAN_INCLUDE)
 ifeq ($(APP_VULKAN),1)
 # SwanStation (Vulkan renderer), built by tools/build-swanstation.sh
 SwanStationPS5_SWANSTATION := build/swanstation-ps5/libswanstation.a
 # Frame generation (AMD FSR 3's frame interpolation, from PS5SX2), built by tools/build-framegen.sh
 SwanStationPS5_FRAMEGEN := build/framegen-ps5/libframegen.a
 endif
-APP_STATIC_ARCHIVES ?= $(SwanStationPS5_RCHEEVOS) $(SwanStationPS5_SWANSTATION) $(SwanStationPS5_FRAMEGEN)
+APP_STATIC_ARCHIVES ?= $(SwanStationPS5_LIBNFS) $(SwanStationPS5_RCHEEVOS) $(SwanStationPS5_SWANSTATION) $(SwanStationPS5_FRAMEGEN)
 APP_RUNTIME_MODULES ?=
-# fcntl: console_curl. The allocator family: ps5_heap.c (the C heap is too small).
-APP_WRAP_SYMBOLS ?= fcntl malloc free calloc realloc reallocf memalign posix_memalign aligned_alloc malloc_usable_size
+# fcntl: console_curl. The allocator family: ps5_heap.c (the C heap is too small). The file family: src/nfs/nfs.cpp
+# (a game on an /nfs share is read through libnfs by the scan and by the core alike).
+APP_WRAP_SYMBOLS ?= fcntl malloc free calloc realloc reallocf memalign posix_memalign aligned_alloc malloc_usable_size \
+	fopen fclose fread fseek fseeko ftell ftello rewind feof ferror fileno fgetc getc fgets fflush setvbuf flockfile \
+	funlockfile open close read pread lseek fstat stat lstat access realpath opendir readdir closedir
 APP_SOURCE_DIR ?=
 APP_PARAM ?=
 APP_SCE_SYS ?=
@@ -265,6 +270,7 @@ ifeq ($(APP_VULKAN),1)
 endif
 
 core:
+	@bash tools/build-libnfs.sh
 	@bash tools/build-rcheevos.sh ps5
 ifeq ($(APP_VULKAN),1)
 	@bash tools/build-swanstation.sh

@@ -332,6 +332,14 @@ void shelf_library_changed(void)
     build_view(S.last_cursor_game);
 }
 
+void shelf_show_all(void)
+{
+    app.global.shelf_category = CAT_ALL;
+    app.settings.shelf_category = CAT_ALL;
+    S.filter[0] = '\0';
+    build_view(S.last_cursor_game);
+}
+
 void shelf_select_game(int library_index)
 {
     S.last_cursor_game = library_index;

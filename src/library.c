@@ -498,6 +498,11 @@ static int cmp_games(const void *a, const void *b)
 void library_scan(Library *lib, const char *const *roots, int root_count)
 {
     lib->count = 0;
+    library_scan_append(lib, roots, root_count);
+}
+
+void library_scan_append(Library *lib, const char *const *roots, int root_count)
+{
     for (int i = 0; i < root_count; ++i)
         if (path_is_dir(roots[i]))
             scan_root(lib, roots[i]);
