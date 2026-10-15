@@ -1581,7 +1581,8 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
         lines /= 2;
     /* Crop black edges: the share of the picture's height cut at the top and
      * at the bottom (8 or 16 of the PS1's 240 lines) */
-    const float crop = (settings->crop_edges > 0 && settings->crop_edges < 3 ? settings->crop_edges * 8 : 0) / 240.0f;
+    const float crop =
+        (!settings->manual_crop && settings->crop_edges > 0 && settings->crop_edges < 3 ? settings->crop_edges * 8 : 0) / 240.0f;
 
     float aspect = display_aspect > 0.0f ? display_aspect : 4.0f / 3.0f;
 
@@ -1608,8 +1609,17 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
         dw = dw * 86 / 100;
         dh = dh * 86 / 100;
     }
-    game_rect[0] = (out_w - dw) / 2;
-    game_rect[1] = (out_h - dh) / 2;
+    int dx = (out_w - dw) / 2, dy = (out_h - dh) / 2;
+    if (settings->manual_crop)
+    {
+        /* Manual crop: the whole picture in an area the player sets (size in percent, position in thousandths) */
+        dw = dw * (settings->mc_w < 25 ? 25 : settings->mc_w > 150 ? 150 : settings->mc_w) / 100;
+        dh = dh * (settings->mc_h < 25 ? 25 : settings->mc_h > 150 ? 150 : settings->mc_h) / 100;
+        dx = (out_w - dw) / 2 + settings->mc_x * out_w / 1000;
+        dy = (out_h - dh) / 2 + settings->mc_y * out_h / 1000;
+    }
+    game_rect[0] = dx;
+    game_rect[1] = dy;
     game_rect[2] = dw;
     game_rect[3] = dh;
     static const uint8_t scan_strength[] = {0, 110, 200};
@@ -1619,7 +1629,7 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
     {
         /* the CPU canvas: a hole where the GPU draws the picture; its alpha darkens the picture for the menus
          * (premultiplied black). The GPU interface just draws that black over it. */
-        SDL_Rect hole = {(out_w - dw) / 2, (out_h - dh) / 2, dw, dh};
+        SDL_Rect hole = {dx, dy, dw, dh};
         if (gpu_ui)
         {
             vkp_ui_game_here(); /* the picture goes in the list here: the border before it is under it, the dimming over it */
@@ -1708,8 +1718,7 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
                 }
             }
             vkp_ui_texture_update(soft_tex, rgba);
-            gpu_quad(soft_tex, (float)((out_w - dw) / 2), (float)((out_h - dh) / 2), (float)((out_w - dw) / 2 + dw),
-                     (float)((out_h - dh) / 2 + dh), 0.0f, (float)cut / game_image_h, 1.0f,
+            gpu_quad(soft_tex, (float)dx, (float)dy, (float)(dx + dw), (float)(dy + dh), 0.0f, (float)cut / game_image_h, 1.0f,
                      (float)(cut + vis_h) / game_image_h, 0xff000000u | (uint32_t)dim << 16 | (uint32_t)dim << 8 | dim);
         }
         return;
@@ -1719,10 +1728,29 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
         /* run SDL's queued drawing (the clear) first, then write the picture */
         SDL_RenderFlush(renderer);
         int cut = (int)(game_image_h * crop);
-        BlitJob job = {game_image + (size_t)cut * game_image_pitch, game_image_w, game_image_h - 2 * cut,
+        const uint32_t *src = game_image + (size_t)cut * game_image_pitch;
+        int src_w = game_image_w, src_h = game_image_h - 2 * cut, bx = dx, by = dy, bw = dw, bh = dh;
+        if (dx < 0 || dy < 0 || dx + dw > out_w || dy + dh > out_h)
+        {
+            /* part of the area is off the screen: only the part that is on it is drawn, from its part of the picture */
+            const int x0 = dx < 0 ? -dx : 0, y0 = dy < 0 ? -dy : 0;
+            const int x1 = dx + dw > out_w ? out_w - dx : dw, y1 = dy + dh > out_h ? out_h - dy : dh;
+            if (x1 <= x0 || y1 <= y0)
+                return;
+            const int sx0 = (int)((int64_t)x0 * src_w / dw), sx1 = (int)(((int64_t)x1 * src_w + dw - 1) / dw);
+            const int sy0 = (int)((int64_t)y0 * src_h / dh), sy1 = (int)(((int64_t)y1 * src_h + dh - 1) / dh);
+            src += (size_t)sy0 * game_image_pitch + sx0;
+            src_w = sx1 - sx0;
+            src_h = sy1 - sy0;
+            bx = dx + x0;
+            by = dy + y0;
+            bw = x1 - x0;
+            bh = y1 - y0;
+        }
+        BlitJob job = {src, src_w, src_h,
                        game_image_pitch,
                        (uint32_t *)canvas->pixels, (size_t)canvas->pitch / 4,
-                       (out_w - dw) / 2, (out_h - dh) / 2, dw, dh, settings->smooth, dim,
+                       bx, by, bw, bh, settings->smooth, dim,
                        scan, lines};
         blit_scaled(&job);
         return;
@@ -1736,7 +1764,7 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
     SDL_SetTextureBlendMode(game_texture, SDL_BLENDMODE_NONE); /* opaque: no per-pixel blend */
     int cut = (int)(game_h * crop);
     SDL_Rect src = {0, cut, game_w, game_h - 2 * cut};
-    SDL_Rect dst = {(out_w - dw) / 2, (out_h - dh) / 2, dw, dh};
+    SDL_Rect dst = {dx, dy, dw, dh};
     SDL_RenderCopy(renderer, game_texture, &src, &dst);
     if (scan && lines > 0)
     {

@@ -169,6 +169,8 @@ static const Row DISPLAY[] = {
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(sharpen), SHARPENS, 3, 0},
     {NULL, "Crop black edges", "Hides the black lines many games leave at the top and bottom, which an old TV hid. Pair with Stretch to fill the screen.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(crop_edges), CROPS, 3, 0},
+    {NULL, "Manual crop", "Ignores the crop mode and draws the whole picture, whose area you set yourself. Open the preview with the touchpad: {Up}/{Down} stretch or narrow the picture, {Left}/{Right} do the same sideways, and {R1} with the directions moves it. Turn it off and everything is as it was.",
+     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(manual_crop), OFF_ON, 2, 0},
     {NULL, "Generate frames",
      "Adds frames AMD FSR 3 makes between the game's own, so motion looks smoother. x2: one between each two, so 30 fps shows at 60 and, with Video output at 120 Hz, 60 fps shows at 120. x4: three between each two, only with Video output at 120 Hz: a 30 fps game shows at 120. With Video output at 60 Hz it only doubles. Each extra frame adds a little input lag. It works at once. Video output is changed above and applies the next time the app starts.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(framegen), FRAMEGENS, 3, 0},
@@ -481,6 +483,19 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
     if (aspect >= 0)
         rows[n].group = NULL; /* "Picture" is now on the aspect row */
     n += base_count;
+    if (aspect >= 0)
+    {
+        /* Manual crop goes right under "Aspect ratio" */
+        for (int k = 2; k < n; ++k)
+        {
+            if (strcmp(rows[k].name, "Manual crop") != 0)
+                continue;
+            const Row m = rows[k];
+            memmove(rows + 2, rows + 1, sizeof(Row) * (size_t)(k - 1));
+            rows[1] = m;
+            break;
+        }
+    }
     /* the three BIOS choices and the BIOS to start go above "Start BIOS", at the top of the SwanStationPS5 group */
     if (base == SYSTEM)
     {
@@ -878,6 +893,33 @@ static void write_value(const Row *r, int v)
     {
         host_apply_settings(&app.settings);
         controls_reconfigure(app.game, &app.settings);
+    }
+}
+
+void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset)
+{
+    const Row *row = NULL;
+    for (size_t i = 0; i < sizeof(DISPLAY) / sizeof(DISPLAY[0]); ++i)
+        if (DISPLAY[i].offset == (int)offsetof(Settings, manual_crop))
+            row = &DISPLAY[i];
+    if (!row)
+        return;
+    Settings *list[2] = {target(row), NULL};
+    if (list[0] == &app.global && (!scope_game() || !app.game_has_own || row->global_only))
+        list[1] = &app.settings;
+    for (int i = 0; i < 2 && list[i]; ++i)
+    {
+        Settings *s = list[i];
+        if (reset)
+        {
+            s->mc_w = s->mc_h = 100;
+            s->mc_x = s->mc_y = 0;
+            continue;
+        }
+        s->mc_w = s->mc_w + dw < 25 ? 25 : s->mc_w + dw > 150 ? 150 : s->mc_w + dw;
+        s->mc_h = s->mc_h + dh < 25 ? 25 : s->mc_h + dh > 150 ? 150 : s->mc_h + dh;
+        s->mc_x = s->mc_x + dx < -500 ? -500 : s->mc_x + dx > 500 ? 500 : s->mc_x + dx;
+        s->mc_y = s->mc_y + dy < -500 ? -500 : s->mc_y + dy > 500 ? 500 : s->mc_y + dy;
     }
 }
 

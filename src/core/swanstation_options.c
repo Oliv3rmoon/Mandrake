@@ -285,7 +285,7 @@ const SsOpt SS_OPTS[SS_OPT_COUNT] = {
      SSC_DISPLAY, 50, 2, v35, l35},
     {"swanstation_Display_CropMode", "Crop Mode",
      "Changes how much of the image is cropped. Some games display garbage in the overscan area which is typically hidden.",
-     SSC_DISPLAY, 3, 2, v36, l36},
+     SSC_DISPLAY, 3, 1, v36, l36},
     {"swanstation_GPU_DownsampleMode", "Downsampling",
      "Downsamples the rendered image prior to displaying it. Can improve overall image quality in mixed 2D/3D games, but should be disabled for pure 3D games. Only applies to the hardware renderers.",
      SSC_DISPLAY, 3, 0, v37, l37},

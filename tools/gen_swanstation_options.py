@@ -156,6 +156,7 @@ def c_str(s):
 # SwanStationPS5's own defaults where they differ from the core's
 DEFAULT_OVERRIDES = {
     "swanstation_Display_ShowOSDMessages": "false",  # SwanStationPS5 draws its own toasts
+    "swanstation_Display_CropMode": "Overscan",  # the fixed overscan area, not the one that follows the picture
 }
 
 

@@ -287,6 +287,8 @@ static void apply_swanstation_options(const Settings *s)
     }
     set_option("swanstation_CPU_FastmemMode", "LUT");
     apply_game_fixes();
+    if (s->manual_crop)
+        set_option("swanstation_Display_CropMode", "None");
     /* controls: Settings > Controls decides these, not the core's own rows */
     set_option("swanstation_ControllerPorts_MultitapMode",
                s->multitap && !(game_fixes & GDB_NO_MULTITAP) ? "Port1Only" : "Disabled");

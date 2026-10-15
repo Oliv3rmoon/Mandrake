@@ -120,6 +120,9 @@ typedef struct
     bool hd_textures;     /* use a texture pack beside the game when there is one */
     int theme;            /* enum ThemeId in ui/theme.h */
     int crop_edges;       /* 0 off, 1: 8 lines top and bottom, 2: 16 (the black a CRT hid) */
+    bool manual_crop;     /* the core's crop mode is ignored (drawn as None) and the picture's area is set by hand (mc_*) */
+    int mc_w, mc_h;       /* manual crop: the picture's width and height as a percentage of its normal size (25..150) */
+    int mc_x, mc_y;       /* manual crop: how far the picture is moved, in thousandths of the screen (-500..500) */
     bool ra_popups;       /* achievement unlock banners while playing */
     bool ra_tracker;      /* the progress card when a counted achievement moves */
     int ra_popup_style;   /* 0 banner, 1 compact, 2 big trophy */

@@ -2373,6 +2373,8 @@ int main(int argc, char **argv)
             else if (app.settings_preview && (pressed & BIT(BTN_MENU)))
             {
                 app.settings_preview = false;
+                if (app.settings.manual_crop)
+                    app_save_settings();
                 sfx_play(SFX_BACK);
             }
             if (app.settings_preview && app.game)
@@ -2389,7 +2391,39 @@ int main(int argc, char **argv)
                     idle[i].touching = false;
                     idle[i].mouse_dx = idle[i].mouse_dy = 0;
                 }
+                if (app.settings.manual_crop)
+                {
+                    const bool move = (pads[app_nav_pad()].buttons & BIT(BTN_R1)) != 0;
+                    const int up = (pressed & BIT(BTN_UP)) != 0, down = (pressed & BIT(BTN_DOWN)) != 0,
+                              left = (pressed & BIT(BTN_LEFT)) != 0, right = (pressed & BIT(BTN_RIGHT)) != 0;
+                    if (pressed & BIT(BTN_SQUARE))
+                        manual_crop_edit(0, 0, 0, 0, true);
+                    else if (move)
+                        manual_crop_edit(0, 0, 2 * (right - left), 2 * (down - up), false);
+                    else
+                        manual_crop_edit(right - left, up - down, 0, 0, false);
+                }
                 game_screen(idle);
+                if (app.settings.manual_crop)
+                {
+                    const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f;
+                    const float w = 900, h = 250, x = (plat_width() - w) * 0.5f, y = plat_height() - h - 36 + (1.0f - in) * 60.0f;
+                    char values[96];
+                    draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_CARD_A(0xf0), in));
+                    text_draw_fit(x + 36, y + 22, 26, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72,
+                                  tr("Manual crop"));
+                    text_draw_fit(x + 36, y + 66, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
+                                  tr("{Up} {Down}  Stretch or narrow the picture vertically"));
+                    text_draw_fit(x + 36, y + 102, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
+                                  tr("{Left} {Right}  Stretch or narrow the picture horizontally"));
+                    text_draw_fit(x + 36, y + 138, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
+                                  tr("{R1} + {Up} {Down} {Left} {Right}  Move the picture"));
+                    text_draw_fit(x + 36, y + 174, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
+                                  tr("{Square}  Back to the original area"));
+                    snprintf(values, sizeof(values), "%d%% x %d%%   %+d, %+d", app.settings.mc_w, app.settings.mc_h,
+                             app.settings.mc_x, app.settings.mc_y);
+                    text_draw_fit(x + 36, y + 210, 22, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72, values);
+                }
                 {
                     const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f,
                                 slide = (1.0f - in) * (1.0f - in) * 80.0f;
