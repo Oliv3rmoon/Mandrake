@@ -171,7 +171,7 @@ static const Row DISPLAY[] = {
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(sharpen), SHARPENS, 3, 0},
     {NULL, "Crop black edges", "Hides the black lines many games leave at the top and bottom, which an old TV hid. Pair with Stretch to fill the screen.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(crop_edges), CROPS, 3, 0},
-    {NULL, "Manual crop", "Ignores the crop mode and draws the whole picture, whose area you set yourself. Open the preview with {Touchpad}: {Up}/{Down} stretch or narrow the picture, {Left}/{Right} do the same sideways, and {R1} with the directions moves it. Turn it off and everything is as it was.",
+    {NULL, "Manual crop", "Ignores the crop mode and draws the whole picture, whose area you set yourself. Open the preview with {Touchpad}: {Left}/{Right} stretch or narrow the picture keeping its aspect ratio, and {Up}/{Down} move it up or down. Turn it off and everything is as it was.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(manual_crop), OFF_ON, 2, 0},
     {NULL, "Generate frames",
      "Adds frames AMD FSR 3 makes between the game's own, so motion looks smoother. x2: one between each two, so 30 fps shows at 60 and, with Video output at 120 Hz, 60 fps shows at 120. x4: three between each two, only with Video output at 120 Hz: a 30 fps game shows at 120. With Video output at 60 Hz it only doubles. Each extra frame adds a little input lag. It works at once. Video output is changed above and applies the next time the app starts.",
@@ -900,13 +900,6 @@ static void write_value(const Row *r, int v)
     }
 }
 
-static bool mc_locked = true;
-
-bool manual_crop_locked(void)
-{
-    return mc_locked;
-}
-
 static Settings *mc_targets(Settings *list[2])
 {
     const Row *row = NULL;
@@ -927,17 +920,19 @@ static int mc_clamp(int v, int lo, int hi)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
-void manual_crop_lock(bool on, bool snap)
+void manual_crop_fix(void)
 {
-    mc_locked = on;
     Settings *list[2];
-    if (!on || !snap || !mc_targets(list))
+    if (!mc_targets(list))
         return;
     for (int i = 0; i < 2 && list[i]; ++i)
+    {
         list[i]->mc_w = list[i]->mc_h = (list[i]->mc_w + list[i]->mc_h + 1) / 2;
+        list[i]->mc_x = 0;
+    }
 }
 
-void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset)
+void manual_crop_edit(int grow, int dy, bool reset)
 {
     Settings *list[2];
     if (!mc_targets(list))
@@ -951,24 +946,7 @@ void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset)
             s->mc_x = s->mc_y = 0;
             continue;
         }
-        if (mc_locked && (dw || dh))
-        {
-            int w = mc_clamp(s->mc_w + dw + dh, 25, 150), h = (s->mc_h * w + s->mc_w / 2) / s->mc_w;
-            if (h < 25 || h > 150)
-            {
-                int old_h = s->mc_h;
-                h = mc_clamp(h, 25, 150);
-                w = (s->mc_w * h + old_h / 2) / old_h;
-            }
-            s->mc_w = mc_clamp(w, 25, 150);
-            s->mc_h = h;
-        }
-        else
-        {
-            s->mc_w = mc_clamp(s->mc_w + dw, 25, 150);
-            s->mc_h = mc_clamp(s->mc_h + dh, 25, 150);
-        }
-        s->mc_x = mc_clamp(s->mc_x + dx, -500, 500);
+        s->mc_w = s->mc_h = mc_clamp(s->mc_w + grow, 25, 150);
         s->mc_y = mc_clamp(s->mc_y + dy, -500, 500);
     }
 }

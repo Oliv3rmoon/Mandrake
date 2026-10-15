@@ -92,9 +92,8 @@ void shelf_screen(uint32_t pressed);
 void settings_screen(uint32_t pressed);
 /* Manual crop (Settings > Display): changes the picture's width / height (percent) and position (thousandths of the
  * screen) in the settings the row edits; reset puts it back as it was drawn by default. */
-void manual_crop_edit(int dw, int dh, int dx, int dy, bool reset);
-bool manual_crop_locked(void);
-void manual_crop_lock(bool on, bool snap);
+void manual_crop_edit(int grow, int dy, bool reset);
+void manual_crop_fix(void); /* the picture's area keeps the aspect ratio and is not moved sideways */
 bool settings_preview_allowed(void); /* the main settings view (not the button-mapping, players or profiles pages) */
 void menu_screen(uint32_t pressed);
 void cheats_screen(uint32_t pressed);

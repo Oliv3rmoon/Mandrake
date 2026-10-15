@@ -2412,7 +2412,8 @@ int main(int argc, char **argv)
             {
                 app.settings_preview = true;
                 app.settings_preview_time = 0;
-                manual_crop_lock(true, false);
+                if (app.settings.manual_crop)
+                    manual_crop_fix();
             }
             else if (app.settings_preview && (pressed & BIT(BTN_MENU)))
             {
@@ -2437,54 +2438,33 @@ int main(int argc, char **argv)
                 }
                 if (app.settings.manual_crop)
                 {
-                    const bool move = (pads[app_nav_pad()].buttons & BIT(BTN_R1)) != 0;
                     const int up = (pressed & BIT(BTN_UP)) != 0, down = (pressed & BIT(BTN_DOWN)) != 0,
                               left = (pressed & BIT(BTN_LEFT)) != 0, right = (pressed & BIT(BTN_RIGHT)) != 0;
-                    if (pressed & BIT(BTN_L1))
-                        manual_crop_lock(!manual_crop_locked(), true);
                     if (pressed & BIT(BTN_SQUARE))
-                        manual_crop_edit(0, 0, 0, 0, true);
-                    else if (move)
-                        manual_crop_edit(0, 0, 2 * (right - left), 2 * (down - up), false);
+                        manual_crop_edit(0, 0, true);
                     else
-                        manual_crop_edit(right - left, up - down, 0, 0, false);
+                        manual_crop_edit(right - left, 2 * (down - up), false);
                 }
                 game_screen(idle);
                 if (app.settings.manual_crop)
                 {
                     const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f;
-                    const float w = 900, h = 286, x = (plat_width() - w) * 0.5f, y = plat_height() - h - 36 + (1.0f - in) * 60.0f;
-                    char values[96];
+                    const float w = 900, h = 230, x = (plat_width() - w) * 0.5f, y = plat_height() - h - 36 + (1.0f - in) * 60.0f;
+                    char values[96], ratio[24];
                     draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_CARD_A(0xf0), in));
                     text_draw_fit(x + 36, y + 22, 26, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72,
                                   tr("Manual crop"));
                     text_draw_fit(x + 36, y + 66, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
-                                  tr("{Up} {Down}  Stretch or narrow the picture vertically"));
+                                  tr("{Left} {Right}  Stretch or narrow the picture, keeping its aspect ratio"));
                     text_draw_fit(x + 36, y + 102, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
-                                  tr("{Left} {Right}  Stretch or narrow the picture horizontally"));
+                                  tr("{Up} {Down}  Move the picture up or down"));
                     text_draw_fit(x + 36, y + 138, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
-                                  tr("{R1} + {Up} {Down} {Left} {Right}  Move the picture"));
-                    {
-                        const char *label = tr("{L1}  Keep the aspect ratio:");
-                        text_draw_fit(x + 36, y + 174, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
-                                      label);
-                        text_draw(x + 36 + text_width(24, FONT_REGULAR, label) + 12, y + 177, 22, FONT_BOLD,
-                                  argb_alpha(TH_TEXT, in), ALIGN_LEFT, tr(manual_crop_locked() ? "On" : "Off"));
-                    }
-                    text_draw_fit(x + 36, y + 210, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, in), ALIGN_LEFT, w - 72,
                                   tr("{Square}  Back to the original area"));
-                    snprintf(values, sizeof(values), "%d%% x %d%%   %+d, %+d", app.settings.mc_w, app.settings.mc_h,
-                             app.settings.mc_x, app.settings.mc_y);
-                    if (manual_crop_locked())
-                    {
-                        char ratio[24];
-                        crop_ratio_text(ratio, sizeof(ratio),
-                                        (play_widescreen_active() ? 16.0f / 9.0f : host_aspect()) * app.settings.mc_w /
-                                            app.settings.mc_h);
-                        size_t used = strlen(values);
-                        snprintf(values + used, sizeof(values) - used, "   %s", ratio);
-                    }
-                    text_draw_fit(x + 36, y + 246, 22, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72, values);
+                    crop_ratio_text(ratio, sizeof(ratio),
+                                    (play_widescreen_active() ? 16.0f / 9.0f : host_aspect()) * app.settings.mc_w /
+                                        app.settings.mc_h);
+                    snprintf(values, sizeof(values), "%d%%   %+d   %s", app.settings.mc_w, app.settings.mc_y, ratio);
+                    text_draw_fit(x + 36, y + 180, 22, FONT_BOLD, argb_alpha(TH_TEXT, in), ALIGN_LEFT, w - 72, values);
                 }
                 {
                     const float t = app.settings_preview_time, in = t < 0.25f ? t / 0.25f : 1.0f,
