@@ -30,7 +30,10 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <iterator>
+#include <map>
 #include <memory>
+#include <new>
 #include <mutex>
 #include <string>
 #include <sys/socket.h>
@@ -83,7 +86,10 @@ namespace
 {
 constexpr int kMaxFiles = 128, kMaxDirs = 32;
 constexpr int kFdBase = 0x6e660000;
-constexpr size_t kBigBlock = 1u << 20, kSmallBlock = 128u << 10;
+constexpr size_t kBlock = 512u << 10;                // what is read from the server at once, and cached
+constexpr size_t kCacheTotal = 256u << 20;           // read ahead in memory, for all the files together
+constexpr size_t kCacheLeast = 32u << 20;            // a file always gets at least this much
+constexpr uint64_t kReadAhead = 16u << 20;           // files bigger than this get a thread that reads ahead
 constexpr uint32_t kTypeReg = 1, kTypeDir = 2;
 
 struct Share
@@ -108,16 +114,33 @@ int64_t now_ms()
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+struct Block
+{
+    uint8_t *data = nullptr;
+    size_t len = 0;
+};
+
+// What a file has read from the server and what a thread reads ahead for it (temporary: it goes with the file).
+struct Cache
+{
+    std::mutex m;
+    std::condition_variable cv;
+    std::map<uint64_t, Block> blocks; // by block number
+    size_t bytes = 0;
+    uint64_t want = 0; // the block the game is at: it is read first, and the ones after it
+    bool stop = false, failed = false, worker_on = false;
+    std::thread worker;
+};
+
 struct File
 {
     bool used = false;
     Share *share = nullptr;
     nfsfh *fh = nullptr;
     std::string rel;
-    uint64_t size = 0, pos = 0, buf_off = 0, next_seq = 0;
-    size_t buf_len = 0;
+    uint64_t size = 0, pos = 0;
     bool eof = false, err = false;
-    std::vector<uint8_t> buf;
+    Cache *cache = nullptr;
 };
 
 struct DirH
@@ -302,14 +325,37 @@ File *new_file()
     return nullptr;
 }
 
+std::atomic<int> g_workers{0}; // files with a thread reading ahead
+
+void free_cache(File *f)
+{
+    Cache *c = f->cache;
+    if (!c)
+        return;
+    if (c->worker_on)
+    {
+        {
+            std::lock_guard<std::mutex> g(c->m);
+            c->stop = true;
+            c->cv.notify_all();
+        }
+        c->worker.join(); // (a read that hangs is cut by the watchdog)
+        --g_workers;
+    }
+    for (auto &entry : c->blocks)
+        free(entry.second.data);
+    delete c;
+    f->cache = nullptr;
+}
+
 void free_file(File *f)
 {
+    free_cache(f);
     if (f->fh && !f->share->dead)
     {
         std::lock_guard<std::mutex> g(f->share->lock);
         nfs_close(f->share->ctx, f->fh);
     }
-    std::vector<uint8_t>().swap(f->buf);
     std::lock_guard<std::mutex> g(g_mutex);
     f->used = false;
     f->fh = nullptr;
@@ -392,40 +438,177 @@ File *open_file(const char *path, int *error)
         *error = -rc;
         return nullptr;
     }
+    f->cache = new (std::nothrow) Cache();
+    if (!f->cache)
+    {
+        free_file(f);
+        *error = ENOMEM;
+        return nullptr;
+    }
     watch_reads();
     return f;
 }
 
-bool fill(File *f, uint64_t pos)
+// One block from the server (no lock of the cache held).
+Block fetch_block(File *f, uint64_t number)
 {
+    Block b;
     if (f->share->dead)
+        return b;
+    const uint64_t start = number * kBlock;
+    if (start >= f->size)
+        return b;
+    const size_t want = static_cast<size_t>(std::min<uint64_t>(kBlock, f->size - start));
+    uint8_t *data = static_cast<uint8_t *>(malloc(want));
+    if (!data)
+        return b;
+    size_t done = 0;
+    while (done < want)
     {
-        errno = EIO;
-        f->buf_len = 0;
-        return false;
+        int rc;
+        {
+            std::lock_guard<std::mutex> g(f->share->lock);
+            f->share->read_since = now_ms();
+            rc = nfs_pread(f->share->ctx, f->fh, data + done, want - done, start + done);
+            f->share->read_since = 0;
+        }
+        if (rc <= 0)
+        {
+            if (rc < 0)
+            {
+                f->share->dead = true;
+                g_lost = true;
+            }
+            free(data);
+            return b;
+        }
+        done += static_cast<size_t>(rc);
     }
-    const size_t block = pos == f->next_seq ? kBigBlock : kSmallBlock;
-    const size_t want = static_cast<size_t>(std::min<uint64_t>(block, f->size - pos));
-    f->buf.resize(want);
-    int rc;
+    b.data = data;
+    b.len = want;
+    return b;
+}
+
+// Drops the blocks farthest from where the game is, until the cache is within its share of memory (called with c->m).
+void trim(Cache *c, uint64_t at, size_t cap)
+{
+    while (c->bytes > cap && !c->blocks.empty())
     {
-        std::lock_guard<std::mutex> g(f->share->lock);
-        f->share->read_since = now_ms();
-        rc = nfs_pread(f->share->ctx, f->fh, f->buf.data(), want, pos);
-        f->share->read_since = 0;
+        auto first = c->blocks.begin(), last = std::prev(c->blocks.end());
+        const uint64_t behind = at > first->first ? (at - first->first) * 2 : 0; // what is behind counts double
+        const uint64_t ahead = last->first > at ? last->first - at : 0;
+        auto victim = behind >= ahead ? first : last;
+        c->bytes -= victim->second.len;
+        free(victim->second.data);
+        c->blocks.erase(victim);
     }
-    if (rc < 0)
+}
+
+size_t cache_cap()
+{
+    const int n = g_workers.load() > 0 ? g_workers.load() : 1;
+    return std::max<size_t>(kCacheTotal / static_cast<size_t>(n), kCacheLeast);
+}
+
+// The thread of a big file: the block the game wants first, then the ones after it, as far as its share of memory goes.
+void read_ahead(File *f)
+{
+    Cache *c = f->cache;
+    const uint64_t blocks = (f->size + kBlock - 1) / kBlock;
+    std::unique_lock<std::mutex> lk(c->m);
+    while (!c->stop && !f->share->dead)
     {
-        errno = -rc;
-        f->buf_len = 0;
-        f->share->dead = true;
-        g_lost = true;
-        return false;
+        const uint64_t at = c->want;
+        const size_t cap = cache_cap();
+        const uint64_t ahead = (cap / kBlock) * 7 / 8; // what would be dropped at once is not read
+        uint64_t target = ~0ull;
+        if (!c->blocks.count(at) && at < blocks)
+            target = at;
+        else
+            for (uint64_t k = at + 1; k < blocks && k < at + ahead; ++k)
+                if (!c->blocks.count(k))
+                {
+                    target = k;
+                    break;
+                }
+        if (target == ~0ull)
+        {
+            trim(c, at, cap);
+            c->cv.wait_for(lk, std::chrono::milliseconds(200));
+            continue;
+        }
+        lk.unlock();
+        Block b = fetch_block(f, target);
+        lk.lock();
+        if (!b.data)
+        {
+            c->failed = true;
+            c->cv.notify_all();
+            break;
+        }
+        if (c->blocks.count(target))
+            free(b.data);
+        else
+        {
+            c->blocks[target] = b;
+            c->bytes += b.len;
+        }
+        trim(c, c->want, cap);
+        c->cv.notify_all();
     }
-    f->buf_off = pos;
-    f->buf_len = static_cast<size_t>(rc);
-    f->next_seq = pos + static_cast<uint64_t>(rc);
-    return rc > 0;
+    c->failed = c->failed || f->share->dead;
+    c->cv.notify_all();
+}
+
+// `n` bytes from `offset` of block `number` into `dst`: how many (0 when the server cannot give the block).
+size_t block_bytes(File *f, uint64_t number, size_t offset, uint8_t *dst, size_t n)
+{
+    Cache *c = f->cache;
+    std::unique_lock<std::mutex> lk(c->m);
+    for (;;)
+    {
+        auto it = c->blocks.find(number);
+        if (it != c->blocks.end())
+        {
+            const Block &b = it->second;
+            const size_t take = offset < b.len ? std::min(n, b.len - offset) : 0;
+            memcpy(dst, b.data + offset, take);
+            if (c->want != number)
+            {
+                c->want = number;
+                c->cv.notify_all();
+            }
+            return take;
+        }
+        if (f->share->dead || c->failed)
+            return 0;
+        c->want = number;
+        if (!c->worker_on && f->size > kReadAhead && !c->stop)
+        {
+            c->worker_on = true;
+            ++g_workers;
+            c->worker = std::thread(read_ahead, f);
+        }
+        if (c->worker_on)
+        {
+            c->cv.notify_all();
+            c->cv.wait_for(lk, std::chrono::milliseconds(100));
+            continue;
+        }
+        lk.unlock();
+        Block b = fetch_block(f, number);
+        lk.lock();
+        if (!b.data)
+            return 0;
+        if (c->blocks.count(number))
+            free(b.data);
+        else
+        {
+            c->blocks[number] = b;
+            c->bytes += b.len;
+            trim(c, number, cache_cap());
+        }
+    }
 }
 
 size_t read_at(File *f, uint64_t pos, void *dst, size_t n)
@@ -434,15 +617,13 @@ size_t read_at(File *f, uint64_t pos, void *dst, size_t n)
     uint8_t *out = static_cast<uint8_t *>(dst);
     while (got < n && pos < f->size)
     {
-        if (pos < f->buf_off || pos >= f->buf_off + f->buf_len)
-            if (!fill(f, pos))
-            {
-                f->err = f->err || errno != 0;
-                break;
-            }
-        const size_t off = static_cast<size_t>(pos - f->buf_off);
-        const size_t take = std::min(n - got, f->buf_len - off);
-        memcpy(out + got, f->buf.data() + off, take);
+        const size_t take = block_bytes(f, pos / kBlock, static_cast<size_t>(pos % kBlock), out + got, n - got);
+        if (take == 0)
+        {
+            errno = EIO;
+            f->err = true;
+            break;
+        }
         got += take;
         pos += take;
     }
