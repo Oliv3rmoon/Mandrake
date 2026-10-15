@@ -1790,6 +1790,8 @@ static float auto_since, auto_shown; /* auto-save: time since the last, and its 
 /* Buttons still held from the menu when the game comes back (the Cross that
  * chose Resume): the game doesn't see them until they're let go. */
 static uint32_t held_from_menu;
+static bool input_reported;      /* the first button that reached the game was logged */
+static uint64_t input_start_us;  /* when the game screen was entered */
 
 static void game_screen(PadState *pads)
 {
@@ -1799,6 +1801,18 @@ static void game_screen(PadState *pads)
     held_from_menu &= held_now;
     for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
         pads[i].buttons &= ~held_from_menu;
+    if (!input_reported)
+    {
+        uint32_t reaching = 0;
+        for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
+            reaching |= pads[i].buttons;
+        if (reaching)
+        {
+            input_reported = true;
+            SwanStationPS5_log("input: the first buttons reach the game (0x%x) %.1f s after it began", reaching,
+                      (double)(plat_ticks_us() - input_start_us) / 1e6);
+        }
+    }
 
     /* Touchpad: a tap is the PS1's Select (the PS5 SDL driver has no Create
      * button); the menu is the touchpad held for 1 second. */
@@ -2110,7 +2124,7 @@ static void game_screen(PadState *pads)
             double own = app.real_fps > 1.0f ? app.real_fps : app.fps;
             int times = plat_framegen_times();
             double shown = own * (times > 1 ? times : 2) < fg_hz ? own * (times > 1 ? times : 2) : fg_hz;
-            snprintf(f, sizeof(f), "%.0f FPS (%s %.1f)", shown, tr("game"), own);
+            snprintf(f, sizeof(f), "%.1f FPS (%s %.1f) | FG x%d", shown, tr("game"), own, times > 1 ? times : 2);
         }
         else if (app.real_fps > 0.0f && app.fps - app.real_fps >= 1.0f)
             snprintf(f, sizeof(f), "%.1f FPS (%s %.1f)", app.fps, tr("game"), app.real_fps);
@@ -2402,8 +2416,22 @@ int main(int argc, char **argv)
         case SCREEN_LIBRARY: shelf_screen(pressed); break;
         case SCREEN_GAME:
             if (last_screen != SCREEN_GAME)
+            {
+                int connected = 0;
+                uint32_t held = 0;
                 for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
+                {
                     held_from_menu |= pads[i].buttons;
+                    held |= pads[i].buttons;
+                    connected += pads[i].connected;
+                }
+                if (last_screen != SCREEN_MENU && last_screen != SCREEN_SETTINGS)
+                {
+                    input_reported = false;
+                    input_start_us = plat_ticks_us();
+                    SwanStationPS5_log("input: game screen, %d pad(s) connected, buttons held at the start 0x%x", connected, held);
+                }
+            }
             game_screen(pads);
             break;
         case SCREEN_MENU: menu_screen(pressed); break;
