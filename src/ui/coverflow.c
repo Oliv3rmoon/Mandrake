@@ -56,6 +56,7 @@
 #define DELETE_HOLD 2.0f /* seconds Triangle is held in Details to delete the game's files */
 #define QUIT_HOLD 2.0f   /* seconds O is held on the shelf to close the app */
 #define DISC_TIME 0.95f  /* before it, with the disc animation: the disc slides out and spins up */
+#define CASE_SPIN_START 0.8f /* with the 3D cases: when the CD starts to spin (the sound of the disc starts then) */
 #define CASE_DISC_TIME 2.4f /* the same with the 3D cases: the lid opens and the CD spins up on its tray */
 static bool shelf_cases(void);
 
@@ -1963,7 +1964,10 @@ void shelf_screen(uint32_t pressed)
     }
     else if (S.launch_t > 0.0f)
     {
+        const float before = S.launch_t;
         S.launch_t = fminf(S.launch_t + app.dt, launch_total());
+        if (shelf_cases() && app.global.disc_animation && before < CASE_SPIN_START && S.launch_t >= CASE_SPIN_START)
+            sfx_play_disc();
         if (S.launch_t >= launch_total())
             S.starting = true;
     }
@@ -2092,7 +2096,7 @@ void shelf_screen(uint32_t pressed)
                 {
                     /* the chosen case: the lid opens and the CD spins up on its tray while the game loads */
                     const float t = S.launch_t, o = fminf(t / 0.95f, 1.0f);
-                    const float u = fmaxf(t - 0.8f, 0.0f);
+                    const float u = fmaxf(t - CASE_SPIN_START, 0.0f);
                     case3d_launch(o * o * (3.0f - 2.0f * o), 7.0f * u * u);
                 }
                 if (cases_)

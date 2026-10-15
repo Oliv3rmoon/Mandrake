@@ -11,6 +11,7 @@
 #include "../platform/platform.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -103,8 +104,84 @@ static Sound make(int rate, const Recipe *r)
     return s;
 }
 
+static Sound disc_sound;
+#define DISC_GAIN 0.5f /* the disc sound's gain, before the interface's volume */
+
+static uint32_t le32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+/* A PCM WAV of 16 bits, mono or stereo, at any rate: stereo at `rate`. */
+static Sound load_wav(const char *path, int rate)
+{
+    Sound s = {0};
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return s;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t *d = size > 12 && size < (16 << 20) ? malloc((size_t)size) : NULL;
+    if (!d || fread(d, 1, (size_t)size, f) != (size_t)size)
+    {
+        free(d);
+        fclose(f);
+        return s;
+    }
+    fclose(f);
+    int channels = 0, bits = 0;
+    uint32_t src_rate = 0;
+    const uint8_t *data = NULL;
+    uint32_t data_bytes = 0;
+    if (memcmp(d, "RIFF", 4) == 0 && memcmp(d + 8, "WAVE", 4) == 0)
+        for (size_t i = 12; i + 8 <= (size_t)size;)
+        {
+            const uint32_t n = le32(d + i + 4);
+            if (!memcmp(d + i, "fmt ", 4) && n >= 16 && i + 8 + 16 <= (size_t)size && d[i + 8] == 1)
+            {
+                channels = d[i + 10];
+                src_rate = le32(d + i + 12);
+                bits = d[i + 22];
+            }
+            else if (!memcmp(d + i, "data", 4) && i + 8 + n <= (size_t)size)
+            {
+                data = d + i + 8;
+                data_bytes = n;
+                break;
+            }
+            i += 8 + (size_t)n + (n & 1);
+        }
+    if (data && bits == 16 && (channels == 1 || channels == 2) && src_rate > 0 && rate > 0)
+    {
+        const size_t in_frames = data_bytes / (size_t)(2 * channels);
+        const size_t out_frames = (size_t)((double)in_frames * rate / src_rate);
+        s.frames = in_frames > 1 ? malloc(out_frames * 2 * sizeof(int16_t)) : NULL;
+        for (size_t k = 0; s.frames && k < out_frames; ++k)
+        {
+            const double pos = (double)k * src_rate / rate;
+            size_t a = (size_t)pos, b = a + 1 < in_frames ? a + 1 : a;
+            const double t = pos - (double)a;
+            for (int c = 0; c < 2; ++c)
+            {
+                const int ch = channels == 1 ? 0 : c;
+                const int16_t x = (int16_t)(data[(a * channels + ch) * 2] | data[(a * channels + ch) * 2 + 1] << 8);
+                const int16_t y = (int16_t)(data[(b * channels + ch) * 2] | data[(b * channels + ch) * 2 + 1] << 8);
+                s.frames[k * 2 + c] = (int16_t)((double)x + ((double)y - (double)x) * t);
+            }
+        }
+        s.count = s.frames ? out_frames : 0;
+    }
+    free(d);
+    return s;
+}
+
 void sfx_init(int rate)
 {
+    free(disc_sound.frames);
+    char path[512];
+    plat_asset_path(path, sizeof(path), "psxdiscsound.wav");
+    disc_sound = load_wav(path, rate);
     for (int st = 0; st < SFX_STYLE_COUNT; ++st)
     {
         for (int i = 0; i < SFX_COUNT; ++i)
@@ -142,4 +219,17 @@ void sfx_play(Sfx id)
     for (size_t i = 0; i < n; ++i)
         scaled[i] = (int16_t)(s->frames[i] * volume);
     plat_audio_push(scaled, n / 2);
+}
+
+void sfx_play_disc(void)
+{
+    if (!enabled || !disc_sound.frames || volume <= 0.0f)
+        return;
+    int16_t *scaled = malloc(disc_sound.count * 2 * sizeof(int16_t));
+    if (!scaled)
+        return;
+    for (size_t i = 0; i < disc_sound.count * 2; ++i)
+        scaled[i] = (int16_t)(disc_sound.frames[i] * volume * DISC_GAIN);
+    plat_audio_push(scaled, disc_sound.count);
+    free(scaled);
 }
