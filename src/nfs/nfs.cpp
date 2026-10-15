@@ -36,6 +36,7 @@
 #include <new>
 #include <mutex>
 #include <string>
+#include <strings.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -224,6 +225,34 @@ bool normalize(const char *path, std::string &out)
     if (out.empty())
         out = "/";
     return true;
+}
+
+std::string g_sbi_dir; // set once at the start
+
+bool has_sbi_ext(const char *path)
+{
+    const size_t n = strlen(path);
+    return n > 4 && !strcasecmp(path + n - 4, ".sbi");
+}
+
+// The local file that stands for an .sbi of a share ("" when the path is not one, or no folder was given).
+std::string sbi_overlay(const char *path)
+{
+    std::string p;
+    if (g_sbi_dir.empty() || !has_sbi_ext(path) || !normalize(path, p))
+        return "";
+    uint64_t h = 1469598103934665603ull;
+    for (unsigned char c : p)
+        h = (h ^ c) * 1099511628211ull;
+    char name[40];
+    snprintf(name, sizeof(name), "/%016llx.sbi", static_cast<unsigned long long>(h));
+    return g_sbi_dir + name;
+}
+
+bool exists_local(const std::string &path)
+{
+    struct stat st;
+    return !path.empty() && __real_stat(path.c_str(), &st) == 0;
 }
 
 bool under(const std::string &path, const std::string &folder) // path is folder or inside it
@@ -1094,6 +1123,11 @@ extern "C" int nfs_first_failure(char *detail, size_t size)
     return NFS_FAIL_NONE;
 }
 
+extern "C" void nfs_set_sbi_dir(const char *dir)
+{
+    g_sbi_dir = dir ? dir : "";
+}
+
 extern "C" int nfs_unmounted(void)
 {
     std::lock_guard<std::mutex> g(g_mutex);
@@ -1132,15 +1166,23 @@ extern "C"
     {
         if (!is_nfs(path))
             return __real_fopen(path, mode);
+        const std::string sbi = sbi_overlay(path);
         if (!read_mode(mode))
         {
-            errno = EROFS;
-            return nullptr;
+            if (sbi.empty())
+            {
+                errno = EROFS;
+                return nullptr;
+            }
+            mkdir(g_sbi_dir.c_str(), 0777);
+            return __real_fopen(sbi.c_str(), mode);
         }
         int e = 0;
         File *f = open_file(path, &e);
         if (!f)
         {
+            if (!sbi.empty() && exists_local(sbi))
+                return __real_fopen(sbi.c_str(), mode);
             errno = e;
             return nullptr;
         }
@@ -1285,15 +1327,23 @@ extern "C"
         }
         if (!is_nfs(path))
             return __real_open(path, flags, mode);
+        const std::string sbi = sbi_overlay(path);
         if ((flags & O_ACCMODE) != O_RDONLY || (flags & (O_CREAT | O_TRUNC)))
         {
-            errno = EROFS;
-            return -1;
+            if (sbi.empty())
+            {
+                errno = EROFS;
+                return -1;
+            }
+            mkdir(g_sbi_dir.c_str(), 0777);
+            return __real_open(sbi.c_str(), flags, mode);
         }
         int e = 0;
         File *f = open_file(path, &e);
         if (!f)
         {
+            if (!sbi.empty() && exists_local(sbi))
+                return __real_open(sbi.c_str(), flags, mode);
             errno = e;
             return -1;
         }
@@ -1353,6 +1403,9 @@ extern "C"
             e = nfs_stat_path(w, st);
         if (e)
         {
+            const std::string sbi = sbi_overlay(path);
+            if (!sbi.empty() && __real_stat(sbi.c_str(), st) == 0)
+                return 0;
             errno = e;
             return -1;
         }
@@ -1368,13 +1421,15 @@ extern "C"
     {
         if (!is_nfs(path))
             return __real_access(path, mode);
-        if (mode & W_OK)
+        if ((mode & W_OK) && sbi_overlay(path).empty())
         {
             errno = EROFS;
             return -1;
         }
         struct stat st;
-        return __wrap_stat(path, &st);
+        if (__wrap_stat(path, &st) == 0)
+            return 0;
+        return (mode & W_OK) && !sbi_overlay(path).empty() ? 0 : -1; // an .sbi that is not there yet may be written
     }
 
     char *__wrap_realpath(const char *path, char *resolved)

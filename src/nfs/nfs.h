@@ -69,6 +69,11 @@ extern "C"
     /* How many of the shares set are not mounted. */
     int nfs_unmounted(void);
 
+    /* Where the .sbi files of the games on a share are kept: the share is read only and the core looks for the .sbi
+     * beside the disc image, so an .sbi under /nfs that the server does not have is read from and written to a file of
+     * this folder instead. */
+    void nfs_set_sbi_dir(const char *dir);
+
     /* One line per share with its state, for the log and the notices. */
     void nfs_describe(char *out, size_t size);
 

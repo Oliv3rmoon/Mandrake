@@ -2326,6 +2326,11 @@ int main(int argc, char **argv)
     }
     config_load(&app.global, app.paths.config);
     app.settings = app.global;
+    {
+        char sbi_dir[SwanStationPS5_PATH_MAX];
+        path_join(sbi_dir, sizeof(sbi_dir), app.paths.cache, "nfs-sbi");
+        nfs_set_sbi_dir(sbi_dir);
+    }
     if (app.global.nfs_shares[0])
     {
         char nfs_error[256];
