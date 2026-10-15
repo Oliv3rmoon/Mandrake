@@ -39,7 +39,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 
 ## Highlights
 
-- **The shelf and menus on the GPU too.** The interface is drawn through Vulkan, with a floor reflection under every cover. When you start a game, the case's lid opens and the CD spins.
+- **The shelf and menus on the GPU too.** The interface is drawn through Vulkan, with a floor reflection under every cover. When you start a game, the case's lid opens and the CD spins, with the sound of a disc spinning up.
 - **Always 4K.** The picture is sent to the TV at 4K, and it falls back to 1080p if the TV lacks the mode.
 - **Up to 16x resolution on the GPU.** SwanStation renders through Vulkan: native, 2x, 4x, 8x or 16x (4x by default), at full speed.
 - **No more wobbly 3D.** PGXP (precise geometry) keeps polygons still and textures straight.
@@ -48,9 +48,11 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 
 - **Five themes.** Neon Arcade (the default), Classic, Memory Card (light and dark, a grid of covers) and Record Shelf (spines on a shelf), each with its own colours and fonts. Around a 4:3 picture: black, the current background or a 90s TV, or the game's own artwork frame (off by default).
 - **Games on a USB drive, by one name.** *Games folder on USB drives* (`psx` by default, typed with an on-screen keyboard) is looked for on `/mnt/usb0/` and `/mnt/usb1/` at once, so it still works when the console numbers your drives differently.
+- **Games on an NFS server.** Keep your games on a PC or a NAS and play them over the network: add the server in Settings > System > NFS shares. They show on the shelf like a drive's, a background thread reads the disc ahead of the game, and a server that goes away just takes you back to the library. See [Games on an NFS server](#games-on-an-nfs-server).
 - **Play your own PS1 discs from a USB CD drive.** Put a PS1 disc in a USB CD drive and SwanStationPS5 copies it to your games folder (a `.bin` and a `.cue`, with a progress bar and the game's cover), adds it to the shelf and starts it. Once a disc is installed, putting it in again just starts the game. With the disc daemon this works even with the app closed. See [Playing from a USB CD drive](#playing-from-a-usb-cd-drive).
 - **Discs without opening the app.** Send `SwanStationPS5-DiscDaemon.elf` (a file of the release) once to your console's ELF loader and leave it running: a disc put in the drive is installed with the console's own notifications (name, percentage and time left), and then the game opens by itself.
 - **Multi-disc games.** Change disc from the in-game menu and it happens as soon as you choose; the disc you leave a game on is the one it starts on next time. A `.m3u` playlist of `.chd` discs gets its serial (and so its cover and data) from the first disc's name.
+- **Analog mode on at start.** A DualShock starts in analog mode in the games that use the sticks, unless the game's entry says to start in digital mode (the ANALOG button combo still switches it).
 - **The DualSense as a light gun.** Point the controller at the screen in GunCon games (Time Crisis, Point Blank...); R2 fires.
 - **Adaptive triggers.** R2 feels like a gas pedal in racing games, and R2 / L2 can be the gas and brake.
 - **Profiles.** Each person keeps their own memory cards, save states, settings, play time and RetroAchievements sign-in.
@@ -63,7 +65,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 - **CRT look.** Light or strong scanlines, and the current background or a 90s TV around the picture.
 - **Shaders for the picture** (Settings → Display → Shader): Sharp bilinear (crisp PS1 pixels at any internal resolution), CRT Basic (scanlines, an RGB grille and glow), LCD3x (a handheld's LCD), CRT Royale (a detailed CRT with bloom and a phosphor mask) and four NTSC ones (320px or 256px, S-Video or Composite) that recreate the analog TV signal.
 - **Generate frames.** AMD FSR 3's frame interpolation adds frames between the game's real ones. x2 puts one between each two: a 30 fps game is shown at 60, and with *Video output* at 120 Hz a 60 fps one at 120. x4 puts three: with *Video output* at 120 Hz a 30 fps game is shown at 120. At 60 Hz it only doubles. SwanStation tells the app when a picture is a repeat, so it starts from the game's real rate. The shaders run after it, CRT Royale and NTSC included.
-- **Show FPS that tells the truth.** It shows the emulated frames, the game's own rate when the game repeats pictures (`60.0 FPS (game 25.0)`) and, while frames are generated, the frames you actually see (`100 FPS (game 25.0)`).
+- **Show FPS that tells the truth.** It shows the emulated frames, the game's own rate when the game repeats pictures (`60.0 FPS (game 25.0)`) and, while frames are generated, the frames you actually see and how many are made for each of the game's (`100.0 FPS (game 25.0) | FG x4`).
 - **HD texture packs.** The *Load HD textures* switch turns on SwanStation's texture replacement; put a pack's PNG files in `/data/SwanStationPS5/cache/textures/<serial>/` (for example `SCUS-94900`).
 - **PS1 homebrew.** Homebrew discs boot too: [Yume Nikki PS1](https://eliasdaler.itch.io/yume-nikki-ps1) and [Doki Doki Literature Club PSX](https://www.psxhomebrewgames.com/2025/09/doki-doki-literature-club-psx.html) are confirmed.
 - **PSXS5 friendly.** It still reads PSXS5's games and BIOS folders (see [supported folders](#supported-folders-for-games-and-bios)), so a PSXS5 library keeps working.
@@ -86,6 +88,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
   - Output: 1080p, 1440p or 4K (Settings → System → SwanStationPS5), changed at once.
   - Internal resolution: native up to 16x with SwanStation.
   - Aspect ratio: auto, 4:3, 16:9, 16:10, 1:1 pixels or stretch, and *Crop black edges* to hide the black lines at the top and bottom.
+  - *Manual crop*, under Aspect ratio: open the preview with the touchpad, and Left / Right stretch or narrow the picture (always keeping its aspect ratio, which is shown) while Up / Down move it up or down. Square goes back to the original area.
   - Integer scaling and smooth final scaling on or off (sharp pixels by default).
 - **Built for full speed.** 60 fps (50 for PAL games). SwanStation renders on the GPU, and so do the shelf and the menus; everything reaches the TV through Vulkan.
 - **RetroAchievements.** Earn [RetroAchievements](https://retroachievements.org) as you play.
@@ -151,6 +154,7 @@ The games are looked for in all of these folders at once. Inside each, **one fol
 | The console, from PSXS5 | `/data/PSXS5/games/<Game name>/` |
 | **A USB drive** | `/mnt/usb0` or `/mnt/usb1`, then `SwanStationPS5/games/<Game name>/` |
 | An extended storage | `/mnt/ext0` or `/mnt/ext1`, then `SwanStationPS5/games/<Game name>/` |
+| **An NFS server** | the folder you add in Settings > System > NFS shares, one folder per game (see [Games on an NFS server](#games-on-an-nfs-server)) |
 
 On each USB drive and extended storage these four also work (`<drive>` is `/mnt/usb0`, `/mnt/usb1`, `/mnt/ext0` or `/mnt/ext1`):
 
@@ -173,6 +177,34 @@ You can also pick one folder name for USB drives in Settings > System > SwanStat
 Put the BIOS files directly in the folder, not in a subfolder, and keep their standard names: `SCPH1001.BIN` (recommended), `scph5500.bin` (Japan), `scph5501.bin` (USA), `scph5502.bin` (Europe), `scph101.bin`. A BIOS on a USB drive or extended storage is not read. With no BIOS, SwanStation uses its built-in OpenBIOS. *Settings → About* shows which one is in use.
 
 > On a USB drive or extended storage SwanStationPS5 needs `/data` unlocked to list the folders (see below). Sandboxed, it only shows the games listed in `/data/SwanStationPS5/library.txt`.
+
+## Games on an NFS server
+
+You can keep your games on a PC or a NAS and play them over your network, with no copy to the console. The console has no NFS client of its own, so SwanStationPS5 carries one ([libnfs](https://github.com/sahlberg/libnfs)): only the app sees the share. It is read only, and the BIOS, saves, states and covers stay on the console.
+
+### 1. Share the games folder from the server
+
+Put one folder per game inside the folder you share (the same as in [Supported folders](#supported-folders-for-games-and-bios): `.cue` + `.bin`, `.chd`, `.pbp`, `.iso`, `.m3u`...), and export it over NFS to the console's address:
+
+- **Windows:** run an NFS server such as WinNFSd with the folder and an alias, for example `winnfsd.exe D:\psx /psx`. The alias (`/psx`) is the path you type in the app.
+- **Linux, or a NAS** (Synology, QNAP, TrueNAS...): turn NFS on, and export the folder read only to the console. On Linux, in `/etc/exports`: `/srv/psx 192.168.1.0/24(ro,no_subtree_check)`. If the console is refused, try adding `insecure` to the options.
+- NFS v3 is used by default. A server that only speaks v4 needs `?version=4` at the end of the address.
+
+### 2. Add it in the app
+
+1. Open **Settings > System > NFS shares**. The on-screen keyboard opens with an example (`nfs://192.168.1.85/psx`).
+2. Type the address of your server and the exported folder, with `nfs://` in front: `nfs://<server IP>/<exported folder>`. For example, `nfs://192.168.1.50/psx`. Several shares go separated by `;`.
+3. Press Apply. The app connects and reloads the library. A notice says `NFS share connected.` or why it could not, and the games of the share show on the shelf.
+
+Useful options go after a `?`: `?version=4` (NFS v4 only), `?nfsport=2049&mountport=1058` (fixed ports, when the server has no portmapper), `?uid=1000&gid=100` (who the server sees). The folder you type can also be inside what the server exports.
+
+### Good to know
+
+- **Opening the app never waits for the server.** The shares mount in the background and the library is scanned again when they are ready.
+- **Reconnecting.** If the server was closed and opened again, or was off when you opened the app, go to **Settings > Library > Rescan library**: it checks the shares again and mounts the ones that are not. A rescan also takes you back to *All games*.
+- **Smooth playing.** While a game runs, a background thread reads the disc image ahead of the game and keeps up to 256 MiB of it in memory, so the game does not wait for the network on every read. The memory goes back when you close the game; nothing is written to the console.
+- **If the connection is lost in the middle of a game** (the server is closed or the network goes), the game is left, the library is reloaded and a notice says *NFS communication was lost*.
+- **Not connecting?** The notice says why: the server did not answer, the connection was refused or closed, the name was not found, the server denies the console, or the folder is not exported (it then lists what the server does export, so you can copy the right path).
 
 ## What you need
 
@@ -293,7 +325,7 @@ It also shows the time and how long you've been playing.
 | Controls | Controller (digital or DualShock), left stick as D-pad, vibration, light bar, players (multitap), player order, dead zone, stick response, rumble feel, trigger effects, gas and brake on R2 / L2, light gun, button mapping, and SwanStation's controller port options |
 | Achievements | Account, your profile, unlock pop-ups and their style, progress tracker, hardcore mode |
 | Library | Theme, cover style, download missing covers, sort, your library, memory cards, rescan |
-| System | SwanStationPS5 (start the BIOS, games folder on USB drives), region, PS1 startup intro, fast CD loading, known game fixes, SwanStation's console and advanced options, quick resume, rewind, auto-save, who's playing (profiles), settings from your phone, language, unlocking `/data`, PS5SX2 Helper whitelist |
+| System | SwanStationPS5 (start the BIOS, games folder on USB drives, NFS shares), region, PS1 startup intro, fast CD loading, known game fixes, SwanStation's console and advanced options, quick resume, rewind, auto-save, who's playing (profiles), settings from your phone, language, unlocking `/data`, PS5SX2 Helper whitelist |
 
 Video settings apply while you play. Internal resolution, PGXP, region, BIOS, controller and SwanStation's options apply from the next game.
 
@@ -405,6 +437,7 @@ SwanStationPS5 started as a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) b
 * **sodaraptor** ([@sodaraptor_dev](https://sodaraptor.itch.io/psx-jewel-case)), for the PSX jewel case model and textures the shelf's 3D cases are built from: [Hypnagogia 無限の夢 Boundless Dreams Jewel Case](https://sketchfab.com/3d-models/hypnagogia-boundless-dreams-jewel-case-20e4780167b6441fb364060c79870378) (CC-BY 4.0), with each game's own cover in place of its art.
 * **The [libretro-database](https://github.com/libretro/libretro-database) contributors**, for the PlayStation cheat library.
 * **Swordpdf**, for [PS5SX2](https://github.com/Swordpdf/PS5SX2). Its shelf and project page inspired SwanStationPS5's, and studying it and the other PS5 emulator ports showed how a native emulator title runs on the console.
+* **Ronnie Sahlberg**, for [libnfs](https://github.com/sahlberg/libnfs) (LGPL-2.1-or-later), the NFS client behind *Games on an NFS server*, and **tutifrutas**, for the [SwanStationPS5 fork](https://github.com/tutifrutas/SwanStationPS5) whose console configuration of it is used here.
 * **Swordpdf and AMD**, for the frame interpolation behind *Generate frames*: [PS5SX2](https://github.com/Swordpdf/PS5SX2)'s port of AMD FSR 3 (FidelityFX SDK), as first integrated in PSXS5 by SynoPiia.
 * **Al-Azif**, for [ps-disc-detect](https://github.com/Al-Azif/ps-disc-detect) (GPL-3.0): the disc installation follows its way of reaching the drive through the CAM pass-through and of dumping a CD to `.bin` and `.cue` with `READ CD`. And **Swordpdf**, for [PS5SX2](https://github.com/Swordpdf/PS5SX2)'s disc code and its rule that a command only counts as done when the drive handed over every byte.
 * **crashGG** ([github.com/crashGG](https://github.com/crashGG)), for MMPX 3.0 and MMPX 3.2, the texture filters of the same names, and **Morgan McGuire and Mara Gagiu**, for [MMPX](https://casual-effects.com/research/McGuire2021PixelArt/), the pixel art filter they are built on (MMPX Basic).
