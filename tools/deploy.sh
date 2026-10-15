@@ -176,6 +176,8 @@ python3 - "$host" "$port" "$user" "$password" "$title_id" "$format" "$artifact" 
 from ftplib import FTP, error_perm
 from pathlib import Path
 from posixpath import dirname, join
+import hashlib
+import json
 import sys
 
 host, port, user, password, title_id, format_name, artifact_name = sys.argv[1:]
@@ -191,6 +193,24 @@ def list_names(ftp, path):
     ftp.cwd(path)
     try:
         return {name for name, _ in ftp.mlsd() if name not in {".", ".."}}
+    finally:
+        ftp.cwd(previous)
+
+
+def list_sizes(ftp, path):
+    # name -> size of the files in a remote folder ({} when it is not there yet). The console's FTP server answers MLSD
+    # only without arguments, from inside the folder.
+    previous = ftp.pwd()
+    try:
+        ftp.cwd(path)
+    except error_perm:
+        return {}
+    try:
+        return {
+            name: int(facts.get("size", -1))
+            for name, facts in ftp.mlsd()
+            if facts.get("type") == "file"
+        }
     finally:
         ftp.cwd(previous)
 
@@ -247,12 +267,45 @@ with FTP() as ftp:
         ) + critical
         print(f"==> [deploy] Publishing {len(files)} files; eboot.bin and param.json are last")
         remote_root = join(homebrew_root, title_id)
+        # Only what changed is sent. A manifest (build/deploy-manifest.json) keeps the hash and the size of each file
+        # as it was sent to this console; a file is left alone when its hash is the same and the console still has
+        # a file of that name and size. (The .sbi files, which never change, are also left alone by size when the
+        # manifest does not know them yet.) param.json is always sent, and last.
+        manifest_path = Path("build/deploy-manifest.json")
+        manifests = {}
+        try:
+            manifests = json.loads(manifest_path.read_text())
+        except (OSError, ValueError):
+            pass
+        key = f"{host}:{title_id}"
+        known = manifests.get(key, {})
+        sent = {}
+        console = {}
+        skipped = 0
         for index, local in enumerate(files, 1):
             relative = local.relative_to(artifact).as_posix()
             if "\n" in relative or "\r" in relative:
                 raise RuntimeError(f"deployment paths cannot contain newlines: {relative!r}")
+            folder = join(remote_root, dirname(relative)) if dirname(relative) else remote_root
+            if folder not in console:
+                console[folder] = list_sizes(ftp, folder)
+            size = local.stat().st_size
+            digest = hashlib.sha256(local.read_bytes()).hexdigest()
+            on_console = console[folder].get(local.name) == size
+            same = known.get(relative) == [digest, size]
+            sbi = relative.startswith("assets/sbi_files/") and relative.endswith(".sbi")
+            if relative != "sce_sys/param.json" and on_console and (same or (sbi and relative not in known)):
+                sent[relative] = [digest, size]
+                skipped += 1
+                continue
             print(f"==> [deploy] [{index}/{len(files)}] {relative}")
             upload_atomic(ftp, local, join(remote_root, relative))
+            sent[relative] = [digest, size]
+        if skipped:
+            print(f"==> [deploy] {skipped} files were already on the console, unchanged, and were not sent again")
+        manifests[key] = sent
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifests, indent=1))
         if "eboot.bin" not in list_names(ftp, remote_root):
             raise RuntimeError("FTP upload completed but eboot.bin is not listed")
         if "param.json" not in list_names(ftp, join(remote_root, "sce_sys")):
