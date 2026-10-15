@@ -169,7 +169,7 @@ static const Row DISPLAY[] = {
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(sharpen), SHARPENS, 3, 0},
     {NULL, "Crop black edges", "Hides the black lines many games leave at the top and bottom, which an old TV hid. Pair with Stretch to fill the screen.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(crop_edges), CROPS, 3, 0},
-    {NULL, "Manual crop", "Ignores the crop mode and draws the whole picture, whose area you set yourself. Open the preview with the touchpad: {Up}/{Down} stretch or narrow the picture, {Left}/{Right} do the same sideways, and {R1} with the directions moves it. Turn it off and everything is as it was.",
+    {NULL, "Manual crop", "Ignores the crop mode and draws the whole picture, whose area you set yourself. Open the preview with {Touchpad}: {Up}/{Down} stretch or narrow the picture, {Left}/{Right} do the same sideways, and {R1} with the directions moves it. Turn it off and everything is as it was.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(manual_crop), OFF_ON, 2, 0},
     {NULL, "Generate frames",
      "Adds frames AMD FSR 3 makes between the game's own, so motion looks smoother. x2: one between each two, so 30 fps shows at 60 and, with Video output at 120 Hz, 60 fps shows at 120. x4: three between each two, only with Video output at 120 Hz: a 30 fps game shows at 120. With Video output at 60 Hz it only doubles. Each extra frame adds a little input lag. It works at once. Video output is changed above and applies the next time the app starts.",
@@ -2007,7 +2007,8 @@ void settings_screen(uint32_t pressed)
     if (scope_game() && app.game_has_own && S.game_scope)
     {
         static const int glyphs[] = {GLYPH_CROSS, GLYPH_CIRCLE, GLYPH_TRIANGLE, GLYPH_SQUARE, GLYPH_TOUCHPAD};
-        static const char *const labels[] = {"Change", "Back", "Default", "Use all-games settings", "Preview"};
+        const char *const labels[] = {"Change", "Back", "Default", "Use all-games settings",
+                                      app.settings.manual_crop ? "Preview with manual crop" : "Preview"};
         app_draw_hints(glyphs, labels, app.game ? 5 : 4, NULL);
         const HintCombo right[1] = {{{GLYPH_L1, GLYPH_R1}, 2, '/', "Tabs"}};
         app_draw_hints_right(right, 1);
@@ -2015,7 +2016,8 @@ void settings_screen(uint32_t pressed)
     else
     {
         static const int glyphs[] = {GLYPH_CROSS, GLYPH_CIRCLE, GLYPH_TRIANGLE, GLYPH_TOUCHPAD};
-        static const char *const labels[] = {"Change", "Back", "Default", "Preview"};
+        const char *const labels[] = {"Change", "Back", "Default",
+                                      app.settings.manual_crop ? "Preview with manual crop" : "Preview"};
         app_draw_hints(glyphs, labels, app.game ? 4 : 3, NULL);
         const HintCombo right[1] = {{{GLYPH_L1, GLYPH_R1}, 2, '/', "Tabs"}};
         app_draw_hints_right(right, 1);
