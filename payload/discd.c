@@ -14,6 +14,7 @@
 #include "cdscsi.h"
 #include "disceta.h"
 #include "discimport.h"
+#include "drives.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -177,6 +178,19 @@ static bool install_only(void)
     while (f && fgets(line, sizeof(line), f))
         if (strncmp(line, "disc_install_only=", 18) == 0)
             on = atoi(line + 18) != 0;
+    if (f)
+        fclose(f);
+    return on;
+}
+
+static bool install_to_ext(void)
+{
+    FILE *f = fopen(CONFIG, "r");
+    char line[256];
+    bool on = false;
+    while (f && fgets(line, sizeof(line), f))
+        if (strncmp(line, "install_to_ext=", 15) == 0)
+            on = atoi(line + 15) != 0;
     if (f)
         fclose(f);
     return on;
@@ -369,7 +383,8 @@ static void handle_disc(const DiscId *id)
     sleep(kSettleSec); /* the system's own screen for a disc it does not know, before anything of ours */
     const bool only = install_only();
     stamp(BUSY);
-    if (!discimport_start(GAMES))
+    char ext_games[256];
+    if (!discimport_start(install_to_ext() && drives_ext_games(ext_games, sizeof(ext_games)) ? ext_games : GAMES))
     {
         say("an installation is already running");
         remove(BUSY);

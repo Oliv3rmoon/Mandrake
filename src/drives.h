@@ -9,6 +9,7 @@ static const char *const drive_paths[DRIVE_COUNT] = {"/mnt/ext0", "/mnt/ext1", "
                                                      "/mnt/usb3", "/mnt/usb4", "/mnt/usb5", "/mnt/usb6", "/mnt/usb7"};
 
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -21,6 +22,25 @@ static const char *const drive_paths[DRIVE_COUNT] = {"/mnt/ext0", "/mnt/ext1", "
 extern int drives_fstatfs(int, struct statfs *) __asm__("_fstatfs");
 #endif
 
+static inline long long drive_free_mb(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))
+        return -1;
+    struct statfs fs;
+    memset(&fs, 0, sizeof(fs));
+    int fd = open(path, O_RDONLY | O_DIRECTORY);
+    if (fd < 0)
+        return -1;
+#ifdef __linux__
+    int measured = fstatfs(fd, &fs);
+#else
+    int measured = drives_fstatfs(fd, &fs);
+#endif
+    close(fd);
+    return measured == 0 ? (long long)((unsigned long long)fs.f_bavail * fs.f_bsize >> 20) : -1;
+}
+
 static inline int drives_list(char *buf, size_t size, int only)
 {
     int found = 0;
@@ -29,27 +49,13 @@ static inline int drives_list(char *buf, size_t size, int only)
         buf[0] = '\0';
     for (int d = 0; d < DRIVE_COUNT; ++d)
     {
-        struct stat st;
-        if (stat(drive_paths[d], &st) != 0 || !S_ISDIR(st.st_mode))
-            continue;
-        struct statfs fs;
-        memset(&fs, 0, sizeof(fs));
-        int fd = open(drive_paths[d], O_RDONLY | O_DIRECTORY);
-        if (fd < 0)
-            continue;
-#ifdef __linux__
-        int measured = fstatfs(fd, &fs);
-#else
-        int measured = drives_fstatfs(fd, &fs);
-#endif
-        close(fd);
-        unsigned long long free_mb = measured == 0 ? (unsigned long long)fs.f_bavail * fs.f_bsize >> 20 : 0;
-        if (measured != 0 || free_mb < 256)
+        long long free_mb = drive_free_mb(drive_paths[d]);
+        if (free_mb < 256)
             continue;
         if (only >= 0 && found++ != only)
             continue;
         const char *name = drive_paths[d] + 5;
-        int n = snprintf(buf + len, size - len, "%s%s %llu.%llu GB", only < 0 && len ? ", " : "", name, free_mb >> 10,
+        int n = snprintf(buf + len, size - len, "%s%s %lld.%lld GB", only < 0 && len ? ", " : "", name, free_mb >> 10,
                          (free_mb & 1023) * 10 >> 10);
         if (n < 0 || (size_t)n >= size - len)
             break;
@@ -59,6 +65,21 @@ static inline int drives_list(char *buf, size_t size, int only)
         ++found;
     }
     return found;
+}
+
+static inline bool drives_ext_games(char *out, size_t size)
+{
+    for (int d = 0; d < DRIVE_EXT_COUNT; ++d)
+        if (drive_free_mb(drive_paths[d]) >= 1024)
+        {
+            char base[64];
+            snprintf(base, sizeof(base), "%s/SwanStationPS5", drive_paths[d]);
+            snprintf(out, size, "%s/games", base);
+            mkdir(base, 0777);
+            mkdir(out, 0777);
+            return true;
+        }
+    return false;
 }
 
 #endif

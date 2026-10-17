@@ -151,6 +151,7 @@ typedef struct
     bool boot_intro;      /* the PS1's startup logo and sound before the game (a real BIOS) */
     int sharpen;          /* 0 off, 1 light, 2 strong (AMD FidelityFX CAS) */
     bool disc_animation;  /* the disc slides out of its case when a game starts */
+    bool install_to_ext; /* a disc is installed on the first extended storage with room (1 GB free) instead of /data */
     bool disc_install_only; /* a disc put in is installed but its game is not started (the disc daemon does not open the app) */
     bool case_lighting;   /* the cover in the jewel case gets light: its shading and the glare over the lid; off: the picture as it is */
     bool jewel_cases;     /* the shelf shows 3D jewel cases; off: the flat covers with a reflection, as in 1.1.8 */

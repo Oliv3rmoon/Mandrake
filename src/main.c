@@ -1382,7 +1382,8 @@ static void disc_auto_frame(void)
             play_from_disc(game, id.key);
         return;
     }
-    auto_launch = discimport_start(app.paths.games);
+    char ext_games[SwanStationPS5_PATH_MAX];
+    auto_launch = discimport_start(app.global.install_to_ext && drives_ext_games(ext_games, sizeof(ext_games)) ? ext_games : app.paths.games);
 }
 
 static void import_draw(void)
@@ -2292,7 +2293,15 @@ int main(int argc, char **argv)
             SwanStationPS5_log("games folder %s: could not be created (%s)", games, strerror(errno));
     }
     if (!stamp_is_fresh("disc-busy", 10)) /* the daemon may be writing a game right now */
+    {
         discimport_cleanup(app.paths.games);
+        for (int i = 0; i < DRIVE_EXT_COUNT; ++i)
+        {
+            char ext_games[SwanStationPS5_PATH_MAX];
+            snprintf(ext_games, sizeof(ext_games), "%s/SwanStationPS5/games", drive_paths[i]);
+            discimport_cleanup(ext_games);
+        }
+    }
     app_started_us = plat_ticks_us();
     if (stamp_is_fresh("daemon-launch", 90))
     {

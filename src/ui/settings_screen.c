@@ -306,6 +306,8 @@ static const Row SYSTEM[] = {
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Install discs only", "A disc put in the USB CD drive is installed but its game does not start: with the disc daemon the app is not opened, and with the app open the shelf only moves to the game. Off: the game starts by itself.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_install_only), OFF_ON, 2, 0},
+    {NULL, "Install to external memory", "A disc is installed on the extended storage when it has at least 1 GB free, in its SwanStationPS5/games folder, instead of /data. Off: it is installed in /data.", K_TOGGLE,
+     APPLY_NOW, SP_NONE, true, BOOL_FIELD(install_to_ext), OFF_ON, 2, 0},
     {NULL, "Games folder on drives", "A folder name to look for games in on drives. It is looked for on /mnt/ext0/, /mnt/ext1/ and /mnt/usb0/ to /mnt/usb7/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx, /mnt/usb1/psx and so on. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
     {NULL, "NFS shares", "Games on an NFS server of your network, as nfs:// addresses separated by ';'. Example: nfs://192.168.1.85/psx. The shelf lists them like a drive's; only SwanStationPS5 sees them. The server has to export the folder to the console. Rescan library connects the ones that did not.",
