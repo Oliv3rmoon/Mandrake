@@ -58,6 +58,7 @@
 #define DISC_TIME 0.95f  /* before it, with the disc animation: the disc slides out and spins up */
 #define CASE_SPIN_START 0.8f /* with the 3D cases: when the CD starts to spin (the sound of the disc starts then) */
 #define CASE_DISC_TIME 2.4f /* the same with the 3D cases: the lid opens and the CD spins up on its tray */
+#define LAUNCH_STICK 0.05f /* with the 3D cases: how far the right stick turns the case while the CD spins (1 = all the way) */
 static bool shelf_cases(void);
 
 static float disc_time(void)
@@ -1946,8 +1947,8 @@ void shelf_screen(uint32_t pressed)
             push = lift = 0.0f;
         if (case_launch)
         {
-            push *= 0.5f;
-            lift *= 0.5f;
+            push *= LAUNCH_STICK;
+            lift *= LAUNCH_STICK;
         }
         /* with the left stick in use the right one is ignored, and what it had turned goes back fast: the knock of a press
          * is a way of its own, never mixed with a tilt */

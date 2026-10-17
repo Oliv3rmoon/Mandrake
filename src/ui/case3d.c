@@ -370,7 +370,7 @@ static void turn_point(float x, float y, float z, float *ox, float *oy, float *o
 }
 
 /* The launch animation (case3d_launch), taken by the next case3d_draw only. */
-static float launch_open, launch_spin, disc_lift;
+static float launch_open, launch_spin, disc_lift, disc_scale = 1.0f;
 static bool launch_on;
 static float lid_c = 1.0f, lid_s, disc_c = 1.0f, disc_s;
 static float draw_cx, draw_scale = 1.0f; /* the case being drawn: its centre on the screen and px per model unit */
@@ -380,6 +380,7 @@ static bool matte_next, matte;           /* the cover sheet is lit like paper (c
 
 #define LID_OPEN 2.2689f    /* the lid's full swing, radians: 130 degrees */
 #define HINGE_Z 1.64f       /* the hinge's axis: the lid's middle, at the case's left edge */
+#define DISC_GROW 0.05f      /* the CD grows by this much (0.1 = 10%) as it comes towards the screen while it spins */
 #define DISC_CX 2.156f      /* the CD's centre in the model, and its radii */
 #define DISC_CY (-0.054f)
 #define DISC_R 27.3f
@@ -407,7 +408,7 @@ static void lid_vector(float x, float y, float z, float *ox, float *oy, float *o
 /* a point of the CD: spun about its axis, on its tray */
 static void disc_point(float x, float y, float z, float *ox, float *oy, float *oz)
 {
-    const float dx = x - DISC_CX, dy = y - DISC_CY;
+    const float dx = (x - DISC_CX) * disc_scale, dy = (y - DISC_CY) * disc_scale;
     *ox = DISC_CX + dx * disc_c - dy * disc_s;
     *oy = DISC_CY + dx * disc_s + dy * disc_c;
     *oz = z + disc_lift;
@@ -849,7 +850,7 @@ static void draw_disc_gloss(uint32_t tint, float cx, float cy, float scale)
         for (int r = 0; r < RINGS; ++r)
         {
             const float rad = DISC_HUB + (DISC_R - 0.3f - DISC_HUB) * (float)r / (RINGS - 1);
-            const float x = DISC_CX + cosf(a) * rad, y = DISC_CY + sinf(a) * rad;
+            const float x = DISC_CX + cosf(a) * rad * disc_scale, y = DISC_CY + sinf(a) * rad * disc_scale;
             float px, py, pz;
             turn_point(x, y, DISC_TOP_Z - 0.012f + disc_lift, &px, &py, &pz);
             const float persp = VIEW_DISTANCE / (VIEW_DISTANCE - pz);
@@ -938,7 +939,7 @@ static void draw_disc_sheen(uint32_t tint, float cx, float cy, float scale)
         const uint32_t rgb = rainbow(0.9f + 0.28f * hue_t);
         for (int r = 0; r < RINGS; ++r)
         {
-            const float x = DISC_CX + cosf(a) * radii[r], y = DISC_CY + sinf(a) * radii[r];
+            const float x = DISC_CX + cosf(a) * radii[r] * disc_scale, y = DISC_CY + sinf(a) * radii[r] * disc_scale;
             float px, py, pz;
             turn_point(x, y, DISC_TOP_Z - 0.012f + disc_lift, &px, &py, &pz);
             const float persp = VIEW_DISTANCE / (VIEW_DISTANCE - pz);
@@ -1008,7 +1009,9 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
     view_distance = VIEW_DISTANCE_BASE * (1.0f + 9.0f * launch_open);
     lid_c = cosf(launch_open * LID_OPEN);
     lid_s = sinf(launch_open * LID_OPEN);
-    disc_lift = launch_on ? launch_open * 12.0f + fminf(launch_spin / 18.0f, 1.0f) * 18.0f : 0.0f;
+    const float disc_t = launch_on ? 0.4f * launch_open + 0.6f * fminf(launch_spin / 18.0f, 1.0f) : 0.0f;
+    disc_lift = disc_t * 36.0f;
+    disc_scale = 1.0f + DISC_GROW * disc_t;
     disc_c = cosf(launch_spin);
     disc_s = sinf(launch_spin);
     /* past 90 degrees the lid lies out to the left of the hinge: the pair (case and lid) is kept centred where the case was
@@ -1079,7 +1082,7 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
     float ax, ay, az, bx, by, bz;
     turn_point(1.0f, 0.0f, 0.0f, &ax, &ay, &az);
     turn_point(0.0f, 0.0f, 0.0f, &bx, &by, &bz);
-    const bool disc_last = launch_on && launch_open > 0.55f && az > bz;
+    const bool disc_last = launch_on && launch_open > 0.55f && az >= bz - 0.001f;
     if (launch_on && !disc_last)
         draw_disc(pts, cover, tint, cx, cy, scale);
     draw_part(PART_PROMO, pts, cover, tint, NULL);
