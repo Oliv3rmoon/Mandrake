@@ -446,10 +446,11 @@ void app_rescan(void)
     static char drive_roots[DRIVE_COUNT * 2 * 2][SwanStationPS5_PATH_MAX];
     static char usb_roots[DRIVE_COUNT][SwanStationPS5_PATH_MAX];
     static char nfs_roots[NFS_MAX_SHARES][NFS_PATH_MAX];
-    const char *roots[2 + DRIVE_COUNT * 2 * 2 + DRIVE_COUNT + NFS_MAX_SHARES];
+    const char *roots[3 + DRIVE_COUNT * 2 * 2 + DRIVE_COUNT + NFS_MAX_SHARES];
     int root_count = 0;
     roots[root_count++] = app.paths.games;
     roots[root_count++] = "/data/PSXS5/games";
+    roots[root_count++] = "/data/homebrew/PPSA99248/games";
     int drive_count = 0;
     for (int d = 0; d < DRIVE_COUNT; ++d)
         for (int n = 0; n < 2; ++n)
@@ -894,18 +895,25 @@ static bool bios_file_present(void)
     return bios_dir_has_bin(app.paths.bios);
 }
 
-/* Also support the BIOS folder of PSXS5: used when ours has no BIOS file and that one has. */
+/* Also support the BIOS folders of PSXS5 and of the other homebrew (PPSA99248): used when ours has no BIOS file and one of
+ * those has. */
 static void bios_use_legacy_dir(void)
 {
-    static const char legacy[] = "/data/PSXS5/bios";
-    DIR *d = opendir(legacy);
-    if (!d) /* missing or can't be listed: nothing proves it holds a BIOS */
+    static const char *const legacy[] = {"/data/PSXS5/bios", "/data/homebrew/PPSA99248/bios"};
+    if (bios_dir_has_bin(app.paths.bios))
         return;
-    closedir(d);
-    if (bios_dir_has_bin(app.paths.bios) || !bios_dir_has_bin(legacy))
+    for (size_t i = 0; i < sizeof(legacy) / sizeof(legacy[0]); ++i)
+    {
+        DIR *d = opendir(legacy[i]);
+        if (!d) /* missing or can't be listed: nothing proves it holds a BIOS */
+            continue;
+        closedir(d);
+        if (!bios_dir_has_bin(legacy[i]))
+            continue;
+        str_copy(app.paths.bios, sizeof(app.paths.bios), legacy[i]);
+        SwanStationPS5_log("bios: none in our bios folder, using %s", legacy[i]);
         return;
-    str_copy(app.paths.bios, sizeof(app.paths.bios), legacy);
-    SwanStationPS5_log("bios: none in our bios folder, using %s", legacy);
+    }
 }
 
 /* A libcrypt game (most PAL discs) needs its .sbi file beside the disc image, with the image's name. The package holds

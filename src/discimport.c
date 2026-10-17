@@ -913,7 +913,9 @@ typedef struct
     uint8_t n, data;
 } PBlock;
 
-#define WINDOW_BYTES ((size_t)256 << 20)
+/* What the disc may take: the emulator needs the rest of the memory the app has (about 400 MB; with a window of 384 MB
+ * it could not even make its own 8 MB arena) */
+#define MEMORY_CAP ((uint64_t)256 << 20)
 #define SLOT_BYTES ((size_t)BLOCK * SECTOR)
 
 static struct
@@ -984,7 +986,9 @@ static uint8_t *play_ptr(int b)
 static bool play_alloc(void)
 {
     D.window = false;
-    D.ram = mmap(NULL, (size_t)D.size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    D.ram = MAP_FAILED;
+    if (D.size <= MEMORY_CAP)
+        D.ram = mmap(NULL, (size_t)D.size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
     if (D.ram != MAP_FAILED)
     {
         D.ram_bytes = (size_t)D.size;
@@ -992,8 +996,12 @@ static bool play_alloc(void)
         return true;
     }
     D.ram = NULL;
-    for (size_t bytes = WINDOW_BYTES; bytes >= ((size_t)64 << 20); bytes /= 2)
+    static const size_t SIZES_MB[] = {256, 192, 128, 64};
+    for (size_t k = 0; k < sizeof(SIZES_MB) / sizeof(SIZES_MB[0]); ++k)
     {
+        const size_t bytes = SIZES_MB[k] << 20;
+        if (bytes >= D.size)
+            continue;
         D.ram = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
         if (D.ram == MAP_FAILED)
         {
@@ -1013,7 +1021,7 @@ static bool play_alloc(void)
         for (int i = 0; i < D.nslots; ++i)
             D.block_of[i] = -1;
         D.pos = 0;
-        P("play: no memory for the whole disc (%llu bytes): a window of %zu bytes (%d blocks) is kept",
+        P("play: the whole disc (%llu bytes) is not kept: a window of %zu bytes (%d blocks) is kept",
           (unsigned long long)D.size, bytes, D.nslots);
         return true;
     }
@@ -1196,6 +1204,8 @@ static void play_run(void)
     bool slowed = false;
     uint32_t bad = 0;
     const uint64_t t_start = SDL_GetTicks64();
+    uint64_t t_log = t_start;
+    bool ahead_full = false;
     while (!SDL_AtomicGet(&D.abort))
     {
         int b = -1;
@@ -1232,6 +1242,12 @@ static void play_run(void)
                 break;
             }
             /* the window is full ahead of the game: wait for it to move, and look at the drive meanwhile */
+            if (!ahead_full)
+            {
+                ahead_full = true;
+                P("play: the window is full ahead of the game (%d%% of the disc is in memory, the game at %d%% of the disc, %.0f s)",
+                  D.loaded * 100 / D.nblk, D.pos * 100 / D.nblk, (double)(SDL_GetTicks64() - t_start) / 1000.0);
+            }
             SDL_CondWaitTimeout(D.wake, D.mu, 1000);
             SDL_UnlockMutex(D.mu);
             static const uint8_t tur[6] = {0};
@@ -1263,6 +1279,16 @@ static void play_run(void)
         SDL_UnlockMutex(D.mu);
         cursor = b + 1;
         SDL_AtomicSet(&D.permille, (int)((uint64_t)(D.window ? b : D.loaded) * 1000 / (uint64_t)D.nblk));
+        if (D.window)
+        {
+            ahead_full = false;
+            if (SDL_GetTicks64() - t_log >= 3000)
+            {
+                t_log = SDL_GetTicks64();
+                P("play: %d%% of the disc is in memory (window %d%% full, %d of %d blocks), the game at %d%% of the disc",
+                  D.loaded * 100 / D.nblk, D.loaded * 100 / D.nslots, D.loaded, D.nslots, D.pos * 100 / D.nblk);
+            }
+        }
         if (!D.window && D.loaded * 100 / D.nblk >= next_pct)
         {
             P("play: %d%% of the disc is in memory (%.0f s)", D.loaded * 100 / D.nblk,

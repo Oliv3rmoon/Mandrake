@@ -81,7 +81,7 @@ void discwatch_pause(bool paused);
 int discwatch_removed(void);
 
 /* Play from disc: the disc in the drive is read into memory by a thread (the order the game asks for, else from the
- * start; the whole disc, or when that much memory cannot be had a window of 256 MB around the game's position) and the core loads it as a game from a virtual folder, so nothing is installed. It is ready (the game can
+ * start; the whole disc, or when that much memory cannot be had a window of 256 MB or less around the game's position, so that the emulator keeps its own memory) and the core loads it as a game from a virtual folder, so nothing is installed. It is ready (the game can
  * start) as soon as the disc is identified. */
 typedef enum
 {
