@@ -44,7 +44,7 @@ static inline int drives_list(char *buf, size_t size, int only)
 #endif
         close(fd);
         unsigned long long free_mb = measured == 0 ? (unsigned long long)fs.f_bavail * fs.f_bsize >> 20 : 0;
-        if (measured != 0 || fs.f_blocks == 0)
+        if (measured != 0 || free_mb < 256)
             continue;
         if (only >= 0 && found++ != only)
             continue;
