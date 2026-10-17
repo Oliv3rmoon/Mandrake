@@ -212,6 +212,27 @@ static Game *add_game(Library *lib)
     return g;
 }
 
+bool library_add_game(Library *lib, const Game *g)
+{
+    Game *n = add_game(lib);
+    if (!n)
+        return false;
+    *n = *g;
+    return true;
+}
+
+bool library_remove_path(Library *lib, const char *path)
+{
+    for (int i = 0; i < lib->count; ++i)
+        if (strcmp(lib->games[i].path, path) == 0)
+        {
+            memmove(&lib->games[i], &lib->games[i + 1], (size_t)(lib->count - i - 1) * sizeof(Game));
+            --lib->count;
+            return true;
+        }
+    return false;
+}
+
 static void set_disc_name(Game *g, const char *file)
 {
     str_copy(g->disc_name, sizeof(g->disc_name), file);

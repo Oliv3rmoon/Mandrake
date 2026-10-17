@@ -11,6 +11,7 @@
  * compressed one) small ones. A share's calls are one at a time (libnfs's context is not thread safe).
  */
 #include "nfs.h"
+#include "../discplay.h"
 
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>
@@ -142,6 +143,7 @@ struct File
     uint64_t size = 0, pos = 0;
     bool eof = false, err = false;
     Cache *cache = nullptr;
+    int virt = 0; // 1 the .cue, 2 the .bin of a disc played from the drive (discplay.h)
 };
 
 struct DirH
@@ -273,6 +275,26 @@ bool is_nfs(const char *path)
     return g_any.load(std::memory_order_relaxed) && path && !strncmp(path, "/nfs", 4) && (path[4] == '\0' || path[4] == '/');
 }
 
+bool is_disc(const char *path)
+{
+    return path && !strncmp(path, DISCPLAY_DIR, 9) && (path[9] == '\0' || path[9] == '/');
+}
+
+bool is_virt(const char *path)
+{
+    return is_nfs(path) || is_disc(path);
+}
+
+// The part after /discplay/ of a path, "" for the folder itself; false for anything else.
+bool disc_name(const char *path, std::string &name)
+{
+    std::string p;
+    if (!normalize(path, p) || p.compare(0, 9, DISCPLAY_DIR) != 0 || (p.size() > 9 && p[9] != '/'))
+        return false;
+    name = p.size() > 10 ? p.substr(10) : "";
+    return true;
+}
+
 int resolve(const char *path, Where &w)
 {
     std::string p;
@@ -320,6 +342,23 @@ void fill_stat(struct stat *st, bool dir, uint64_t size, uint64_t mtime, uint64_
     st->st_blksize = 4096;
     st->st_blocks = static_cast<blkcnt_t>((size + 511) / 512);
     st->st_ino = static_cast<ino_t>(ino);
+}
+
+int disc_stat(const char *path, struct stat *st)
+{
+    std::string name;
+    if (!disc_name(path, name))
+        return ENOENT;
+    if (name.empty())
+    {
+        fill_stat(st, true, 0, 0, 0, 1);
+        return 0;
+    }
+    uint64_t size = 0;
+    if (!discplay_file(name.c_str(), &size))
+        return ENOENT;
+    fill_stat(st, false, size, 0, 0, 2);
+    return 0;
 }
 
 int nfs_stat_path(const Where &w, struct stat *st)
@@ -430,8 +469,31 @@ void watch_reads()
         .detach();
 }
 
+File *open_disc(const char *path, int *error)
+{
+    std::string name;
+    uint64_t size = 0;
+    const int kind = disc_name(path, name) && !name.empty() ? discplay_file(name.c_str(), &size) : 0;
+    if (!kind)
+    {
+        *error = ENOENT;
+        return nullptr;
+    }
+    File *f = new_file();
+    if (!f)
+    {
+        *error = EMFILE;
+        return nullptr;
+    }
+    f->virt = kind;
+    f->size = size;
+    return f;
+}
+
 File *open_file(const char *path, int *error)
 {
+    if (is_disc(path))
+        return open_disc(path, error);
     Where w;
     int e = resolve(path, w);
     if (!e && w.synthetic)
@@ -642,6 +704,16 @@ size_t block_bytes(File *f, uint64_t number, size_t offset, uint8_t *dst, size_t
 
 size_t read_at(File *f, uint64_t pos, void *dst, size_t n)
 {
+    if (f->virt)
+    {
+        const size_t read = pos < f->size ? discplay_read(f->virt, pos, dst, n) : 0;
+        if (read < n && pos + read < f->size)
+        {
+            errno = EIO;
+            f->err = true;
+        }
+        return read;
+    }
     size_t got = 0;
     uint8_t *out = static_cast<uint8_t *>(dst);
     while (got < n && pos < f->size)
@@ -1164,7 +1236,7 @@ extern "C"
 {
     FILE *__wrap_fopen(const char *path, const char *mode)
     {
-        if (!is_nfs(path))
+        if (!is_virt(path))
             return __real_fopen(path, mode);
         const std::string sbi = sbi_overlay(path);
         if (!read_mode(mode))
@@ -1325,7 +1397,7 @@ extern "C"
             mode = va_arg(ap, int);
             va_end(ap);
         }
-        if (!is_nfs(path))
+        if (!is_virt(path))
             return __real_open(path, flags, mode);
         const std::string sbi = sbi_overlay(path);
         if ((flags & O_ACCMODE) != O_RDONLY || (flags & (O_CREAT | O_TRUNC)))
@@ -1395,12 +1467,18 @@ extern "C"
 
     int __wrap_stat(const char *path, struct stat *st)
     {
-        if (!is_nfs(path))
+        if (!is_virt(path))
             return __real_stat(path, st);
-        Where w;
-        int e = resolve(path, w);
-        if (!e)
-            e = nfs_stat_path(w, st);
+        int e;
+        if (is_disc(path))
+            e = disc_stat(path, st);
+        else
+        {
+            Where w;
+            e = resolve(path, w);
+            if (!e)
+                e = nfs_stat_path(w, st);
+        }
         if (e)
         {
             const std::string sbi = sbi_overlay(path);
@@ -1414,12 +1492,12 @@ extern "C"
 
     int __wrap_lstat(const char *path, struct stat *st)
     {
-        return is_nfs(path) ? __wrap_stat(path, st) : __real_lstat(path, st);
+        return is_virt(path) ? __wrap_stat(path, st) : __real_lstat(path, st);
     }
 
     int __wrap_access(const char *path, int mode)
     {
-        if (!is_nfs(path))
+        if (!is_virt(path))
             return __real_access(path, mode);
         if ((mode & W_OK) && sbi_overlay(path).empty())
         {
@@ -1434,7 +1512,7 @@ extern "C"
 
     char *__wrap_realpath(const char *path, char *resolved)
     {
-        if (!is_nfs(path))
+        if (!is_virt(path))
             return __real_realpath(path, resolved);
         std::string p;
         if (!normalize(path, p))

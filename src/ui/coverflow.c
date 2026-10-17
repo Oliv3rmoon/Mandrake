@@ -315,7 +315,9 @@ void shelf_folder_tag(const Game *g, char *out, size_t size)
         if (p[n] == '/' && --slashes == 0)
             break;
     out[0] = '\0';
-    if (n > 0 && n < 24)
+    if (!strncmp(p, "/discplay/", 10))
+        snprintf(out, size, "%s", tr("Play from disc"));
+    else if (n > 0 && n < 24)
         snprintf(out, size, "%s: '%.*s'", tr("Folder"), (int)n, p);
 }
 
@@ -1823,8 +1825,13 @@ void shelf_screen(uint32_t pressed)
             const bool tri = (app.pads[app_nav_pad()].buttons & BIT(BTN_TRIANGLE)) != 0;
             if (details_was_open && S.details && game >= 0 && (pressed & BIT(BTN_TRIANGLE)))
             {
-                S.delete_armed = true;
-                app_toast("Hold {Triangle} to delete this game's files.");
+                if (!strncmp(app.library.games[game].path, "/discplay/", 10))
+                    app_toast("Game running from the disc...");
+                else
+                {
+                    S.delete_armed = true;
+                    app_toast("Hold {Triangle} to delete this game's files.");
+                }
             }
             if (S.details && game >= 0 && tri && S.delete_armed && !S.dialog)
             {

@@ -418,6 +418,10 @@ void app_restart_covers(void)
     covers_download_loaded = app.global.cover_download;
 }
 
+static Game dg;                  /* the disc played from the drive, while it is in (see disc_play_frame) */
+static bool dg_active, dg_gone;
+static int dg_removed_mark;
+
 static bool nfs_rescan_from_mount; /* the rescan that follows a mount does not start another */
 static bool nfs_notify;            /* say how the mount went (the player asked for it) */
 
@@ -487,6 +491,8 @@ void app_rescan(void)
         if (app.library.count == 0)
             library_load_index(&app.library, index);
     }
+    if (dg_active)
+        library_add_game(&app.library, &dg);
     if (nfs_rescan_from_mount)
         shelf_library_changed(); /* the shares came up on their own: the player stays where they were */
     else
@@ -1215,6 +1221,130 @@ static void play_from_disc(int game, const char *key)
         SwanStationPS5_log("disc: the game could not be started from the shelf");
 }
 
+/* what went wrong, in a box that stays until X */
+static const char *import_why(DiscImportState s)
+{
+    static const char *const WHY[] = {
+        [DI_NO_DRIVE] = "No CD drive was found. Plug the USB CD drive into the console and try again.",
+        [DI_NO_DISC] = "The CD drive has no disc ready. Put in a disc, wait for it to spin up and try again.",
+        [DI_NOT_PS1] = "This disc is not a PS1 game: its first track is not data or it has no readable volume. Nothing was installed.",
+        [DI_UNREADABLE] = "The disc has too many sectors that cannot be read, so the installation was stopped and what was copied was deleted. Clean the disc or try another copy.",
+        [DI_DRIVE_LOST] = "The disc or the drive was removed during the installation. What was copied was deleted.",
+        [DI_WRITE_FAILED] = "The game could not be written to the games folder. Check that there is free space and try again.",
+        [DI_STALLED] = "The installation was stopped: the CD drive did not read anything for 30 seconds. The disc may be dirty, scratched or badly burned. Clean it and try again; what was copied was deleted.",
+    };
+    return WHY[s];
+}
+
+/* Play from disc (Settings > System > SwanStationPS5): the disc in the drive is read into memory and its game is on the
+ * shelf, started by itself, for as long as the disc is in. It is a Game of its own (not in any folder): the library
+ * gets it back after a rescan, and it goes when the disc is taken out (or, if it is being played, when that ends). */
+static const char *play_why(DiscImportState s)
+{
+    switch (s)
+    {
+    case DI_DRIVE_LOST: return "The disc or the drive was removed before the game could be read.";
+    case DI_WRITE_FAILED: return "There is not enough memory to read the disc.";
+    default: return import_why(s);
+    }
+}
+
+static void dg_make(void)
+{
+    const DiscId *id = discplay_id();
+    memset(&dg, 0, sizeof(dg));
+    str_copy(dg.title, sizeof(dg.title), id->title);
+    str_copy(dg.serial, sizeof(dg.serial), id->serial);
+    str_copy(dg.path, sizeof(dg.path), discplay_path());
+    str_copy(dg.folder, sizeof(dg.folder), "/discplay");
+    const char *base = strrchr(dg.path, '/');
+    str_copy(dg.disc_name, sizeof(dg.disc_name), base ? base + 1 : dg.path);
+    char *dot = strrchr(dg.disc_name, '.');
+    if (dot)
+        *dot = '\0';
+    if (dg.serial[0])
+        str_copy(dg.id, sizeof(dg.id), dg.serial);
+    else
+    {
+        size_t w = 0;
+        for (const char *p = dg.title; *p && w + 1 < sizeof(dg.id); ++p)
+            dg.id[w++] = isalnum((unsigned char)*p) ? *p : '_';
+        dg.id[w] = '\0';
+    }
+    dg.discs = 1;
+}
+
+static void dg_drop(void)
+{
+    SwanStationPS5_log("disc: '%s' is gone: its game leaves the library", dg.title);
+    library_remove_path(&app.library, dg.path);
+    discplay_stop();
+    dg_active = dg_gone = false;
+    shelf_library_changed();
+}
+
+/* Every frame: the disc read for the game is ready (start it), failed (say why) or went away (drop its game) */
+static void disc_play_frame(void)
+{
+    const DiscPlayState st = discplay_state();
+    if (st == DP_FAILED)
+    {
+        const DiscImportState why = discplay_error();
+        discplay_stop();
+        app_message_box(play_why(why));
+        return;
+    }
+    if (!dg_active && st == DP_READY && app.screen == SCREEN_LIBRARY && !app.game && shelf_idle() && !box_open &&
+        !SC.active)
+    {
+        dg_make();
+        char key[24];
+        str_copy(key, sizeof(key), discplay_id()->key);
+        if (!library_add_game(&app.library, &dg))
+        {
+            discplay_stop();
+            return;
+        }
+        dg_active = true;
+        dg_gone = false;
+        dg_removed_mark = discwatch_removed();
+        app_restart_covers();
+        shelf_show_all();
+        SwanStationPS5_log("disc: '%s' (%s) is read into memory and starts from the disc", dg.title, key);
+        if (app.global.disc_install_only)
+            shelf_show_game(app.library.count - 1);
+        else
+            play_from_disc(app.library.count - 1, key);
+        return;
+    }
+    if (!dg_active)
+        return;
+    if (!dg_gone && (discwatch_removed() != dg_removed_mark || discplay_lost() || !app.global.play_from_disc))
+        dg_gone = true;
+    if (dg_gone && !app.game && app.screen == SCREEN_LIBRARY && shelf_idle() && !SC.active)
+        dg_drop();
+}
+
+/* The disc is being identified: the buttons stay out of the screens below, and a panel says so */
+static bool play_input(uint32_t *pressed)
+{
+    if (discplay_state() != DP_PREPARING)
+        return false;
+    *pressed = 0;
+    return true;
+}
+
+static void play_draw(void)
+{
+    if (discplay_state() != DP_PREPARING)
+        return;
+    const char *msg = tr("Reading the disc...");
+    float w = text_width(26, FONT_REGULAR, msg) + 96, h = 84;
+    float x = (plat_width() - w) * 0.5f, y = plat_height() - 300;
+    draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
+    text_draw(plat_width() * 0.5f, y + 28, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
+}
+
 #define CANCEL_HOLD 2.0f /* seconds O is held to cancel an import, as to close the app */
 static float cancel_hold;
 
@@ -1283,18 +1413,8 @@ static bool import_input(uint32_t *pressed)
     }
     if (s != DI_OK && s != DI_OK_INCOMPLETE && s != DI_ALREADY)
     {
-        /* what went wrong, in a box that stays until X */
-        static const char *const WHY[] = {
-            [DI_NO_DRIVE] = "No CD drive was found. Plug the USB CD drive into the console and try again.",
-            [DI_NO_DISC] = "The CD drive has no disc ready. Put in a disc, wait for it to spin up and try again.",
-            [DI_NOT_PS1] = "This disc is not a PS1 game: its first track is not data or it has no readable volume. Nothing was installed.",
-            [DI_UNREADABLE] = "The disc has too many sectors that cannot be read, so the installation was stopped and what was copied was deleted. Clean the disc or try another copy.",
-            [DI_DRIVE_LOST] = "The disc or the drive was removed during the installation. What was copied was deleted.",
-            [DI_WRITE_FAILED] = "The game could not be written to the games folder. Check that there is free space and try again.",
-            [DI_STALLED] = "The installation was stopped: the CD drive did not read anything for 30 seconds. The disc may be dirty, scratched or badly burned. Clean it and try again; what was copied was deleted.",
-        };
         discimport_ack();
-        app_message_box(WHY[s]);
+        app_message_box(import_why(s));
         return true;
     }
     discimport_ack();
@@ -1354,6 +1474,7 @@ static void write_alive_stamp(void)
 static void disc_auto_frame(void)
 {
     write_alive_stamp();
+    disc_play_frame();
     const bool daemon_busy = daemon_installing();
     discwatch_pause(daemon_busy); /* the daemon is at the drive */
     if (daemon_busy)
@@ -1366,7 +1487,7 @@ static void disc_auto_frame(void)
         handled_count = 0;
     }
     bool free_for_disc = app.screen == SCREEN_LIBRARY && !app.game && shelf_idle() &&
-                         discimport_state() == DI_IDLE && !box_open && !SC.active;
+                         discimport_state() == DI_IDLE && discplay_state() == DP_IDLE && !box_open && !SC.active;
     discwatch_set_active(free_for_disc);
     DiscId id;
     if (!free_for_disc || !discwatch_take(&id) || disc_handled(id.key))
@@ -1380,6 +1501,12 @@ static void disc_auto_frame(void)
             shelf_show_game(game);
         else
             play_from_disc(game, id.key);
+        return;
+    }
+    if (app.global.play_from_disc)
+    {
+        if (!discplay_start())
+            SwanStationPS5_log("disc: the disc could not be read for playing");
         return;
     }
     char ext_games[SwanStationPS5_PATH_MAX];
@@ -2430,7 +2557,7 @@ int main(int argc, char **argv)
         memcpy(app.pads, pads, sizeof(app.pads));
         uint32_t pressed = nav_pressed(pads);
         disc_auto_frame();
-        if (!question_input(&pressed) && !sbi_check_input(&pressed) && !import_input(&pressed))
+        if (!question_input(&pressed) && !sbi_check_input(&pressed) && !play_input(&pressed) && !import_input(&pressed))
             message_box_input(&pressed);
         /* the shelf and settings paint a full-screen backdrop: no clear needed */
         bool backdrop = app.screen == SCREEN_LIBRARY || (app.screen == SCREEN_SETTINGS && !app.game);
@@ -2619,6 +2746,7 @@ int main(int argc, char **argv)
             ra_idle();
         draw_achievement();
         sbi_check_draw();
+        play_draw();
         import_draw();
         message_box_draw();
         question_draw();

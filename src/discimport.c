@@ -7,6 +7,8 @@
  */
 #include "discimport.h"
 
+#include "discplay.h"
+
 #include "cdscsi.h"
 #include "disc.h"
 #include "covers.h"
@@ -18,6 +20,8 @@
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -759,6 +763,8 @@ static int unit_ready(const CdPass *pass)
     int rc = cdscsi_cmd(pass, tur, 6, NULL, 0, 3000, &sense, NULL);
     if (rc == 0)
         return 1;
+    if (rc == -2) /* the ioctl itself failed: the drive was unplugged */
+        return -1;
     if ((sense >> 16) == 6) /* unit attention: the medium may have changed; ask again */
         return cdscsi_cmd(pass, tur, 6, NULL, 0, 3000, &sense, NULL) == 0 ? 2 : 0;
     return CDSENSE_IS_NO_MEDIUM(sense) ? -1 : 0;
@@ -803,11 +809,18 @@ static int watch_thread(void *unused)
         {
             char dev[24];
             snprintf(dev, sizeof(dev), "/dev/cd%u", u);
-            if (!exists(dev))
-                continue;
             CdPass pass;
-            if (!cdscsi_open(u, &pass))
+            if (!exists(dev) || !cdscsi_open(u, &pass))
+            {
+                if (was_ready[u] && ++gone[u] >= 2) /* the drive itself is gone, with its disc */
+                {
+                    was_ready[u] = false;
+                    gone[u] = 0;
+                    SDL_AtomicAdd(&W.removed, 1);
+                    P("watch: the drive cd%u was unplugged", u);
+                }
                 continue;
+            }
             int ready = unit_ready(&pass);
             if (ready == -1)
             {
@@ -888,3 +901,509 @@ bool discwatch_take(DiscId *out)
     SDL_AtomicSet(&W.have, 0);
     return true;
 }
+
+#ifndef SwanStationPS5_PAYLOAD
+/* ---------------------------------------------------------------- play from disc */
+
+/* The disc is kept whole in memory when that much can be had. When it cannot, a window of it is: blocks in slots, the
+ * ones around the game's position, read ahead as the game goes on and the farthest dropped. */
+typedef struct
+{
+    uint32_t lba;
+    uint8_t n, data;
+} PBlock;
+
+#define WINDOW_BYTES ((size_t)256 << 20)
+#define SLOT_BYTES ((size_t)BLOCK * SECTOR)
+
+static struct
+{
+    SDL_Thread *thread;
+    SDL_atomic_t state, error, abort, permille, lost;
+    SDL_mutex *mu;
+    SDL_cond *cv, *wake;
+    char stem[40], path[64], cue[8192];
+    size_t cue_len;
+    DiscId id;
+    uint32_t first, total;
+    uint64_t size;
+    PBlock *blk;
+    uint8_t *have;
+    int nblk, loaded, demand;
+    uint8_t *ram;
+    size_t ram_bytes;
+    bool window;
+    int32_t *slot_of, *block_of;
+    int nslots, ahead, pos;
+} D;
+
+DiscPlayState discplay_state(void)
+{
+    return (DiscPlayState)SDL_AtomicGet(&D.state);
+}
+
+DiscImportState discplay_error(void)
+{
+    return (DiscImportState)SDL_AtomicGet(&D.error);
+}
+
+const DiscId *discplay_id(void)
+{
+    return &D.id;
+}
+
+const char *discplay_path(void)
+{
+    return D.path;
+}
+
+int discplay_permille(void)
+{
+    return SDL_AtomicGet(&D.permille);
+}
+
+bool discplay_lost(void)
+{
+    return SDL_AtomicGet(&D.lost) != 0;
+}
+
+static void play_fail(DiscImportState why)
+{
+    SDL_AtomicSet(&D.error, (int)why);
+    SDL_AtomicSet(&D.state, DP_FAILED);
+}
+
+/* Where block b is in memory (a window: it has to have a slot) */
+static uint8_t *play_ptr(int b)
+{
+    if (D.window)
+        return D.ram + (size_t)D.slot_of[b] * SLOT_BYTES;
+    return D.ram + (uint64_t)(D.blk[b].lba - D.first) * SECTOR;
+}
+
+static bool play_alloc(void)
+{
+    D.window = false;
+    D.ram = mmap(NULL, (size_t)D.size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    if (D.ram != MAP_FAILED)
+    {
+        D.ram_bytes = (size_t)D.size;
+        P("play: the whole disc is kept in memory (%llu bytes)", (unsigned long long)D.size);
+        return true;
+    }
+    D.ram = NULL;
+    for (size_t bytes = WINDOW_BYTES; bytes >= ((size_t)64 << 20); bytes /= 2)
+    {
+        D.ram = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+        if (D.ram == MAP_FAILED)
+        {
+            D.ram = NULL;
+            continue;
+        }
+        D.ram_bytes = bytes;
+        D.window = true;
+        D.nslots = (int)(bytes / SLOT_BYTES);
+        D.ahead = D.nslots * 3 / 4;
+        D.slot_of = malloc((size_t)D.nblk * sizeof(int32_t));
+        D.block_of = malloc((size_t)D.nslots * sizeof(int32_t));
+        if (!D.slot_of || !D.block_of)
+            return false;
+        for (int i = 0; i < D.nblk; ++i)
+            D.slot_of[i] = -1;
+        for (int i = 0; i < D.nslots; ++i)
+            D.block_of[i] = -1;
+        D.pos = 0;
+        P("play: no memory for the whole disc (%llu bytes): a window of %zu bytes (%d blocks) is kept",
+          (unsigned long long)D.size, bytes, D.nslots);
+        return true;
+    }
+    return false;
+}
+
+static void play_release(void)
+{
+    if (D.ram)
+        munmap(D.ram, D.ram_bytes);
+    D.ram = NULL;
+    free(D.blk);
+    free(D.have);
+    free(D.slot_of);
+    free(D.block_of);
+    D.blk = NULL;
+    D.have = NULL;
+    D.slot_of = D.block_of = NULL;
+    D.nblk = D.loaded = D.nslots = 0;
+    D.window = false;
+}
+
+/* 0 read, 1 the disc is gone or too much of it cannot be read */
+static int play_block(const CdPass *pass, const PBlock *b, uint8_t *raw, bool *slowed, uint32_t *bad)
+{
+    const uint8_t flags = b->data ? 0xf8 : 0x10;
+    uint32_t sense = 0;
+    for (int attempt = 0; attempt < TRIES; ++attempt)
+    {
+        int rc = read_cd(pass, b->lba, b->n, flags, raw, &sense);
+        if (rc == 0)
+            return 0;
+        if (rc == -2 || (rc == -3 && CDSENSE_IS_NO_MEDIUM(sense)))
+            return 1;
+        if ((sense >> 16) == 3)
+            break;
+    }
+    if (!*slowed)
+    {
+        uint8_t set_speed[12] = {0xbb, 0, SPEED_AFTER_ERROR >> 8, SPEED_AFTER_ERROR & 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0};
+        cdscsi_cmd(pass, set_speed, 12, NULL, 0, 5000, NULL, NULL);
+        *slowed = true;
+    }
+    for (uint32_t i = 0; i < b->n; ++i)
+    {
+        bool one = false;
+        for (int attempt = 0; attempt < 2 && !one; ++attempt)
+            one = read_cd(pass, b->lba + i, 1, flags, raw + i * SECTOR, &sense) == 0;
+        if (one)
+            continue;
+        if (CDSENSE_IS_NO_MEDIUM(sense))
+            return 1;
+        memset(raw + i * SECTOR, 0, SECTOR);
+        P("play: sector %u could not be read (sense %06x): zeros", b->lba + i, sense);
+        if (++*bad > MAX_BAD)
+            return 1;
+    }
+    return 0;
+}
+
+/* The slot for block b (the mutex is held): a free one, else the block farthest from the game's position, the ones
+ * behind it first */
+static int play_slot(int b)
+{
+    int best = 0;
+    long best_score = -1;
+    for (int i = 0; i < D.nslots; ++i)
+    {
+        const int held = D.block_of[i];
+        if (held < 0)
+        {
+            best = i;
+            best_score = -2;
+            break;
+        }
+        const long score = held < D.pos ? 1000000L + (D.pos - held) : (long)(held - D.pos);
+        if (score > best_score)
+        {
+            best = i;
+            best_score = score;
+        }
+    }
+    if (best_score != -2)
+    {
+        D.have[D.block_of[best]] = 0;
+        D.slot_of[D.block_of[best]] = -1;
+        --D.loaded;
+    }
+    D.block_of[best] = b;
+    D.slot_of[b] = best;
+    return best;
+}
+
+static void play_run(void)
+{
+    CdPass pass;
+    uint8_t toc[2048];
+    uint32_t toc_got = 0;
+    memset(toc, 0, sizeof(toc));
+    DiscImportState found = find_disc(&pass, toc, sizeof(toc), &toc_got);
+    if (found != DI_RUNNING)
+    {
+        play_fail(found);
+        return;
+    }
+    Track tracks[MAX_TRACKS];
+    uint32_t leadout = 0;
+    int ntracks = parse_toc(toc, toc_got, tracks, &leadout);
+    if (!ntracks || !leadout || leadout <= tracks[0].lba || !tracks[0].data)
+    {
+        P("play: the disc is not a PS1 game");
+        cdscsi_close(&pass);
+        play_fail(DI_NOT_PS1);
+        return;
+    }
+    {
+        uint8_t set_speed[12] = {0xbb, 0, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0};
+        cdscsi_cmd(&pass, set_speed, 12, NULL, 0, 5000, NULL, NULL);
+    }
+    uint32_t sense = 0;
+    DiscId id;
+    if (!identify(&pass, toc, toc_got, tracks[0].lba, &id, &sense))
+    {
+        cdscsi_close(&pass);
+        play_fail(CDSENSE_IS_NO_MEDIUM(sense) ? DI_DRIVE_LOST : DI_NOT_PS1);
+        return;
+    }
+    D.id = id;
+    D.first = tracks[0].lba;
+    D.total = leadout - D.first;
+    D.size = (uint64_t)D.total * SECTOR;
+    snprintf(D.stem, sizeof(D.stem), "%s-%08x", id.serial[0] ? id.serial : "DISC", id.fingerprint);
+    snprintf(D.path, sizeof(D.path), DISCPLAY_DIR "/%s.cue", D.stem);
+
+    static uint8_t raw[SECTOR * BLOCK];
+    D.cue_len = (size_t)snprintf(D.cue, sizeof(D.cue), "FILE \"%s.bin\" BINARY\r\n", D.stem);
+    int nblk = 0;
+    for (int t = 0; t < ntracks; ++t)
+    {
+        uint32_t start = tracks[t].lba, end = t + 1 < ntracks ? tracks[t + 1].lba : leadout;
+        const char *mode = "AUDIO";
+        if (tracks[t].data)
+        {
+            mode = "MODE2/2352";
+            if (read_cd(&pass, start, 1, 0xf8, raw, NULL) == 0 && raw[15] == 1)
+                mode = "MODE1/2352";
+        }
+        uint32_t rel = start - D.first;
+        if (D.cue_len < sizeof(D.cue) - 128)
+            D.cue_len += (size_t)snprintf(D.cue + D.cue_len, sizeof(D.cue) - D.cue_len,
+                                          "  TRACK %02d %s\r\n    INDEX 01 %02u:%02u:%02u\r\n", tracks[t].number, mode,
+                                          rel / 4500, rel / 75 % 60, rel % 75);
+        nblk += (int)((end - start + BLOCK - 1) / BLOCK);
+    }
+    D.nblk = nblk;
+    D.blk = malloc((size_t)nblk * sizeof(PBlock));
+    D.have = calloc((size_t)nblk, 1);
+    if (!D.blk || !D.have || !play_alloc())
+    {
+        cdscsi_close(&pass);
+        play_release();
+        play_fail(DI_WRITE_FAILED);
+        return;
+    }
+    {
+        int b = 0;
+        for (int t = 0; t < ntracks; ++t)
+        {
+            uint32_t start = tracks[t].lba, end = t + 1 < ntracks ? tracks[t + 1].lba : leadout;
+            for (uint32_t lba = start; lba < end; lba += BLOCK, ++b)
+                D.blk[b] = (PBlock){lba, (uint8_t)(end - lba < BLOCK ? end - lba : BLOCK), tracks[t].data};
+        }
+    }
+    D.loaded = 0;
+    D.demand = -1;
+    P("play: '%s' (%s), %d tracks, %u sectors in %d blocks, as %s", id.title, id.key, ntracks, D.total, nblk, D.path);
+    SDL_AtomicSet(&D.state, DP_READY);
+
+    int cursor = 0, next_pct = 5;
+    bool slowed = false;
+    uint32_t bad = 0;
+    const uint64_t t_start = SDL_GetTicks64();
+    while (!SDL_AtomicGet(&D.abort))
+    {
+        int b = -1;
+        SDL_LockMutex(D.mu);
+        if (D.demand >= 0 && D.demand < D.nblk && !D.have[D.demand])
+            b = D.demand;
+        D.demand = -1;
+        if (b < 0 && D.window)
+        {
+            for (int i = 0; i < D.ahead && D.pos + i < D.nblk; ++i)
+                if (!D.have[D.pos + i])
+                {
+                    b = D.pos + i;
+                    break;
+                }
+        }
+        else if (b < 0)
+        {
+            for (int i = 0; i < D.nblk; ++i)
+            {
+                int k = (cursor + i) % D.nblk;
+                if (!D.have[k])
+                {
+                    b = k;
+                    break;
+                }
+            }
+        }
+        if (b < 0)
+        {
+            if (!D.window) /* all of it is in */
+            {
+                SDL_UnlockMutex(D.mu);
+                break;
+            }
+            /* the window is full ahead of the game: wait for it to move, and look at the drive meanwhile */
+            SDL_CondWaitTimeout(D.wake, D.mu, 1000);
+            SDL_UnlockMutex(D.mu);
+            static const uint8_t tur[6] = {0};
+            uint32_t tsense = 0;
+            int rc = cdscsi_cmd(&pass, tur, 6, NULL, 0, 3000, &tsense, NULL);
+            if (rc == -2 || (rc == -3 && CDSENSE_IS_NO_MEDIUM(tsense)))
+            {
+                P("play: the disc is gone");
+                SDL_AtomicSet(&D.lost, 1);
+                break;
+            }
+            continue;
+        }
+        if (D.window && D.slot_of[b] < 0)
+            play_slot(b);
+        SDL_UnlockMutex(D.mu);
+        int rc = play_block(&pass, &D.blk[b], raw, &slowed, &bad);
+        if (rc)
+        {
+            P("play: the disc is gone or unreadable at LBA %u (%d blocks in memory)", D.blk[b].lba, D.loaded);
+            SDL_AtomicSet(&D.lost, 1);
+            break;
+        }
+        memcpy(play_ptr(b), raw, (size_t)D.blk[b].n * SECTOR);
+        SDL_LockMutex(D.mu);
+        D.have[b] = 1;
+        ++D.loaded;
+        SDL_CondBroadcast(D.cv);
+        SDL_UnlockMutex(D.mu);
+        cursor = b + 1;
+        SDL_AtomicSet(&D.permille, (int)((uint64_t)(D.window ? b : D.loaded) * 1000 / (uint64_t)D.nblk));
+        if (!D.window && D.loaded * 100 / D.nblk >= next_pct)
+        {
+            P("play: %d%% of the disc is in memory (%.0f s)", D.loaded * 100 / D.nblk,
+              (double)(SDL_GetTicks64() - t_start) / 1000.0);
+            next_pct = D.loaded * 100 / D.nblk + 5;
+        }
+    }
+    cdscsi_close(&pass);
+    if (!D.window && D.loaded >= D.nblk)
+        P("play: the whole disc is in memory (%u unreadable sectors, %.0f s)", bad,
+          (double)(SDL_GetTicks64() - t_start) / 1000.0);
+    SDL_LockMutex(D.mu);
+    SDL_CondBroadcast(D.cv); /* readers waiting for what will not come */
+    SDL_UnlockMutex(D.mu);
+}
+
+static int play_thread(void *unused)
+{
+    (void)unused;
+    cdscsi_lock();
+    play_run();
+    cdscsi_unlock();
+    return 0;
+}
+
+bool discplay_start(void)
+{
+    if (discplay_state() != DP_IDLE)
+        return false;
+    if (!D.mu)
+    {
+        D.mu = SDL_CreateMutex();
+        D.cv = SDL_CreateCond();
+        D.wake = SDL_CreateCond();
+        if (!D.mu || !D.cv || !D.wake)
+            return false;
+    }
+    memset(&D.id, 0, sizeof(D.id));
+    D.path[0] = D.stem[0] = '\0';
+    D.cue_len = 0;
+    SDL_AtomicSet(&D.abort, 0);
+    SDL_AtomicSet(&D.lost, 0);
+    SDL_AtomicSet(&D.permille, 0);
+    SDL_AtomicSet(&D.error, 0);
+    SDL_AtomicSet(&D.state, DP_PREPARING);
+    D.thread = SDL_CreateThread(play_thread, "disc-play", NULL);
+    if (!D.thread)
+    {
+        SDL_AtomicSet(&D.state, DP_IDLE);
+        return false;
+    }
+    return true;
+}
+
+void discplay_stop(void)
+{
+    SDL_AtomicSet(&D.abort, 1);
+    if (D.mu)
+    {
+        SDL_LockMutex(D.mu);
+        SDL_CondBroadcast(D.cv);
+        SDL_CondBroadcast(D.wake);
+        SDL_UnlockMutex(D.mu);
+    }
+    if (D.thread)
+        SDL_WaitThread(D.thread, NULL);
+    D.thread = NULL;
+    play_release();
+    D.path[0] = D.stem[0] = '\0';
+    SDL_AtomicSet(&D.state, DP_IDLE);
+}
+
+int discplay_file(const char *name, uint64_t *size)
+{
+    if (discplay_state() != DP_READY)
+        return 0;
+    const size_t n = strlen(name), s = strlen(D.stem);
+    if (n != s + 4 || strncmp(name, D.stem, s) != 0)
+        return 0;
+    if (strcmp(name + s, ".cue") == 0)
+    {
+        *size = D.cue_len;
+        return 1;
+    }
+    if (strcmp(name + s, ".bin") == 0)
+    {
+        *size = D.size;
+        return 2;
+    }
+    return 0;
+}
+
+size_t discplay_read(int kind, uint64_t off, void *dst, size_t n)
+{
+    uint8_t *out = dst;
+    if (discplay_state() != DP_READY)
+        return 0;
+    if (kind == 1)
+    {
+        if (off >= D.cue_len)
+            return 0;
+        size_t take = D.cue_len - off < n ? (size_t)(D.cue_len - off) : n;
+        memcpy(out, D.cue + off, take);
+        return take;
+    }
+    size_t got = 0;
+    while (got < n && off < D.size)
+    {
+        const uint32_t lba = D.first + (uint32_t)(off / SECTOR);
+        int lo = 0, hi = D.nblk - 1;
+        while (lo < hi) /* the last block that starts at or before the sector */
+        {
+            int mid = (lo + hi + 1) / 2;
+            if (D.blk[mid].lba <= lba)
+                lo = mid;
+            else
+                hi = mid - 1;
+        }
+        SDL_LockMutex(D.mu);
+        D.pos = lo;
+        SDL_CondSignal(D.wake);
+        while (!D.have[lo] && !SDL_AtomicGet(&D.abort) && !SDL_AtomicGet(&D.lost))
+        {
+            D.demand = lo;
+            SDL_CondSignal(D.wake);
+            SDL_CondWaitTimeout(D.cv, D.mu, 200);
+        }
+        size_t take = 0;
+        if (D.have[lo])
+        {
+            const uint64_t block_start = (uint64_t)(D.blk[lo].lba - D.first) * SECTOR;
+            const uint64_t block_len = (uint64_t)D.blk[lo].n * SECTOR;
+            take = block_start + block_len - off < n - got ? (size_t)(block_start + block_len - off) : n - got;
+            memcpy(out + got, play_ptr(lo) + (off - block_start), take);
+        }
+        SDL_UnlockMutex(D.mu);
+        if (!take)
+            break;
+        got += take;
+        off += take;
+    }
+    return got;
+}
+#endif

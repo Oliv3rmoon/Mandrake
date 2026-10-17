@@ -44,6 +44,11 @@ void library_scan_append(Library *lib, const char *const *roots, int root_count)
 bool library_load_index(Library *lib, const char *index_path);
 void library_free(Library *lib);
 
+/* Adds a game that is not in a folder (a disc played from the drive) as the last one; library_remove_path takes it out
+ * again by its path. Both leave the games before it where they are. */
+bool library_add_game(Library *lib, const Game *g);
+bool library_remove_path(Library *lib, const char *path);
+
 /* Deletes the files that make the game appear on the shelf: the file the core loads (.cue, .m3u, .chd, .pbp, .iso...),
  * what a .cue or .m3u lists (its .bin, its discs), and the .sbi beside it. Only files inside the game's folder;
  * the folder goes too when it is one SwanStationPS5 made ("Title [serial]") and nothing else is left in it. Saves,

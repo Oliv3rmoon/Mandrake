@@ -168,7 +168,7 @@ static void load_language(void)
         fclose(f);
 }
 
-/* "Install discs only" (Settings > System > SwanStationPS5), read for every disc: the game is not started, so the app is
+/* "Do not start the game automatically" (Settings > System > SwanStationPS5), read for every disc: the game is not started, so the app is
  * not opened, and a disc whose game is installed already is left alone */
 static bool install_only(void)
 {
@@ -178,6 +178,20 @@ static bool install_only(void)
     while (f && fgets(line, sizeof(line), f))
         if (strncmp(line, "disc_install_only=", 18) == 0)
             on = atoi(line + 18) != 0;
+    if (f)
+        fclose(f);
+    return on;
+}
+
+/* "Play from disc": the disc is not installed; the app is opened and plays it from the drive */
+static bool play_from_disc(void)
+{
+    FILE *f = fopen(CONFIG, "r");
+    char line[256];
+    bool on = false;
+    while (f && fgets(line, sizeof(line), f))
+        if (strncmp(line, "play_from_disc=", 15) == 0)
+            on = atoi(line + 15) != 0;
     if (f)
         fclose(f);
     return on;
@@ -381,6 +395,17 @@ static void handle_disc(const DiscId *id)
 {
     say("a disc: '%s' (%s)", id->title, id->key);
     sleep(kSettleSec); /* the system's own screen for a disc it does not know, before anything of ours */
+    if (play_from_disc())
+    {
+        if (install_only())
+            say("play from disc, not starting the game: the app is not opened");
+        else
+        {
+            say("play from disc: nothing is installed, the app is opened");
+            launch_app(); /* it finds the disc in the drive, reads it into memory and starts the game */
+        }
+        return;
+    }
     const bool only = install_only();
     stamp(BUSY);
     char ext_games[256];

@@ -80,4 +80,28 @@ void discwatch_pause(bool paused);
  * only busy does not count). It goes up while a game is running too. */
 int discwatch_removed(void);
 
+/* Play from disc: the disc in the drive is read into memory by a thread (the order the game asks for, else from the
+ * start; the whole disc, or when that much memory cannot be had a window of 256 MB around the game's position) and the core loads it as a game from a virtual folder, so nothing is installed. It is ready (the game can
+ * start) as soon as the disc is identified. */
+typedef enum
+{
+    DP_IDLE,
+    DP_PREPARING, /* the drive is being asked who the disc is */
+    DP_READY,     /* discplay_path() can be loaded; the rest of the disc is still being read, or is done */
+    DP_FAILED     /* discplay_error() says why; discplay_stop() clears it */
+} DiscPlayState;
+
+bool discplay_start(void);
+DiscPlayState discplay_state(void);
+DiscImportState discplay_error(void);
+const DiscId *discplay_id(void);
+/* The .cue the core loads ("/discplay/<serial>-<hex>.cue"). */
+const char *discplay_path(void);
+/* How much of the disc is in memory, 0 to 1000. */
+int discplay_permille(void);
+/* True once the disc went (or too much of it could not be read) before it was all in memory. */
+bool discplay_lost(void);
+/* Stops reading and frees the memory. Not while a game is loaded from it. */
+void discplay_stop(void);
+
 #endif
