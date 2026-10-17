@@ -132,6 +132,11 @@ void discimport_cancel(void)
         P("cancelled by the player");
 }
 
+const char *discimport_games_dir(void)
+{
+    return J.games;
+}
+
 int discimport_bad(void)
 {
     return SDL_AtomicGet(&J.bad);

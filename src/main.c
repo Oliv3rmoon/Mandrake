@@ -1463,6 +1463,21 @@ static void import_draw(void)
             snprintf(when, sizeof(when), tr("%ld s left"), sec);
         text_draw(tx, y + 138, 24, FONT_REGULAR, TH_TEXT_DIM, ALIGN_LEFT, when);
     }
+    {
+        const char *games = discimport_games_dir();
+        char where[64], drive[24];
+        if (strncmp(games, "/mnt/", 5) == 0)
+        {
+            str_copy(drive, sizeof(drive), games);
+            char *slash = strchr(drive + 5, '/');
+            if (slash)
+                *slash = '\0';
+        }
+        else
+            str_copy(drive, sizeof(drive), "/data");
+        snprintf(where, sizeof(where), tr("Installing to: %s"), drive);
+        text_draw(tx, y + 172, 24, FONT_REGULAR, TH_TEXT_DIM, ALIGN_LEFT, where);
+    }
     /* bottom right: how to cancel */
     const char *cancel = tr("Cancel (hold)");
     const float cancel_w = text_width(22, FONT_REGULAR, cancel);

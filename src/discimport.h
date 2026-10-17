@@ -51,6 +51,7 @@ bool discimport_check_stall(void);
 void discimport_cancel(void);
 /* How many sectors could not be read (zeros in the image). */
 int discimport_bad(void);
+const char *discimport_games_dir(void);
 /* At start: removes what an interrupted import left (*.part in the games folder's subfolders). */
 void discimport_cleanup(const char *games_dir);
 

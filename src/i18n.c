@@ -1545,6 +1545,7 @@ static const Entry ENTRIES[] = {
       "ディスクのインストールのみ"}},
     {{"A disc put in the USB CD drive is installed but its game does not start: with the disc daemon the app is not opened, and with the app open the shelf only moves to the game. Off: the game starts by itself.", "Un disque mis dans le lecteur de CD USB est installé, mais son jeu ne démarre pas : avec le démon de disques l'application ne s'ouvre pas, et avec l'application ouverte l'étagère se place seulement sur le jeu. Désactivé : le jeu démarre tout seul.", "Um disco colocado no leitor de CD USB é instalado, mas o jogo não arranca: com o daemon de discos a app não abre, e com a app aberta a estante apenas se posiciona no jogo. Desligado: o jogo arranca sozinho.", "Un disco puesto en el lector de CD USB se instala, pero su juego no se inicia: con el daemon de discos la app no se abre, y con la app abierta el estante solo se posiciona en el juego. Desactivado: el juego se inicia solo.",
       "USB CDドライブに入れたディスクはインストールされますが、ゲームは起動しません。ディスクデーモン使用時はアプリを開かず、アプリが開いているときは棚がそのゲームに移動するだけです。オフ:ゲームが自動で起動します。"}},
+    {{"Installing to: %s", "Installation sur : %s", "A instalar em: %s", "Instalando en: %s", "インストール先: %s"}},
     {{"Install to external memory", "Installer sur la mémoire externe", "Instalar na memória externa", "Instalar en memoria externa",
       "外部メモリにインストール"}},
     {{"A disc is installed on the extended storage when it has at least 1 GB free, in its SwanStationPS5/games folder, instead of /data. Off: it is installed in /data.",
