@@ -41,6 +41,11 @@ static inline long long drive_free_mb(const char *path)
     return measured == 0 ? (long long)((unsigned long long)fs.f_bavail * fs.f_bsize >> 20) : -1;
 }
 
+static inline bool drive_usable(int d)
+{
+    return drive_free_mb(drive_paths[d]) >= 256;
+}
+
 static inline int drives_list(char *buf, size_t size, int only)
 {
     int found = 0;
@@ -49,9 +54,9 @@ static inline int drives_list(char *buf, size_t size, int only)
         buf[0] = '\0';
     for (int d = 0; d < DRIVE_COUNT; ++d)
     {
-        long long free_mb = drive_free_mb(drive_paths[d]);
-        if (free_mb < 256)
+        if (!drive_usable(d))
             continue;
+        long long free_mb = drive_free_mb(drive_paths[d]);
         if (only >= 0 && found++ != only)
             continue;
         const char *name = drive_paths[d] + 5;

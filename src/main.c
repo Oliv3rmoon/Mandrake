@@ -457,6 +457,8 @@ void app_rescan(void)
     for (int d = 0; d < DRIVE_COUNT; ++d)
         for (int n = 0; n < 2; ++n)
         {
+            if (d < DRIVE_EXT_COUNT && !drive_usable(d))
+                continue;
             char *plain = drive_roots[drive_count++], *games = drive_roots[drive_count++];
             snprintf(plain, SwanStationPS5_PATH_MAX, "%s/%s", drive_paths[d], names[n]);
             snprintf(games, SwanStationPS5_PATH_MAX, "%s/%s/games", drive_paths[d], names[n]);
@@ -468,6 +470,8 @@ void app_rescan(void)
     if (app.global.usb_folder[0])
         for (int u = 0; u < DRIVE_COUNT; ++u)
         {
+            if (u < DRIVE_EXT_COUNT && !drive_usable(u))
+                continue;
             snprintf(usb_roots[u], SwanStationPS5_PATH_MAX, "%s/%s", drive_paths[u], app.global.usb_folder);
             roots[root_count++] = usb_roots[u];
         }
@@ -1752,8 +1756,8 @@ void app_start_game(int index, bool resume)
         app_toast("This game has no widescreen code: playing in 4:3");
     if (translated)
         app_toast("Translation patch applied");
-    if (resume && play_load_resume())
-        app_toast("Continuing where you left off...");
+    if (resume)
+        play_load_resume();
     if (controls_gun_active())
         app_toast("Light gun: point the controller at the screen, {R2} fires, {R3} re-centres");
     app.screen = SCREEN_GAME;
@@ -2437,7 +2441,7 @@ int main(int argc, char **argv)
         struct stat ext;
         char games[64];
         snprintf(games, sizeof(games), "%s/SwanStationPS5/games", ext_drives[i]);
-        if (stat(ext_drives[i], &ext) != 0 || !S_ISDIR(ext.st_mode))
+        if (!drive_usable(i))
             SwanStationPS5_log("games folder %s: %s is not available", games, ext_drives[i]);
         else if (stat(games, &ext) == 0)
             SwanStationPS5_log("games folder %s: already exists", games);
@@ -2451,6 +2455,8 @@ int main(int argc, char **argv)
         discimport_cleanup(app.paths.games);
         for (int i = 0; i < DRIVE_EXT_COUNT; ++i)
         {
+            if (!drive_usable(i))
+                continue;
             char ext_games[SwanStationPS5_PATH_MAX];
             snprintf(ext_games, sizeof(ext_games), "%s/SwanStationPS5/games", drive_paths[i]);
             discimport_cleanup(ext_games);
