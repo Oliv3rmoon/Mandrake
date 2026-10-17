@@ -58,7 +58,7 @@
 #define DISC_TIME 0.95f  /* before it, with the disc animation: the disc slides out and spins up */
 #define CASE_SPIN_START 0.8f /* with the 3D cases: when the CD starts to spin (the sound of the disc starts then) */
 #define CASE_DISC_TIME 2.4f /* the same with the 3D cases: the lid opens and the CD spins up on its tray */
-#define LAUNCH_STICK 0.05f /* with the 3D cases: how far the right stick turns the case while the CD spins (1 = all the way) */
+#define LAUNCH_STICK 0.1f /* with the 3D cases: how far the right stick turns the case while the CD spins (1 = all the way) */
 static bool shelf_cases(void);
 
 static float disc_time(void)
