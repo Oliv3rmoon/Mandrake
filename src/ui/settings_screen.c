@@ -7,6 +7,7 @@
 #include "../config.h"
 #include "../controls.h"
 #include "../core/host.h"
+#include "../drives.h"
 #include "../i18n.h"
 #include "../nfs/nfs.h"
 #include "../profiles.h"
@@ -77,6 +78,7 @@ enum Special
     SP_HDTEX, /* drives the two core options for texture packs */
     SP_USBFOLDER, /* the games folder on USB drives, typed */
     SP_NFSHARES,  /* the NFS servers that hold games, typed */
+    SP_DRIVES,    /* the extended and USB drives found, with their free space */
 };
 
 typedef struct
@@ -304,7 +306,7 @@ static const Row SYSTEM[] = {
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Install discs only", "A disc put in the USB CD drive is installed but its game does not start: with the disc daemon the app is not opened, and with the app open the shelf only moves to the game. Off: the game starts by itself.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_install_only), OFF_ON, 2, 0},
-    {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ and /mnt/usb1/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx and /mnt/usb1/psx. Leave it empty to turn it off.",
+    {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ to /mnt/usb7/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx, /mnt/usb1/psx and so on. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
     {NULL, "NFS shares", "Games on an NFS server of your network, as nfs:// addresses separated by ';'. Example: nfs://192.168.1.85/psx. The shelf lists them like a drive's; only SwanStationPS5 sees them. The server has to export the folder to the console. Rescan library connects the ones that did not.",
      K_ACTION, APPLY_NOW, SP_NFSHARES, true, NO_FIELD, NULL, 0, 0},
@@ -343,6 +345,8 @@ static const Row ABOUT[] = {
      K_INFO, APPLY_NOW, SP_BIOS, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Games", "Games are your own backups, in /data/SwanStationPS5/games.", K_INFO, APPLY_NOW, SP_GAMES,
      true, NO_FIELD, NULL, 0, 0},
+    {NULL, "Drives", "The extended storage and USB drives found, with their free space.", K_INFO, APPLY_NOW,
+     SP_DRIVES, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Data folder", "Saves, states, covers and settings live here.", K_INFO, APPLY_NOW, SP_DATA,
      true, NO_FIELD, NULL, 0, 0},
     {NULL, "Created by", "The person behind SwanStationPS5.", K_INFO, APPLY_NOW, SP_CREDITS, true, NO_FIELD, NULL, 0,
@@ -653,6 +657,7 @@ static struct
     int remap_cursor;
     float tab_x, tab_w, sel_y, scroll, scope_x, remap_y;
     float switch_t[MAX_ROWS];
+    int drive; /* the drive shown in Drives */
 } S;
 
 /* The game whose own settings the "This game" side edits: the running one, or the shelf's (Settings opened from the shelf) */
@@ -717,7 +722,7 @@ static const Tab *tab(void)
 
 static bool selectable(const Row *r)
 {
-    return r->kind != K_INFO;
+    return r->kind != K_INFO || r->special == SP_DRIVES;
 }
 
 static void first_selectable(void)
@@ -966,6 +971,16 @@ static const char *value_label(const Row *r, char *buf, size_t size)
     case SP_BIOS: app_describe_bios(buf, size); return buf;
     case SP_GAMES: snprintf(buf, size, "%d", app.library.count); return buf;
     case SP_DATA: return app.paths.root;
+    case SP_DRIVES:
+    {
+        int count = drives_list(buf, size, -1);
+        if (!count)
+            return tr("None");
+        if (S.drive >= count)
+            S.drive = 0;
+        drives_list(buf, size, S.drive);
+        return buf;
+    }
     case SP_CREDITS: return "AngelXex";
     case SP_HOTKEYS: return tr("{Touchpad} + {R2} / {L2}");
     case SP_USBFOLDER: return app.global.usb_folder[0] ? app.global.usb_folder : tr("Off");
@@ -1771,6 +1786,12 @@ static void draw_rows(void)
                               value_label(r, buf, sizeof(buf)));
             break;
         case K_INFO:
+            if (r->special == SP_DRIVES)
+            {
+                draw_choice(right, ry + 15, 46, 24, sel ? (theme.light ? TH_BG : TH_SWITCH_OFF) : TH_PILL,
+                            TH_TEXT_SOFT, value_label(r, buf, sizeof(buf)));
+                break;
+            }
             text_draw_fit(right, ry + 24, 24, FONT_REGULAR, TH_TEXT_SOFT, ALIGN_RIGHT, w - 420,
                           value_label(r, buf, sizeof(buf)));
             break;
@@ -1884,7 +1905,7 @@ static void activate(const Row *r)
     case SP_USBFOLDER:
         sfx_play(SFX_SELECT);
         textinput_open(SCREEN_SETTINGS, "Games folder on USB drives",
-                       "Type the folder name: games are looked for on /mnt/usb0/ and /mnt/usb1/",
+                       "Type the folder name: games are looked for on /mnt/usb0/ to /mnt/usb7/",
                        app.global.usb_folder, usb_folder_set);
         return;
     case SP_BIOS_START:
@@ -2046,6 +2067,16 @@ void settings_screen(uint32_t pressed)
             int count = r->kind == K_TOGGLE ? 2 : r->count;
             write_value(r, (read_value(r) + count + delta) % count);
             sfx_play(SFX_CLICK); /* also previews a new interface sound */
+        }
+        if (r->special == SP_DRIVES && (delta || (pressed & BIT(BTN_CROSS))))
+        {
+            char tmp[256];
+            int count = drives_list(tmp, sizeof(tmp), -1);
+            if (count > 1)
+            {
+                S.drive = (S.drive + count + (delta ? delta : 1)) % count;
+                sfx_play(SFX_CLICK);
+            }
         }
         if ((pressed & BIT(BTN_CROSS)) && r->kind == K_ACTION)
             activate(r);

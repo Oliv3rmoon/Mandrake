@@ -47,7 +47,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 - **SwanStation's own options.** 104 of its core options (MSAA, texture filter, widescreen hack, PGXP details, controller ports, CPU overclock...) in Settings → Display, Graphics, Controls and System. They are in English and only on the console.
 
 - **Five themes.** Neon Arcade (the default), Classic, Memory Card (light and dark, a grid of covers) and Record Shelf (spines on a shelf), each with its own colours and fonts. Around a 4:3 picture: black, the current background or a 90s TV, or the game's own artwork frame (off by default).
-- **Games on a USB drive, by one name.** *Games folder on USB drives* (`psx` by default, typed with an on-screen keyboard) is looked for on `/mnt/usb0/` and `/mnt/usb1/` at once, so it still works when the console numbers your drives differently.
+- **Games on a USB drive, by one name.** *Games folder on USB drives* (`psx` by default, typed with an on-screen keyboard) is looked for on `/mnt/usb0/` to `/mnt/usb7/` at once, so it still works when the console numbers your drives differently.
 - **Games on an NFS server.** Keep your games on a PC or a NAS and play them over the network: add the server in Settings > System > NFS shares. They show on the shelf like a drive's, a background thread reads the disc ahead of the game, and a server that goes away just takes you back to the library. See [Games on an NFS server](#games-on-an-nfs-server).
 - **Play your own PS1 discs from a USB CD drive.** Put a PS1 disc in a USB CD drive and SwanStationPS5 copies it to your games folder (a `.bin` and a `.cue`, with a progress bar and the game's cover), adds it to the shelf and starts it. Once a disc is installed, putting it in again just starts the game. With the disc daemon this works even with the app closed. See [Playing from a USB CD drive](#playing-from-a-usb-cd-drive).
 - **Discs without opening the app.** Send `SwanStationPS5-DiscDaemon.elf` (a file of the release) once to your console's ELF loader and leave it running: a disc put in the drive is installed with the console's own notifications (name, percentage and time left), and then the game opens by itself.
@@ -152,11 +152,11 @@ The games are looked for in all of these folders at once. Inside each, **one fol
 |---|---|
 | **The console** (the default) | `/data/SwanStationPS5/games/<Game name>/` |
 | The console, from PSXS5 | `/data/PSXS5/games/<Game name>/` |
-| **A USB drive** | `/mnt/usb0` or `/mnt/usb1`, then `SwanStationPS5/games/<Game name>/` |
+| **A USB drive** | `/mnt/usb0` to `/mnt/usb7`, then `SwanStationPS5/games/<Game name>/` |
 | An extended storage | `/mnt/ext0` or `/mnt/ext1`, then `SwanStationPS5/games/<Game name>/` |
 | **An NFS server** | the folder you add in Settings > System > NFS shares, one folder per game (see [Games on an NFS server](#games-on-an-nfs-server)) |
 
-On each USB drive and extended storage these four also work (`<drive>` is `/mnt/usb0`, `/mnt/usb1`, `/mnt/ext0` or `/mnt/ext1`):
+On each USB drive and extended storage these four also work (`<drive>` is `/mnt/usb0` to `/mnt/usb7`, `/mnt/ext0` or `/mnt/ext1`):
 
 - `<drive>/SwanStationPS5/games/<Game name>/`
 - `<drive>/SwanStationPS5/<Game name>/` (without `games`)
@@ -165,7 +165,7 @@ On each USB drive and extended storage these four also work (`<drive>` is `/mnt/
 
 Example on a USB drive: `/mnt/usb0/SwanStationPS5/games/Crash Bandicoot/Crash Bandicoot.chd`.
 
-You can also pick one folder name for USB drives in Settings > System > SwanStationPS5 > Games folder on USB drives (`psx` by default): it is looked for on `/mnt/usb0/` and `/mnt/usb1/` at once, since the drive's number changes with the ones plugged in. With `psx`, a game goes in `/mnt/usb0/psx/<Game name>/` or `/mnt/usb1/psx/<Game name>/`. Leave the field empty to turn it off.
+You can also pick one folder name for USB drives in Settings > System > SwanStationPS5 > Games folder on USB drives (`psx` by default): it is looked for on `/mnt/usb0/` to `/mnt/usb7/` at once, since the drive's number changes with the ones plugged in. With `psx`, a game goes in `/mnt/usb0/psx/<Game name>/` (or `/mnt/usb1/psx/...` and so on). Leave the field empty to turn it off.
 
 ### BIOS: one folder, no subfolders
 

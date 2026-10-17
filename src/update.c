@@ -10,6 +10,7 @@
  */
 #include "update.h"
 
+#include "drives.h"
 #include "app.h"
 #include "i18n.h"
 #include "net.h"
@@ -179,8 +180,9 @@ static const char *app_dir(void)
     done = true;
     str_copy(found, sizeof(found), APP_DIR_DEFAULT);
     static const char *const running_dirs[] = {"/app0", "/system_ex/app/" SwanStationPS5_TITLE_ID};
-    static const char *const roots[] = {"/data", "/mnt/ext0", "/mnt/ext1", "/mnt/usb0", "/mnt/usb1",
-                                        "/mnt/usb2", "/mnt/usb3", "/mnt/usb4", "/mnt/usb5", "/mnt/usb6", "/mnt/usb7"};
+    const char *roots[1 + DRIVE_COUNT] = {"/data"};
+    for (int d = 0; d < DRIVE_COUNT; ++d)
+        roots[1 + d] = drive_paths[d];
     struct stat running;
     bool have = false;
     for (size_t i = 0; i < sizeof(running_dirs) / sizeof(running_dirs[0]) && !have; ++i)

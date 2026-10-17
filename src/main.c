@@ -6,6 +6,7 @@
  * live in src/ui (shelf, settings, in-game menu and cheats).
  * Emulation is SwanStation, linked statically and driven through libretro.
  */
+#include "drives.h"
 #include "app.h"
 
 #include "config.h"
@@ -437,30 +438,30 @@ void app_rescan(void)
     }
     /* The games folder, then on each drive both <drive>/<name> and <drive>/<name>/games, for our
      * folder name and for the PSXS5 one. */
-    static const char *const drives[] = {"/mnt/usb0", "/mnt/usb1", "/mnt/ext0", "/mnt/ext1"};
     static const char *const names[] = {"SwanStationPS5", "PSXS5"};
-    static char drive_roots[2 * 2 * 4][SwanStationPS5_PATH_MAX];
-    static char usb_roots[2][SwanStationPS5_PATH_MAX];
+    static char drive_roots[DRIVE_COUNT * 2 * 2][SwanStationPS5_PATH_MAX];
+    static char usb_roots[DRIVE_USB_COUNT][SwanStationPS5_PATH_MAX];
     static char nfs_roots[NFS_MAX_SHARES][NFS_PATH_MAX];
-    const char *roots[2 + 2 * 2 * 4 + 2 + NFS_MAX_SHARES];
+    const char *roots[2 + DRIVE_COUNT * 2 * 2 + DRIVE_USB_COUNT + NFS_MAX_SHARES];
     int root_count = 0;
     roots[root_count++] = app.paths.games;
     roots[root_count++] = "/data/PSXS5/games";
-    for (int d = 0; d < 4; ++d)
+    int drive_count = 0;
+    for (int d = 0; d < DRIVE_COUNT; ++d)
         for (int n = 0; n < 2; ++n)
         {
-            char *plain = drive_roots[root_count - 2], *games = drive_roots[root_count - 1];
-            snprintf(plain, SwanStationPS5_PATH_MAX, "%s/%s", drives[d], names[n]);
-            snprintf(games, SwanStationPS5_PATH_MAX, "%s/%s/games", drives[d], names[n]);
+            char *plain = drive_roots[drive_count++], *games = drive_roots[drive_count++];
+            snprintf(plain, SwanStationPS5_PATH_MAX, "%s/%s", drive_paths[d], names[n]);
+            snprintf(games, SwanStationPS5_PATH_MAX, "%s/%s/games", drive_paths[d], names[n]);
             roots[root_count++] = plain;
             roots[root_count++] = games;
         }
     /* Settings > System > SwanStationPS5 > Games folder on USB drives: that name on both drives at once, as the drive's
      * number changes with the ones plugged in */
     if (app.global.usb_folder[0])
-        for (int u = 0; u < 2; ++u)
+        for (int u = 0; u < DRIVE_USB_COUNT; ++u)
         {
-            snprintf(usb_roots[u], SwanStationPS5_PATH_MAX, "/mnt/usb%d/%s", u, app.global.usb_folder);
+            snprintf(usb_roots[u], SwanStationPS5_PATH_MAX, "%s/%s", drive_paths[DRIVE_EXT_COUNT + u], app.global.usb_folder);
             roots[root_count++] = usb_roots[u];
         }
     /* Settings > System > NFS shares: the ones that are not mounted are tried on their own thread, so a rescan never
@@ -2270,8 +2271,10 @@ int main(int argc, char **argv)
     ps5_klog_capture_stderr("");
 #endif
     /* a second games folder on each extended storage, only when it is mounted */
-    static const char *const ext_drives[] = {"/mnt/ext0", "/mnt/ext1"};
-    for (int i = 0; i < 2; ++i)
+    char found_drives[160];
+    SwanStationPS5_log("drives found: %s", drives_list(found_drives, sizeof(found_drives), -1) ? found_drives : "none");
+    const char *const *ext_drives = drive_paths;
+    for (int i = 0; i < DRIVE_EXT_COUNT; ++i)
     {
         struct stat ext;
         char games[64];
