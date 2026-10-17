@@ -159,7 +159,7 @@ typedef struct
     int run_ahead;        /* 0 off, 1 to 10 frames less input lag */
     bool fast_effects;    /* screen effects on the GPU, without the software copy */
     bool fsr;             /* FSR 1 scales the picture before the shader */
-    char usb_folder[48];  /* a folder name looked for on USB drives: /mnt/usb0/<name> to /mnt/usb7/<name> (empty: none) */
+    char usb_folder[48];  /* a folder name looked for on USB drives: /mnt/ext0/<name>, /mnt/ext1/<name> and /mnt/usb0/<name> to /mnt/usb7/<name> (empty: none) */
     char nfs_shares[512]; /* nfs:// addresses of the servers that hold games, ';' between them (empty: none); src/nfs/nfs.h */
     bool frame_pacing;    /* Video sync: one game frame per screen refresh, the sound stretched by a hair to keep up; off: synchronised to the sound */
     int video_out;        /* picture output to the TV: 0 60 Hz, 1 120 Hz (from the next start) */

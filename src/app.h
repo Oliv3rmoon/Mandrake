@@ -44,6 +44,8 @@ typedef struct
     bool settings_preview;    /* Settings opened from a game: the touchpad hides it and the game runs, to see the changes live */
     float settings_preview_time; /* seconds since the preview began (its notice fades out) */
     char storage_error[256];
+    char drive_text[10][40]; /* the drives found when the app started, with their free space */
+    int drive_count;
     bool sandboxed;           /* /data can't be listed: library.txt is the library */
     bool unlock_setting;      /* Settings > System > Unlock /data with etaHEN */
     char sandbox_reason[200];

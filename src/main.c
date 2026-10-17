@@ -440,9 +440,9 @@ void app_rescan(void)
      * folder name and for the PSXS5 one. */
     static const char *const names[] = {"SwanStationPS5", "PSXS5"};
     static char drive_roots[DRIVE_COUNT * 2 * 2][SwanStationPS5_PATH_MAX];
-    static char usb_roots[DRIVE_USB_COUNT][SwanStationPS5_PATH_MAX];
+    static char usb_roots[DRIVE_COUNT][SwanStationPS5_PATH_MAX];
     static char nfs_roots[NFS_MAX_SHARES][NFS_PATH_MAX];
-    const char *roots[2 + DRIVE_COUNT * 2 * 2 + DRIVE_USB_COUNT + NFS_MAX_SHARES];
+    const char *roots[2 + DRIVE_COUNT * 2 * 2 + DRIVE_COUNT + NFS_MAX_SHARES];
     int root_count = 0;
     roots[root_count++] = app.paths.games;
     roots[root_count++] = "/data/PSXS5/games";
@@ -456,12 +456,12 @@ void app_rescan(void)
             roots[root_count++] = plain;
             roots[root_count++] = games;
         }
-    /* Settings > System > SwanStationPS5 > Games folder on USB drives: that name on both drives at once, as the drive's
+    /* Settings > System > SwanStationPS5 > Games folder on drives: that name on every drive at once, as the drive's
      * number changes with the ones plugged in */
     if (app.global.usb_folder[0])
-        for (int u = 0; u < DRIVE_USB_COUNT; ++u)
+        for (int u = 0; u < DRIVE_COUNT; ++u)
         {
-            snprintf(usb_roots[u], SwanStationPS5_PATH_MAX, "%s/%s", drive_paths[DRIVE_EXT_COUNT + u], app.global.usb_folder);
+            snprintf(usb_roots[u], SwanStationPS5_PATH_MAX, "%s/%s", drive_paths[u], app.global.usb_folder);
             roots[root_count++] = usb_roots[u];
         }
     /* Settings > System > NFS shares: the ones that are not mounted are tried on their own thread, so a rescan never
@@ -2271,8 +2271,11 @@ int main(int argc, char **argv)
     ps5_klog_capture_stderr("");
 #endif
     /* a second games folder on each extended storage, only when it is mounted */
-    char found_drives[160];
-    SwanStationPS5_log("drives found: %s", drives_list(found_drives, sizeof(found_drives), -1) ? found_drives : "none");
+    char found_drives[256];
+    app.drive_count = drives_list(found_drives, sizeof(found_drives), -1);
+    for (int i = 0; i < app.drive_count; ++i)
+        drives_list(app.drive_text[i], sizeof(app.drive_text[i]), i);
+    SwanStationPS5_log("drives found: %s", app.drive_count ? found_drives : "none");
     const char *const *ext_drives = drive_paths;
     for (int i = 0; i < DRIVE_EXT_COUNT; ++i)
     {

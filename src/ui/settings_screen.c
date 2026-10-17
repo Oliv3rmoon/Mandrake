@@ -306,7 +306,7 @@ static const Row SYSTEM[] = {
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Install discs only", "A disc put in the USB CD drive is installed but its game does not start: with the disc daemon the app is not opened, and with the app open the shelf only moves to the game. Off: the game starts by itself.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_install_only), OFF_ON, 2, 0},
-    {NULL, "Games folder on USB drives", "A folder name to look for games in on USB drives. It is looked for on /mnt/usb0/ to /mnt/usb7/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx, /mnt/usb1/psx and so on. Leave it empty to turn it off.",
+    {NULL, "Games folder on drives", "A folder name to look for games in on drives. It is looked for on /mnt/ext0/, /mnt/ext1/ and /mnt/usb0/ to /mnt/usb7/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx, /mnt/usb1/psx and so on. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
     {NULL, "NFS shares", "Games on an NFS server of your network, as nfs:// addresses separated by ';'. Example: nfs://192.168.1.85/psx. The shelf lists them like a drive's; only SwanStationPS5 sees them. The server has to export the folder to the console. Rescan library connects the ones that did not.",
      K_ACTION, APPLY_NOW, SP_NFSHARES, true, NO_FIELD, NULL, 0, 0},
@@ -973,13 +973,11 @@ static const char *value_label(const Row *r, char *buf, size_t size)
     case SP_DATA: return app.paths.root;
     case SP_DRIVES:
     {
-        int count = drives_list(buf, size, -1);
-        if (!count)
+        if (!app.drive_count)
             return tr("None");
-        if (S.drive >= count)
+        if (S.drive >= app.drive_count)
             S.drive = 0;
-        drives_list(buf, size, S.drive);
-        return buf;
+        return app.drive_text[S.drive];
     }
     case SP_CREDITS: return "AngelXex";
     case SP_HOTKEYS: return tr("{Touchpad} + {R2} / {L2}");
@@ -1904,8 +1902,8 @@ static void activate(const Row *r)
         return;
     case SP_USBFOLDER:
         sfx_play(SFX_SELECT);
-        textinput_open(SCREEN_SETTINGS, "Games folder on USB drives",
-                       "Type the folder name: games are looked for on /mnt/usb0/ to /mnt/usb7/",
+        textinput_open(SCREEN_SETTINGS, "Games folder on drives",
+                       "Type the folder name: games are looked for on /mnt/ext0/, /mnt/ext1/ and /mnt/usb0/ to /mnt/usb7/",
                        app.global.usb_folder, usb_folder_set);
         return;
     case SP_BIOS_START:
@@ -2070,8 +2068,7 @@ void settings_screen(uint32_t pressed)
         }
         if (r->special == SP_DRIVES && (delta || (pressed & BIT(BTN_CROSS))))
         {
-            char tmp[256];
-            int count = drives_list(tmp, sizeof(tmp), -1);
+            int count = app.drive_count;
             if (count > 1)
             {
                 S.drive = (S.drive + count + (delta ? delta : 1)) % count;

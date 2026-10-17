@@ -34,7 +34,7 @@ void config_defaults(Settings *s)
     s->vibration = 4;
     s->quick_resume = true;
     s->update_check = true;
-    snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/usb0/psx to /mnt/usb7/psx */
+    snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/ext0/psx, /mnt/ext1/psx and /mnt/usb0/psx to /mnt/usb7/psx */
     s->bezel = false; /* the game's artwork frame, when there is one */
     s->theme = THEME_NEON; /* Neon Arcade (ui/theme.h) */
     s->pgxp = true; /* no wobbling polygons */
