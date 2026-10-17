@@ -1939,8 +1939,16 @@ void shelf_screen(uint32_t pressed)
             lift = 0.0f;
         else
             push = 0.0f;
-        if (S.dialog || P.open || S.launch_t > 0.0f || !shelf_cases() || moving)
+        const bool case_launch = S.launch_t > 0.0f && !S.starting && shelf_cases() && app.global.disc_animation;
+        if (case_launch)
+            moving = false;
+        if (S.dialog || P.open || (S.launch_t > 0.0f && !case_launch) || !shelf_cases() || moving)
             push = lift = 0.0f;
+        if (case_launch)
+        {
+            push *= 0.5f;
+            lift *= 0.5f;
+        }
         /* with the left stick in use the right one is ignored, and what it had turned goes back fast: the knock of a press
          * is a way of its own, never mixed with a tilt */
         const float follow = moving ? 24.0f : 12.0f;

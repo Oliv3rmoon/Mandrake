@@ -370,7 +370,7 @@ static void turn_point(float x, float y, float z, float *ox, float *oy, float *o
 }
 
 /* The launch animation (case3d_launch), taken by the next case3d_draw only. */
-static float launch_open, launch_spin;
+static float launch_open, launch_spin, disc_lift;
 static bool launch_on;
 static float lid_c = 1.0f, lid_s, disc_c = 1.0f, disc_s;
 static float draw_cx, draw_scale = 1.0f; /* the case being drawn: its centre on the screen and px per model unit */
@@ -410,7 +410,7 @@ static void disc_point(float x, float y, float z, float *ox, float *oy, float *o
     const float dx = x - DISC_CX, dy = y - DISC_CY;
     *ox = DISC_CX + dx * disc_c - dy * disc_s;
     *oy = DISC_CY + dx * disc_s + dy * disc_c;
-    *oz = z;
+    *oz = z + disc_lift;
 }
 
 typedef struct
@@ -742,13 +742,13 @@ static void draw_sheet(const Sheet *sh, float cx, float cy, float scale, float a
 
 /* The shine over the lid's clear plastic: the long horizontal streak. The sides are left as the example textures have
  * them. */
-static void draw_plastic(float cx, float cy, float scale, float alpha)
+static void draw_plastic(float cx, float cy, float scale, float alpha, bool strip_pass, bool shine_pass)
 {
     /* the lid's front runs over the ribbed strip too, flush with it (the model's front plane starts right of it) */
     PlatTexture *strip = hinge_texture();
     float nx, ny, nz;
     turn_point(0.0f, 0.0f, 1.0f, &nx, &ny, &nz);
-    if (strip && nz > 0.0f)
+    if (strip_pass && strip && nz > 0.0f)
     {
         const float x0 = -case_w * 0.5f, x1 = SPINE_EDGE_X, z = FRONT_Z + 0.01f, hh = case_h * 0.5f;
         const float corner[4][2] = {{x0, hh}, {x1, hh}, {x1, -hh}, {x0, -hh}};
@@ -769,7 +769,7 @@ static void draw_plastic(float cx, float cy, float scale, float alpha)
     /* the shine of the light point over the lid */
     const Sheet lid = {{0, 0, FRONT_Z + 0.02f}, {case_w * 0.5f, 0, 0}, {0, case_h * 0.5f, 0}, {0, 0, 1},
                        0.90f, 0.24f, 0.08f, 0.0f, true};
-    if (lighting_on)
+    if (shine_pass && lighting_on)
         draw_sheet(&lid, cx, cy, scale, alpha);
 }
 
@@ -838,7 +838,7 @@ static void draw_disc_gloss(uint32_t tint, float cx, float cy, float scale)
     turn_point(0.0f, 0.0f, 1.0f, &nx, &ny, &nz);
     const float lx = (LIGHT_SCREEN_X - draw_cx) / draw_scale, ly = LIGHT_HEIGHT, lz = LIGHT_DEPTH;
     float ccx, ccy, ccz;
-    turn_point(DISC_CX, DISC_CY, DISC_TOP_Z, &ccx, &ccy, &ccz);
+    turn_point(DISC_CX, DISC_CY, DISC_TOP_Z + disc_lift, &ccx, &ccy, &ccz);
     const float light_angle = atan2f(ly - ccy, lx - ccx);
     static PlatVertex ring[RINGS][SEG + 1], tris[SEG * (RINGS - 1) * 6];
     for (int i = 0; i <= SEG; ++i)
@@ -851,7 +851,7 @@ static void draw_disc_gloss(uint32_t tint, float cx, float cy, float scale)
             const float rad = DISC_HUB + (DISC_R - 0.3f - DISC_HUB) * (float)r / (RINGS - 1);
             const float x = DISC_CX + cosf(a) * rad, y = DISC_CY + sinf(a) * rad;
             float px, py, pz;
-            turn_point(x, y, DISC_TOP_Z - 0.012f, &px, &py, &pz);
+            turn_point(x, y, DISC_TOP_Z - 0.012f + disc_lift, &px, &py, &pz);
             const float persp = VIEW_DISTANCE / (VIEW_DISTANCE - pz);
             /* half-way between the light and the camera */
             float hx = (lx - px) / 1.0f, hy = ly - py, hz = lz - pz;
@@ -915,7 +915,7 @@ static void draw_disc_sheen(uint32_t tint, float cx, float cy, float scale)
     if (tint_a == 0)
         return;
     float ccx, ccy, ccz, nx, ny, nz;
-    turn_point(DISC_CX, DISC_CY, DISC_TOP_Z, &ccx, &ccy, &ccz);
+    turn_point(DISC_CX, DISC_CY, DISC_TOP_Z + disc_lift, &ccx, &ccy, &ccz);
     turn_point(0.0f, 0.0f, 1.0f, &nx, &ny, &nz);
     const float lx = (LIGHT_SCREEN_X - draw_cx) / draw_scale - ccx, ly = LIGHT_HEIGHT - ccy, lz = LIGHT_DEPTH - ccz;
     const float ll = sqrtf(lx * lx + ly * ly + lz * lz);
@@ -940,7 +940,7 @@ static void draw_disc_sheen(uint32_t tint, float cx, float cy, float scale)
         {
             const float x = DISC_CX + cosf(a) * radii[r], y = DISC_CY + sinf(a) * radii[r];
             float px, py, pz;
-            turn_point(x, y, DISC_TOP_Z - 0.012f, &px, &py, &pz);
+            turn_point(x, y, DISC_TOP_Z - 0.012f + disc_lift, &px, &py, &pz);
             const float persp = VIEW_DISTANCE / (VIEW_DISTANCE - pz);
             float k = SHEEN_ALPHA * spoke * radial[r] * facing;
             k = k > SHEEN_ALPHA ? SHEEN_ALPHA : k;
@@ -1008,6 +1008,7 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
     view_distance = VIEW_DISTANCE_BASE * (1.0f + 9.0f * launch_open);
     lid_c = cosf(launch_open * LID_OPEN);
     lid_s = sinf(launch_open * LID_OPEN);
+    disc_lift = launch_on ? launch_open * 12.0f + fminf(launch_spin / 18.0f, 1.0f) * 18.0f : 0.0f;
     disc_c = cosf(launch_spin);
     disc_s = sinf(launch_spin);
     /* past 90 degrees the lid lies out to the left of the hinge: the pair (case and lid) is kept centred where the case was
@@ -1071,12 +1072,21 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
     }
     draw_part(PART_BACK, pts, cover, tint, NULL);
     draw_part(PART_INNER, pts, cover, tint, NULL);
-    /* the CD sits on the tray, behind the lid */
-    if (launch_on)
+    /* the CD sits on the tray, behind the lid; once it lifts it is over the ribbed strip at the case's left */
+    const bool strip_first = launch_on && launch_open > 0.08f;
+    if (strip_first)
+        draw_plastic(cx, cy, scale, alpha, true, false);
+    float ax, ay, az, bx, by, bz;
+    turn_point(1.0f, 0.0f, 0.0f, &ax, &ay, &az);
+    turn_point(0.0f, 0.0f, 0.0f, &bx, &by, &bz);
+    const bool disc_last = launch_on && launch_open > 0.55f && az > bz;
+    if (launch_on && !disc_last)
         draw_disc(pts, cover, tint, cx, cy, scale);
     draw_part(PART_PROMO, pts, cover, tint, NULL);
     draw_part(PART_FRONT, pts, cover, tint, NULL);
-    draw_plastic(cx, cy, scale, alpha);
+    if (disc_last)
+        draw_disc(pts, cover, tint, cx, cy, scale);
+    draw_plastic(cx, cy, scale, alpha, !strip_first, true);
     launch_on = false;
     launch_open = launch_spin = 0.0f;
     view_distance = VIEW_DISTANCE_BASE;
