@@ -371,7 +371,7 @@ static void turn_point(float x, float y, float z, float *ox, float *oy, float *o
 
 /* The launch animation (case3d_launch), taken by the next case3d_draw only. */
 static float launch_open, launch_spin, disc_lift, disc_scale = 1.0f;
-static bool launch_on;
+static bool launch_on, launch_tray;
 static float lid_c = 1.0f, lid_s, disc_c = 1.0f, disc_s;
 static float draw_cx, draw_scale = 1.0f; /* the case being drawn: its centre on the screen and px per model unit */
 static bool lighting_on = true;                  /* case3d_lighting: the cover's light */
@@ -987,9 +987,10 @@ void case3d_matte(bool on)
     matte_next = on;
 }
 
-void case3d_launch(float open, float spin)
+void case3d_launch(float open, float spin, bool in_tray)
 {
     launch_on = true;
+    launch_tray = in_tray;
     launch_open = open < 0.0f ? 0.0f : open > 1.0f ? 1.0f : open;
     launch_spin = spin;
 }
@@ -1009,7 +1010,7 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
     view_distance = VIEW_DISTANCE_BASE * (1.0f + 9.0f * launch_open);
     lid_c = cosf(launch_open * LID_OPEN);
     lid_s = sinf(launch_open * LID_OPEN);
-    const float disc_t = launch_on ? 0.4f * launch_open + 0.6f * fminf(launch_spin / 18.0f, 1.0f) : 0.0f;
+    const float disc_t = launch_on && !launch_tray ? 0.4f * launch_open + 0.6f * fminf(launch_spin / 18.0f, 1.0f) : 0.0f;
     disc_lift = disc_t * 36.0f;
     disc_scale = 1.0f + DISC_GROW * disc_t;
     disc_c = cosf(launch_spin);
@@ -1076,13 +1077,13 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
     draw_part(PART_BACK, pts, cover, tint, NULL);
     draw_part(PART_INNER, pts, cover, tint, NULL);
     /* the CD sits on the tray, behind the lid; once it lifts it is over the ribbed strip at the case's left */
-    const bool strip_first = launch_on && launch_open > 0.08f;
+    const bool strip_first = launch_on && !launch_tray && launch_open > 0.08f;
     if (strip_first)
         draw_plastic(cx, cy, scale, alpha, true, false);
     float ax, ay, az, bx, by, bz;
     turn_point(1.0f, 0.0f, 0.0f, &ax, &ay, &az);
     turn_point(0.0f, 0.0f, 0.0f, &bx, &by, &bz);
-    const bool disc_last = launch_on && launch_open > 0.55f && az >= bz - 0.001f;
+    const bool disc_last = launch_on && !launch_tray && launch_open > 0.55f && az >= bz - 0.001f;
     if (launch_on && !disc_last)
         draw_disc(pts, cover, tint, cx, cy, scale);
     draw_part(PART_PROMO, pts, cover, tint, NULL);

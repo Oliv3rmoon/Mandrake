@@ -555,6 +555,14 @@ static PlatTexture *shelf_cover(int index)
     return covers_is_placeholder(index) && no_cover_icon() ? NULL : covers_get(index);
 }
 
+/* The picture to show for a game wherever its cover is drawn outside the shelf: its cover, or assets/nocover2.png when it has
+ * none (or only a generated title card). */
+PlatTexture *shelf_cover_or_none(int index)
+{
+    PlatTexture *t = shelf_cover(index);
+    return t ? t : no_cover_icon();
+}
+
 /* The floor under a cover: its lower part mirrored, fading out downwards. Only with the GPU interface (Vulkan): it
  * draws it as one mirrored picture whose opacity fades out by itself; the CPU's renderer does without. */
 /* Follows the switch in Settings, which changes the interface at once */
@@ -1192,7 +1200,7 @@ static void picker_draw(void)
             free(rgba);
         }
     }
-    PlatTexture *shown = P.cursor > 0 ? P.preview : covers_get(P.game);
+    PlatTexture *shown = P.cursor > 0 ? P.preview : shelf_cover_or_none(P.game);
     if (shown)
     {
         int iw, ih;
@@ -1369,7 +1377,7 @@ static void draw_disc(int game, float cx, float cy, float r, float spin)
     draw_circle(cx + r * 0.05f, cy + r * 0.08f, r, 0x70000000u); /* shadow */
     draw_circle(cx, cy, r, 0xff16161cu);
     float lr = r * 0.95f;
-    PlatTexture *t = covers_get(game);
+    PlatTexture *t = shelf_cover_or_none(game);
     if (t)
     {
         enum { SEG = 72 };
@@ -1417,7 +1425,7 @@ static void draw_launch_disc(int game, float d, float t)
         return;
     }
     float r = COVER_H * 0.42f;
-    PlatTexture *cover = covers_get(game);
+    PlatTexture *cover = shelf_cover_or_none(game);
     float aspect = 0.88f;
     if (shelf_cases())
         aspect = case3d_aspect();
@@ -1673,7 +1681,7 @@ bool shelf_play_game(int library_index, bool direct)
     if (direct)
     {
         /* the disc daemon opened the app: nobody is watching the case open, so the animation is skipped and only its
-         * last frame (the "Loading your game..." one) is shown while the game loads */
+         * last frame is shown while the game loads */
         S.launch_t = fmaxf(S.launch_t, launch_total() - 0.001f);
     }
     return true;
@@ -2113,7 +2121,7 @@ void shelf_screen(uint32_t pressed)
                     /* the chosen case: the lid opens and the CD spins up on its tray while the game loads */
                     const float t = S.launch_t, o = fminf(t / 0.95f, 1.0f);
                     const float u = fmaxf(t - CASE_SPIN_START, 0.0f);
-                    case3d_launch(o * o * (3.0f - 2.0f * o), 7.0f * u * u);
+                    case3d_launch(o * o * (3.0f - 2.0f * o), 7.0f * u * u, app.global.disc_in_tray);
                 }
                 if (cases_)
                     draw_case(shelf_cover(index), &app.library.games[index], CENTER_X + me.ox + (selected ? det_shift : 0.0f), flow_y(),
@@ -2266,7 +2274,6 @@ void shelf_screen(uint32_t pressed)
     {
         start_black = false;
         draw_rect(0, 0, plat_width(), plat_height(), 0xff000000u);
-        text_draw(CENTER_X, plat_height() - 120, 30, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, tr("Loading your game..."));
     }
     if (S.launch_t > 0.0f)
     {
@@ -2278,11 +2285,6 @@ void shelf_screen(uint32_t pressed)
                   argb_alpha(0xff000000u, disc && !shelf_cases() ? launch * 0.85f : launch));
         if (disc && !shelf_cases()) /* the 3D cases bring their own CD out */
             draw_launch_disc(game, fminf(S.launch_t / DISC_TIME, 1.0f), S.launch_t);
-        /* with the 3D cases the text is there from the moment the case opens; otherwise it comes with the final fade */
-        const float loading = disc && shelf_cases() ? fminf(S.launch_t / 0.4f, 1.0f) : launch;
-        if (loading > 0.0f)
-            text_draw(CENTER_X, plat_height() - 120, 30, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, loading),
-                      ALIGN_CENTER, tr("Loading your game..."));
     }
     if (S.delete_hold > 0.5f)
     {

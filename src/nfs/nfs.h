@@ -65,6 +65,10 @@ extern "C"
 
     /* True once when a read from a share failed (the server went away): the game that was reading it cannot go on. */
     bool nfs_connection_lost(void);
+    /* How long a read may take, in seconds, before it is cut and tried again on a new connection. */
+    void nfs_set_read_timeout(int seconds);
+    /* True while a read that failed is being tried again; the game waits. */
+    bool nfs_reconnecting(void);
 
     /* How many of the shares set are not mounted. */
     int nfs_unmounted(void);

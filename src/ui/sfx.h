@@ -32,6 +32,8 @@ void sfx_play(Sfx sound);
 /* assets/psxdiscsound.wav (the CD spinning up in the 3D case), with the interface's volume; nothing when the interface
  * sound is off or the file is not there. */
 void sfx_play_disc(void);
+/* While on, the app plays no sounds (Nostalgia mode during a game). */
+void sfx_silence(bool on);
 /* style: SFX_STYLE_*, or SFX_STYLE_OFF; volume 0..100 */
 void sfx_configure(int style, int volume_percent);
 void sfx_set_enabled(bool enabled); /* temporary mute, keeps the style */

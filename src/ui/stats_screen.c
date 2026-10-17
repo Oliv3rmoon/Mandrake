@@ -136,7 +136,7 @@ void library_stats_screen(uint32_t pressed)
         const Game *g = &app.library.games[L.top[k]];
         float x = TH_MARGIN + k * (cw + gap), cy = ty + 56, ch = cw * 0.92f;
         draw_rrect(x, cy, cw, ch + 120, TH_RADIUS, TH_CARD);
-        PlatTexture *t = covers_get(L.top[k]);
+        PlatTexture *t = shelf_cover_or_none(L.top[k]);
         if (t)
         {
             int iw, ih;

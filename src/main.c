@@ -90,8 +90,10 @@ void app_toast(const char *message)
 
 void app_toast_for(const char *message, float seconds)
 {
-    uint64_t length_us = (uint64_t)(seconds * 1e6f);
     SwanStationPS5_log("%s", message);
+    if (app.game && app.global.nostalgia && (app.screen == SCREEN_GAME || app.screen == SCREEN_LIBRARY))
+        return;
+    uint64_t length_us = (uint64_t)(seconds * 1e6f);
     char sentence[sizeof(toast)];
     const char *text = toast_sentence(tr(message), sentence, sizeof(sentence));
     if (toast[0] && plat_ticks_us() < toast_until)
@@ -746,7 +748,8 @@ static int wrap_lines(const char *s, float size, int weight, float max_w, char o
 
 static void draw_achievement(void)
 {
-    if (app.screen == SCREEN_GAME && app.global.ra_tracker)
+    const bool nostalgia = app.game && app.global.nostalgia && app.screen == SCREEN_GAME;
+    if (app.screen == SCREEN_GAME && app.global.ra_tracker && !nostalgia)
         draw_tracker();
     static char title[96], detail[192];
     static uint64_t shown_at;
@@ -759,7 +762,7 @@ static void draw_achievement(void)
         if (!showing)
             return;
         /* pop-ups off: messages that arrive during play are dropped, not shown */
-        if (!app.global.ra_popups && app.screen == SCREEN_GAME)
+        if ((!app.global.ra_popups || nostalgia) && app.screen == SCREEN_GAME)
         {
             showing = false;
             return;
@@ -1815,6 +1818,7 @@ void app_stop_game(void)
     plat_audio_clear();
     cheats_clear(&app.cheats);
     app.game = NULL;
+    sfx_silence(false);
     app.game_has_own = false;
     app.settings = app.global;
     app.screen = SCREEN_LIBRARY;
@@ -2696,6 +2700,19 @@ int main(int argc, char **argv)
         count_play_time();
         remote_frame();
         /* a game's cheat file arrived from libretro-database */
+        {
+            const bool nostalgia = app.game && app.global.nostalgia && app.screen == SCREEN_GAME;
+            sfx_silence(nostalgia);
+        }
+        {
+            static const int nfs_seconds[] = {5, 10, 15, 20, 30};
+            static bool nfs_told;
+            nfs_set_read_timeout(nfs_seconds[app.global.nfs_timeout >= 0 && app.global.nfs_timeout < 5 ? app.global.nfs_timeout : 2]);
+            const bool again = nfs_reconnecting() && app.game;
+            if (again && !nfs_told)
+                app_toast("Reconnecting to the NFS server.");
+            nfs_told = again;
+        }
         if (nfs_connection_lost() && app.game)
         {
             app_stop_game();

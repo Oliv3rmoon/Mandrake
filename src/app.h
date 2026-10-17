@@ -133,6 +133,8 @@ void shelf_select_game(int library_index);
 bool shelf_idle(void);
 /* The picture the shelf shows for a game without a cover (assets/nocover2.png). Not to be freed. */
 struct PlatTexture *shelf_no_cover(void);
+/* A game's cover for screens other than the shelf: assets/nocover2.png when it has none. Not to be freed. */
+struct PlatTexture *shelf_cover_or_none(int index);
 /* Puts the cursor on the game and starts it from the beginning, with no Continue box: a disc put in the drive. With
  * `direct` (the app was opened by the disc daemon, nobody is watching) it also skips the opening animation and the
  * click; otherwise it plays as when ✕ is pressed. False if the shelf is busy or the game cannot be shown. */

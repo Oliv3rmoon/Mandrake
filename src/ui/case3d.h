@@ -24,8 +24,8 @@ float case3d_max_yaw(void);
 float case3d_max_pitch(void);
 
 /* The launch animation of the case drawn next (case3d_draw takes it and forgets it): `open` (0..1) swings its lid open on
- * the hinge, `spin` (radians) turns the CD on its tray. */
-void case3d_launch(float open, float spin);
+ * the hinge, `spin` (radians) turns the CD on its tray; `in_tray`: the CD stays flat on the tray, without lifting or growing. */
+void case3d_launch(float open, float spin, bool in_tray);
 
 /* Whether the cover gets light (its shading and the glare over the lid's plastic); off: the picture as it is. The rest of
  * the case and the CD keep theirs. Stays until changed. */

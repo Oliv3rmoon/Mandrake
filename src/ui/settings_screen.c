@@ -114,6 +114,7 @@ static const char *row_help(const Row *r)
 static const char *const OFF_ON[] = {"Off", "On"};
 static const char *const RENDERERS[] = {"GPU (Recommended)", "CPU"};
 static const char *const INTERNAL[] = {"Native", "2x", "3x (720p)", "4x", "5x (1080p)", "6x (1440p)", "7x", "8x", "9x (4K)", "10x", "11x", "12x", "13x", "14x", "15x", "16x"};
+static const char *const NFS_TIMEOUTS[] = {"5 s", "10 s", "15 s", "20 s", "30 s"};
 static const char *const CD_SPEEDS[] = {"Off", "2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x"};
 /* unused while the Emulator row is commented out */
 static const __attribute__((unused)) char *const UPSCALE[] = {"Off", "2x", "3x", "4x"};
@@ -287,6 +288,8 @@ static const Row LIBRARY[] = {
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(case_lighting), OFF_ON, 2, 0},
     {NULL, "Disc animation", "When a game starts, its disc slides out of the case and spins.", K_TOGGLE, APPLY_NOW,
      SP_NONE, true, BOOL_FIELD(disc_animation), OFF_ON, 2, 0},
+    {NULL, "Disc in tray", "The disc stays on its tray while it spins: it does not lift or grow, as in version 1.3.7.", K_TOGGLE, APPLY_NOW,
+     SP_NONE, true, BOOL_FIELD(disc_in_tray), OFF_ON, 2, 0},
     {NULL, "Download missing covers", "Fetches covers for new games over the internet.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(cover_download), OFF_ON, 2, 0},
     {NULL, "Background", "Classic theme: Dark keeps the screen deep navy; Cover colour tints it with the selected game.",
@@ -314,6 +317,8 @@ static const Row SYSTEM[] = {
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
     {NULL, "NFS shares", "Games on an NFS server of your network, as nfs:// addresses separated by ';'. Example: nfs://192.168.1.85/psx. The shelf lists them like a drive's; only SwanStationPS5 sees them. The server has to export the folder to the console. Rescan library connects the ones that did not.",
      K_ACTION, APPLY_NOW, SP_NFSHARES, true, NO_FIELD, NULL, 0, 0},
+    {NULL, "NFS timeout", "How long a read from an NFS server may take before the connection is given up and the game is left. While it waits, the game stays paused and tries to reconnect. Raise it if the server or the network is slow.",
+     K_CHOICE, APPLY_NOW, SP_NONE, true, INT_FIELD(nfs_timeout), NFS_TIMEOUTS, 5, 0},
     {"Emulation", "Region", "Auto follows the disc; force 50 or 60 Hz, or the Japanese console, if a game misbehaves.", K_CHOICE,
      APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(region), REGIONS, 3, 0},
     {NULL, "Fast CD loading", "Shorter loading screens; the higher, the faster. Rarely, a game glitches.", K_CHOICE, APPLY_NOW,
@@ -450,13 +455,25 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
     for (int c = 0; c < ncat; ++c)
         for (int i = 0; i < SS_OPT_COUNT; ++i)
             extra += SS_OPTS[i].category == categories[c];
-    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 5));
+    Row *rows = malloc(sizeof(Row) * (size_t)(base_count + extra + 6));
     if (!rows)
         return;
     int n = 0;
     if (aspect >= 0)
     {
-        Row r = {"Picture",
+        const Row nostalgia = {"Picture",
+                               "Nostalgia mode",
+                               "While a game is played, the app makes no sounds and no notices, trophies or progress cards appear. The game menu still opens by holding the {Touchpad}.",
+                               K_TOGGLE,
+                               APPLY_NOW,
+                               SP_NONE,
+                               true,
+                               BOOL_FIELD(nostalgia),
+                               OFF_ON,
+                               2,
+                               0};
+        rows[n++] = nostalgia;
+        Row r = {NULL,
                  "Aspect ratio",
                  "The shape of the picture. Pair 16:9 with a widescreen cheat. With Custom, set the ratio with the numerator and denominator under Screen fit.",
                  K_CHOICE,
@@ -498,13 +515,13 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
     if (aspect >= 0)
     {
         /* Manual crop goes right under "Aspect ratio" */
-        for (int k = 2; k < n; ++k)
+        for (int k = 3; k < n; ++k)
         {
             if (strcmp(rows[k].name, "Manual crop") != 0)
                 continue;
             const Row m = rows[k];
-            memmove(rows + 2, rows + 1, sizeof(Row) * (size_t)(k - 1));
-            rows[1] = m;
+            memmove(rows + 3, rows + 2, sizeof(Row) * (size_t)(k - 2));
+            rows[2] = m;
             break;
         }
     }
@@ -1829,7 +1846,7 @@ static void usb_folder_set(const char *text)
     app_rescan();
 }
 
-static void nfs_shares_set(const char *text)
+void settings_nfs_shares_set(const char *text)
 {
     char list[sizeof(app.global.nfs_shares)];
     str_copy(list, sizeof(list), text);
@@ -1909,7 +1926,7 @@ static void activate(const Row *r)
         sfx_play(SFX_SELECT);
         textinput_open(SCREEN_SETTINGS, "NFS shares",
                        "Type one or more nfs:// addresses, separated by ';'. Example: nfs://192.168.1.85/psx",
-                       app.global.nfs_shares[0] ? app.global.nfs_shares : "nfs://192.168.1.85/psx", nfs_shares_set);
+                       app.global.nfs_shares[0] ? app.global.nfs_shares : "nfs://192.168.1.85/psx", settings_nfs_shares_set);
         return;
     case SP_USBFOLDER:
         sfx_play(SFX_SELECT);
@@ -2226,7 +2243,13 @@ int settings_json(char *out, size_t size)
     for (int t = 0; t < TAB_COUNT; ++t)
         if (TABS[t].rows == ACHIEVEMENTS)
             ra_tab = t;
-    PUT("],\"ra\":{\"tab\":%d,\"signed_in\":%s,\"user\":", ra_tab, ra_signed_in() ? "true" : "false");
+    int nfs_tab = 0;
+    for (int t = 0; t < TAB_COUNT; ++t)
+        if (TABS[t].rows == SYSTEM)
+            nfs_tab = t;
+    PUT("],\"nfs\":{\"tab\":%d,\"shares\":", nfs_tab);
+    at = json_text(out, size, at, app.global.nfs_shares);
+    PUT("},\"ra\":{\"tab\":%d,\"signed_in\":%s,\"user\":", ra_tab, ra_signed_in() ? "true" : "false");
     at = json_text(out, size, at, ra_user());
     PUT(",\"profile\":");
     at = json_text(out, size, at, profiles_name(profiles_current()));

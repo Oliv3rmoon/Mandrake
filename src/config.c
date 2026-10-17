@@ -19,6 +19,7 @@ void config_defaults(Settings *s)
     s->smooth = false; /* sharp pixels; "Smooth final scaling" is opt-in */
     s->internal_res = 9; /* 9x (4K) */
     s->cd_speed = 1;
+    s->nfs_timeout = 2;
     s->frame_pacing = true; /* Video sync */
     s->true_colour = true; /* True Color is on by default */
     s->upscale = 2;
@@ -36,7 +37,7 @@ void config_defaults(Settings *s)
     s->update_check = true;
     snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/ext0/psx, /mnt/ext1/psx and /mnt/usb0/psx to /mnt/usb7/psx */
     s->bezel = false; /* the game's artwork frame, when there is one */
-    s->theme = THEME_NEON; /* Neon Arcade (ui/theme.h) */
+    s->theme = THEME_GRAYRAT; /* Grayrat (ui/theme.h) */
     s->pgxp = true; /* no wobbling polygons */
     s->ra_popups = true;
     s->hd_textures = true;
@@ -254,6 +255,8 @@ static bool config_apply(Settings *s, const char *path)
             s->boot_intro = as_bool(value);
         else if (strcmp(key, "sharpen") == 0)
             s->sharpen = atoi(value) % 3;
+        else if (strcmp(key, "disc_in_tray") == 0)
+            s->disc_in_tray = as_bool(value);
         else if (strcmp(key, "disc_animation") == 0)
             s->disc_animation = as_bool(value);
         else if (strcmp(key, "install_to_ext") == 0)
@@ -274,6 +277,8 @@ static bool config_apply(Settings *s, const char *path)
             s->run_ahead = atoi(value) % 11;
         else if (strcmp(key, "fast_effects") == 0)
             s->fast_effects = as_bool(value);
+        else if (strcmp(key, "nostalgia") == 0)
+            s->nostalgia = as_bool(value);
         else if (strcmp(key, "frame_pacing") == 0)
             s->frame_pacing = as_bool(value);
         else if (strcmp(key, "video_out") == 0)
@@ -282,6 +287,8 @@ static bool config_apply(Settings *s, const char *path)
             s->framegen = as_bool(value) ? 1 : atoi(value) == 2 ? 2 : 0;
         else if (strcmp(key, "usb_folder") == 0)
             snprintf(s->usb_folder, sizeof(s->usb_folder), "%s", value);
+        else if (strcmp(key, "nfs_timeout") == 0)
+            s->nfs_timeout = atoi(value) >= 0 && atoi(value) <= 4 ? atoi(value) : 2;
         else if (strcmp(key, "nfs_shares") == 0)
             snprintf(s->nfs_shares, sizeof(s->nfs_shares), "%s", value);
         else if (strcmp(key, "fsr") == 0)
@@ -361,6 +368,8 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
     out->update_check = global->update_check;
     snprintf(out->usb_folder, sizeof(out->usb_folder), "%s", global->usb_folder);
     snprintf(out->nfs_shares, sizeof(out->nfs_shares), "%s", global->nfs_shares);
+    out->nfs_timeout = global->nfs_timeout;
+    out->nostalgia = global->nostalgia;
     out->quick_resume = global->quick_resume;
     return true;
 }
@@ -446,7 +455,7 @@ bool config_save(const Settings *s, const char *path)
     fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\n",
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
             s->update_check);
-    fprintf(f, "renderer=%d\nusb_folder=%s\nnfs_shares=%s\n", s->renderer, s->usb_folder, s->nfs_shares);
+    fprintf(f, "renderer=%d\nusb_folder=%s\nnfs_timeout=%d\nnfs_shares=%s\n", s->renderer, s->usb_folder, s->nfs_timeout, s->nfs_shares);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,
             s->crop_edges);
@@ -459,10 +468,10 @@ bool config_save(const Settings *s, const char *path)
             s->overclock, s->brightness, s->colour, s->autosave, s->bezel);
     fprintf(f, "msaa=%d\ntexture_filter=%d\nfilter_2d=%d\nsupersampling=%d\ndeinterlace=%d\npal60=%d\ngame_fixes=%d\n",
             s->msaa, s->texture_filter, s->filter_2d, s->supersampling, s->deinterlace, s->pal60, s->game_fixes);
-    fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\nnegcon=%d\njewel_cases=%d\ncase_lighting=%d\ndisc_install_only=%d\ninstall_to_ext=%d\nplay_from_disc=%d\n",
-            s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->negcon, s->jewel_cases, s->case_lighting, s->disc_install_only, s->install_to_ext, s->play_from_disc);
-    fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nvideo_out=%d\nfsr=%d\nframe_pacing=%d\n", s->touch_mouse, s->run_ahead,
-            s->fast_effects, s->framegen, s->video_out, s->fsr, s->frame_pacing);
+    fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\ndisc_in_tray=%d\nnegcon=%d\njewel_cases=%d\ncase_lighting=%d\ndisc_install_only=%d\ninstall_to_ext=%d\nplay_from_disc=%d\n",
+            s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->disc_in_tray, s->negcon, s->jewel_cases, s->case_lighting, s->disc_install_only, s->install_to_ext, s->play_from_disc);
+    fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nvideo_out=%d\nfsr=%d\nframe_pacing=%d\nnostalgia=%d\n", s->touch_mouse, s->run_ahead,
+            s->fast_effects, s->framegen, s->video_out, s->fsr, s->frame_pacing, s->nostalgia);
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         int v = s->ss_opt[i];

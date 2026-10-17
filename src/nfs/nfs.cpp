@@ -101,6 +101,9 @@ struct Share
     nfs_context *ctx = nullptr;
     bool mounted = false;
     std::atomic<int64_t> read_since{0}; // when the read in flight began (ms), 0 when there is none
+    std::string folder; // what was mounted (the address' folder, or one above it): a new connection mounts it again
+    std::atomic<int> gen{0}; // goes up with each new connection: a file handle of an older one is not valid
+    std::atomic<bool> stalled{false}; // the watchdog shut the socket of the read in flight
     std::atomic<bool> dead{false}; // a read failed: the server is gone, nothing more is asked of it until it is mounted again
     std::mutex lock;
 };
@@ -110,6 +113,9 @@ std::vector<Share *> g_shares; // the ones set; the ones replaced are kept (a ga
 std::atomic<bool> g_any{false};
 std::atomic<bool> g_lost{false};
 std::atomic<bool> g_watching{false};
+std::atomic<int> g_timeout_ms{15000}; // how long a read may take (the setting)
+std::atomic<bool> g_reconnecting{false};
+std::atomic<bool> g_reconnect_told{false};
 
 int64_t now_ms()
 {
@@ -143,6 +149,7 @@ struct File
     uint64_t size = 0, pos = 0;
     bool eof = false, err = false;
     Cache *cache = nullptr;
+    int gen = 0;
     int virt = 0; // 1 the .cue, 2 the .bin of a disc played from the drive (discplay.h)
 };
 
@@ -422,7 +429,8 @@ void free_file(File *f)
     if (f->fh && !f->share->dead)
     {
         std::lock_guard<std::mutex> g(f->share->lock);
-        nfs_close(f->share->ctx, f->fh);
+        if (f->gen == f->share->gen && f->share->ctx)
+            nfs_close(f->share->ctx, f->fh);
     }
     std::lock_guard<std::mutex> g(g_mutex);
     f->used = false;
@@ -430,8 +438,8 @@ void free_file(File *f)
 }
 
 // libnfs's synchronous calls have no limit of their own that holds when a server goes away in the middle of a read: the
-// thread of the game would stay in them. A read that takes too long makes the share dead and its socket is shut, so that
-// the call fails and the game can be left.
+// thread of the game would stay in them. A read that takes longer than the timeout of the setting has its socket shut, so
+// that the call fails and the read can be tried again on a new connection (fetch_block).
 void watch_reads()
 {
     bool idle = false;
@@ -451,10 +459,10 @@ void watch_reads()
                 for (Share *s : list)
                 {
                     const int64_t since = s->read_since.load();
-                    if (!since || now_ms() - since < 5000 || s->dead.exchange(true))
+                    if (!since || s->dead || now_ms() - since < g_timeout_ms.load() || s->stalled.exchange(true))
                         continue;
-                    g_lost = true;
-                    SwanStationPS5_log("nfs: %s: a read took over 5 s, the connection is shut", s->url.c_str());
+                    SwanStationPS5_log("nfs: %s: a read took over %d s, the connection is shut", s->url.c_str(),
+                                       g_timeout_ms.load() / 1000);
                     nfs_context *c = s->ctx;
                     if (c)
                     {
@@ -521,6 +529,7 @@ File *open_file(const char *path, int *error)
     {
         std::lock_guard<std::mutex> g(w.share->lock);
         rc = nfs_open(w.share->ctx, w.rel.c_str(), O_RDONLY, &f->fh);
+        f->gen = w.share->gen;
     }
     if (rc < 0)
     {
@@ -540,9 +549,40 @@ File *open_file(const char *path, int *error)
     return f;
 }
 
-// One block from the server (no lock of the cache held).
+// A new connection to a share, in place of one that went silent (called with the lock of the share held). The file
+// handles of the old one are not valid on it: each file opens its own again (fetch_block).
+bool reconnect(Share *s)
+{
+    nfs_context *ctx = nfs_init_context();
+    if (!ctx)
+        return false;
+    nfs_set_timeout(ctx, std::max(g_timeout_ms.load() / 2, 3000));
+    nfs_set_autoreconnect(ctx, 2);
+    const std::string url = "nfs://" + s->authority + s->folder + (s->query.empty() ? "" : "?" + s->query);
+    nfs_url *u = nfs_parse_url_dir(ctx, url.c_str());
+    int rc = -EINVAL;
+    if (u)
+    {
+        rc = nfs_mount(ctx, u->server, u->path);
+        nfs_destroy_url(u);
+    }
+    if (rc != 0)
+    {
+        nfs_destroy_context(ctx);
+        return false;
+    }
+    if (s->ctx)
+        nfs_destroy_context(s->ctx);
+    s->ctx = ctx;
+    ++s->gen;
+    return true;
+}
+
+// One block from the server (no lock of the cache held). A read that fails or stalls is tried again on a new connection
+// a few times before the server is given up.
 Block fetch_block(File *f, uint64_t number)
 {
+    constexpr int kTries = 3;
     Block b;
     if (f->share->dead)
         return b;
@@ -554,27 +594,58 @@ Block fetch_block(File *f, uint64_t number)
     if (!data)
         return b;
     size_t done = 0;
+    int failures = 0;
     while (done < want)
     {
-        int rc;
+        int rc = -EIO, seen;
         {
             std::lock_guard<std::mutex> g(f->share->lock);
-            f->share->read_since = now_ms();
-            rc = nfs_pread(f->share->ctx, f->fh, data + done, want - done, start + done);
-            f->share->read_since = 0;
-        }
-        if (rc <= 0)
-        {
-            if (rc < 0)
+            seen = f->share->gen;
+            if (f->share->ctx && f->gen != seen)
             {
-                f->share->dead = true;
-                g_lost = true;
+                nfsfh *fresh = nullptr;
+                if (nfs_open(f->share->ctx, f->rel.c_str(), O_RDONLY, &fresh) == 0)
+                {
+                    f->fh = fresh;
+                    f->gen = seen;
+                }
             }
+            if (f->share->ctx && f->gen == seen && f->fh)
+            {
+                f->share->read_since = now_ms();
+                rc = nfs_pread(f->share->ctx, f->fh, data + done, want - done, start + done);
+                f->share->read_since = 0;
+            }
+            f->share->stalled = false;
+        }
+        if (rc > 0)
+        {
+            done += static_cast<size_t>(rc);
+            failures = 0;
+            continue;
+        }
+        if (rc == 0)
+        {
             free(data);
             return b;
         }
-        done += static_cast<size_t>(rc);
+        if (f->share->dead || ++failures > kTries)
+        {
+            f->share->dead = true;
+            g_lost = true;
+            g_reconnecting = false;
+            free(data);
+            return b;
+        }
+        g_reconnecting = true;
+        SwanStationPS5_log("nfs: %s: a read failed, trying again on a new connection (%d of %d)", f->share->url.c_str(),
+                           failures, kTries);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500 * failures));
+        std::lock_guard<std::mutex> g(f->share->lock);
+        if (f->share->gen == seen)
+            reconnect(f->share);
     }
+    g_reconnecting = false;
     b.data = data;
     b.len = want;
     return b;
@@ -772,7 +843,7 @@ struct Job
     std::condition_variable cv;
     bool done = false, abandoned = false, ok = false;
     nfs_context *ctx = nullptr;
-    std::string base, state, detail;
+    std::string base, folder, state, detail;
     int code = NFS_FAIL_OTHER;
 };
 
@@ -862,7 +933,7 @@ void drop_share(Share *s)
 void mount_job(std::shared_ptr<Job> job, std::string authority, std::string path, std::string query, int timeout_ms)
 {
     nfs_context *got = nullptr;
-    std::string base = "/", state;
+    std::string base = "/", state, got_folder;
     std::string folder = path;
     int code = NFS_FAIL_OTHER, last_rc = 0;
     for (int attempt = 0; attempt < 8; ++attempt)
@@ -893,6 +964,7 @@ void mount_job(std::shared_ptr<Job> job, std::string authority, std::string path
             if (nfs_stat64(ctx, rest.empty() ? "/" : rest.c_str(), &st) == 0 && (st.nfs_mode & S_IFMT) == S_IFDIR)
             {
                 got = ctx;
+                got_folder = folder;
                 base = rest.empty() ? "/" : rest;
                 break;
             }
@@ -947,6 +1019,7 @@ void mount_job(std::shared_ptr<Job> job, std::string authority, std::string path
         job->ok = got != nullptr;
         job->ctx = got;
         job->base = base;
+        job->folder = got_folder;
         job->state = state;
         job->detail = detail;
         job->code = code;
@@ -1129,6 +1202,7 @@ extern "C" int nfs_mount_all(int timeout_ms)
         {
             p.share->ctx = p.job->ctx;
             p.share->base = p.job->base;
+            p.share->folder = p.job->folder;
             p.share->mounted = true;
             p.share->dead = false;
             p.share->state = "mounted";
@@ -1175,6 +1249,16 @@ extern "C" bool nfs_mount_finished(void)
 {
     int done = 2;
     return g_background.compare_exchange_strong(done, 0);
+}
+
+extern "C" void nfs_set_read_timeout(int seconds)
+{
+    g_timeout_ms = std::max(seconds, 3) * 1000;
+}
+
+extern "C" bool nfs_reconnecting(void)
+{
+    return g_reconnecting.load();
 }
 
 extern "C" bool nfs_connection_lost(void)

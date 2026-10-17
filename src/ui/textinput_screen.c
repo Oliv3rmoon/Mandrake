@@ -18,7 +18,7 @@
 #include <string.h>
 
 #define CENTER_X (plat_width() * 0.5f)
-#define TEXT_MAX 47
+#define TEXT_MAX 511
 
 /* letters and digits, or symbols; the last row is Space and Apply */
 static const char *const PAGE_LETTERS[4] = {"1234567890", "qwertyuiop", "asdfghjkl_", "zxcvbnm.-/"};
@@ -31,6 +31,7 @@ static struct
     char title[64], prompt[160];
     char text[TEXT_MAX + 1];
     TextInputDone done;
+    int cur, view; /* where typing goes, and the first character shown (the field scrolls) */
     int row, col; /* row KEY_ROWS is Space (col 0) and Apply (col 1) */
     bool shift, symbols;
 } T;
@@ -43,6 +44,8 @@ void textinput_open(enum Screen back_to, const char *title, const char *prompt, 
     str_copy(T.prompt, sizeof(T.prompt), prompt);
     str_copy(T.text, sizeof(T.text), initial ? initial : "");
     T.done = done;
+    T.cur = (int)strlen(T.text);
+    T.view = 0;
     T.row = 1;
     T.col = 0;
     T.shift = T.symbols = false;
@@ -65,16 +68,28 @@ static void type(char c)
     size_t n = strlen(T.text);
     if (n < TEXT_MAX)
     {
-        T.text[n] = c;
-        T.text[n + 1] = '\0';
+        memmove(T.text + T.cur + 1, T.text + T.cur, n - (size_t)T.cur + 1);
+        T.text[T.cur++] = c;
     }
 }
 
 static void erase(void)
 {
     size_t n = strlen(T.text);
-    if (n)
-        T.text[n - 1] = '\0';
+    if (T.cur > 0)
+    {
+        memmove(T.text + T.cur - 1, T.text + T.cur, n - (size_t)T.cur + 1);
+        --T.cur;
+    }
+}
+
+static float span_width(float size, int from, int to)
+{
+    char part[TEXT_MAX + 1];
+    int n = to - from;
+    memcpy(part, T.text + from, (size_t)n);
+    part[n] = '\0';
+    return text_width(size, FONT_BOLD, part);
 }
 
 static void apply(void)
@@ -106,6 +121,16 @@ void textinput_screen(uint32_t pressed)
         T.col = (pressed & BIT(BTN_RIGHT)) ? 0 : len - 1;
     if (T.row != row || T.col != col)
         sfx_play(SFX_CLICK);
+    if ((pressed & BIT(BTN_L1)) && T.cur > 0)
+    {
+        --T.cur;
+        sfx_play(SFX_CLICK);
+    }
+    if ((pressed & BIT(BTN_R1)) && T.text[T.cur])
+    {
+        ++T.cur;
+        sfx_play(SFX_CLICK);
+    }
     if (pressed & BIT(BTN_L2))
     {
         T.symbols = !T.symbols;
@@ -167,9 +192,22 @@ void textinput_screen(uint32_t pressed)
     const float fw = 760, fx = CENTER_X - fw * 0.5f;
     draw_rrect(fx, 160, fw, 84, TH_RADIUS_SMALL, TH_ROW_SELECTED);
     draw_rrect_outline(fx, 160, fw, 84, TH_RADIUS_SMALL, 3, TH_FOCUS);
-    char shown[TEXT_MAX + 2];
-    snprintf(shown, sizeof(shown), "%s_", T.text);
-    text_draw_fit(fx + 24, 184, 36, FONT_BOLD, TH_TEXT, ALIGN_LEFT, fw - 48, shown);
+    {
+        const float size = 36, room = fw - 56;
+        const int len = (int)strlen(T.text);
+        if (T.view > T.cur)
+            T.view = T.cur;
+        while (T.view < T.cur && span_width(size, T.view, T.cur) > room)
+            ++T.view;
+        int end = T.cur;
+        while (end < len && span_width(size, T.view, end + 1) <= room)
+            ++end;
+        char shown[TEXT_MAX + 1];
+        memcpy(shown, T.text + T.view, (size_t)(end - T.view));
+        shown[end - T.view] = '\0';
+        text_draw(fx + 24, 184, size, FONT_BOLD, TH_TEXT, ALIGN_LEFT, shown);
+        draw_rect(fx + 24 + span_width(size, T.view, T.cur), 182, 3, 44, TH_FOCUS);
+    }
 
     const float key = 104, gap = 12, kh = 88;
     float ky = 270;
@@ -207,7 +245,7 @@ void textinput_screen(uint32_t pressed)
     static const int glyphs[] = {GLYPH_CROSS, GLYPH_SQUARE, GLYPH_TRIANGLE, GLYPH_START, GLYPH_CIRCLE};
     static const char *const labels[] = {"Type", "Delete", "Shift", "Apply", "Back"};
     app_draw_hints(glyphs, labels, 5, NULL);
-    const HintCombo right[1] = {{{GLYPH_L2}, 1, '+', "Symbols"}};
-    app_draw_hints_right(right, 1);
+    const HintCombo right[2] = {{{GLYPH_L1, GLYPH_R1}, 2, '/', "Cursor"}, {{GLYPH_L2}, 1, '+', "Symbols"}};
+    app_draw_hints_right(right, 2);
     app_draw_toast();
 }

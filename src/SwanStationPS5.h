@@ -17,7 +17,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.4.0"
+#define SwanStationPS5_VERSION "1.4.1"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -150,6 +150,7 @@ typedef struct
     bool true_colour;     /* 32-bit colour, no dithering */
     bool boot_intro;      /* the PS1's startup logo and sound before the game (a real BIOS) */
     int sharpen;          /* 0 off, 1 light, 2 strong (AMD FidelityFX CAS) */
+    bool disc_in_tray;    /* the disc spins flat on its tray, without lifting or growing, as in 1.3.7 */
     bool disc_animation;  /* the disc slides out of its case when a game starts */
     bool install_to_ext; /* a disc is installed on the first extended storage with room (1 GB free) instead of /data */
     bool play_from_disc; /* a disc put in is read into memory and played from there: nothing is installed (install_to_ext does not apply) */
@@ -162,7 +163,9 @@ typedef struct
     bool fast_effects;    /* screen effects on the GPU, without the software copy */
     bool fsr;             /* FSR 1 scales the picture before the shader */
     char usb_folder[48];  /* a folder name looked for on USB drives: /mnt/ext0/<name>, /mnt/ext1/<name> and /mnt/usb0/<name> to /mnt/usb7/<name> (empty: none) */
+    int nfs_timeout;  /* how long an NFS read may take before the connection is given up: 0..4 = 5, 10, 15, 20, 30 s (2 default) */
     char nfs_shares[512]; /* nfs:// addresses of the servers that hold games, ';' between them (empty: none); src/nfs/nfs.h */
+    bool nostalgia;       /* while a game is played: no sound of the app, no notices or trophies, and the game is silent */
     bool frame_pacing;    /* Video sync: one game frame per screen refresh, the sound stretched by a hair to keep up; off: synchronised to the sound */
     int video_out;        /* picture output to the TV: 0 60 Hz, 1 120 Hz (from the next start) */
     int framegen;         /* generated frames: 0 off, 1 one between two of the game's (x2), 2 three (x4, a 30 fps game on a 120 Hz screen) */

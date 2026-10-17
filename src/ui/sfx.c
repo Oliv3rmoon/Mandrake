@@ -205,9 +205,16 @@ void sfx_set_enabled(bool on)
     enabled = on;
 }
 
+static bool silenced;
+
+void sfx_silence(bool on)
+{
+    silenced = on;
+}
+
 void sfx_play(Sfx id)
 {
-    if (!enabled || id >= SFX_COUNT || !sounds[style][id].frames || volume <= 0.0f)
+    if (silenced || !enabled || id >= SFX_COUNT || !sounds[style][id].frames || volume <= 0.0f)
         return;
     const Sound *s = &sounds[style][id];
     /* Fast scrolling must not build a backlog of clicks. */
@@ -223,7 +230,7 @@ void sfx_play(Sfx id)
 
 void sfx_play_disc(void)
 {
-    if (!enabled || !disc_sound.frames || volume <= 0.0f)
+    if (silenced || !enabled || !disc_sound.frames || volume <= 0.0f)
         return;
     int16_t *scaled = malloc(disc_sound.count * 2 * sizeof(int16_t));
     if (!scaled)

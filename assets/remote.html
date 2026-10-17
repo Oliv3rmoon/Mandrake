@@ -39,7 +39,7 @@
   .value { color:var(--dim); text-align:right; }
   #status { color:var(--dim); font-size:13px; text-align:center; margin-top:24px; }
   form { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
-  input { font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--off);
+  input, textarea { font:inherit; padding:10px 12px; border-radius:10px; border:1px solid var(--off);
           background:var(--row); color:var(--text); }
   button.action { border:0; border-radius:999px; padding:9px 16px; background:var(--on); color:#fff;
                   font:inherit; margin-top:10px; align-self:flex-start; }
@@ -111,6 +111,7 @@ function render() {
   const rows = document.getElementById('rows');
   rows.replaceChildren();
   if (tab === data.tabs.length) { renderSaves(rows); return; }
+  if (data.nfs && tab === data.nfs.tab) renderNfs(rows);
   if (data.ra && tab === data.ra.tab) renderAccount(rows);
   let card = null;
   for (const r of data.tabs[tab].rows) {
@@ -152,7 +153,48 @@ function render() {
 /* ---- RetroAchievements: sign in from the phone (the password goes to
    retroachievements.org through SwanStationPS5 and isn't kept; SwanStationPS5 keeps a token) ---- */
 
-let accountMessage = '';
+let accountMessage = '', nfsMessage = '', nfsDraft = null;
+
+function renderNfs(rows) {
+  rows.appendChild(el('div', 'group', 'NFS shares'));
+  const card = el('div', 'card');
+  const row = el('div', 'row');
+  row.appendChild(el('div', 'name', 'Servers with games'));
+  row.appendChild(el('div', 'help', 'One nfs:// address per line, for example nfs://192.168.1.85/psx or nfs://192.168.1.85/psx?version=4. Applying it saves the list and looks for the games again; it can’t be done while a game is running.'));
+  const form = el('form');
+  const box = el('textarea');
+  box.rows = 4;
+  box.spellcheck = false;
+  box.autocapitalize = 'none';
+  box.placeholder = 'nfs://192.168.1.85/psx';
+  box.value = nfsDraft !== null ? nfsDraft : data.nfs.shares.split(';').join('\n');
+  box.oninput = () => { nfsDraft = box.value; };
+  const go = el('button', 'action', 'Apply');
+  go.type = 'submit';
+  form.append(box, go);
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    go.disabled = true;
+    nfsMessage = 'Applying…';
+    msg.textContent = nfsMessage;
+    try {
+      const r = await fetch('/api/nfs', {method: 'POST', body: box.value.split('\n').map(s => s.trim()).filter(Boolean).join(';')});
+      const j = await r.json();
+      nfsMessage = j.ok ? 'Done. The console is connecting to the servers.' : (j.error || 'Could not apply.');
+      if (j.ok) nfsDraft = null;
+    } catch (err) {
+      nfsMessage = 'SwanStationPS5 isn’t answering.';
+    }
+    go.disabled = false;
+    msg.textContent = nfsMessage;
+    setTimeout(load, 600);
+  };
+  row.appendChild(form);
+  const msg = el('div', 'help', nfsMessage);
+  row.appendChild(msg);
+  card.appendChild(row);
+  rows.appendChild(card);
+}
 
 function renderAccount(rows) {
   rows.appendChild(el('div', 'group', 'RetroAchievements account'));

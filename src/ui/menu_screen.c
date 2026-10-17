@@ -402,7 +402,7 @@ void menu_screen(uint32_t pressed)
 
     /* the game: cover, title, serial, achievements */
     const Game *g = app.game;
-    PlatTexture *cover = g ? covers_get(app.game_index) : NULL;
+    PlatTexture *cover = g ? shelf_cover_or_none(app.game_index) : NULL;
     float cx = px + 48, cy = 56;
     if (cover)
     {
