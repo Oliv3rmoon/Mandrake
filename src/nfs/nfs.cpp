@@ -89,7 +89,7 @@ namespace
 constexpr int kMaxFiles = 128, kMaxDirs = 32;
 constexpr int kFdBase = 0x6e660000;
 constexpr size_t kBlock = 512u << 10;                // what is read from the server at once, and cached
-constexpr size_t kCacheTotal = 256u << 20;           // read ahead in memory, for all the files together
+constexpr size_t kCacheTotal = 128u << 20;           // read ahead in memory, for all the files together
 constexpr size_t kCacheLeast = 32u << 20;            // a file always gets at least this much
 constexpr uint64_t kReadAhead = 16u << 20;           // files bigger than this get a thread that reads ahead
 constexpr uint32_t kTypeReg = 1, kTypeDir = 2;

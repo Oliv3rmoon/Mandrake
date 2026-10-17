@@ -915,7 +915,7 @@ typedef struct
 
 /* What the disc may take: the emulator needs the rest of the memory the app has (about 400 MB; with a window of 384 MB
  * it could not even make its own 8 MB arena) */
-#define MEMORY_CAP ((uint64_t)256 << 20)
+#define MEMORY_CAP ((uint64_t)128 << 20)
 #define SLOT_BYTES ((size_t)BLOCK * SECTOR)
 
 static struct
@@ -996,7 +996,7 @@ static bool play_alloc(void)
         return true;
     }
     D.ram = NULL;
-    static const size_t SIZES_MB[] = {256, 192, 128, 64};
+    static const size_t SIZES_MB[] = {128, 96, 64, 32};
     for (size_t k = 0; k < sizeof(SIZES_MB) / sizeof(SIZES_MB[0]); ++k)
     {
         const size_t bytes = SIZES_MB[k] << 20;

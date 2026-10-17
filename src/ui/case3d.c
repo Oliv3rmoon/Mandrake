@@ -1013,7 +1013,7 @@ void case3d_draw(PlatTexture *cover, float cx, float cy, float h, float yaw, flo
     disc_lift = disc_t * 36.0f;
     disc_scale = 1.0f + DISC_GROW * disc_t;
     disc_c = cosf(launch_spin);
-    disc_s = sinf(launch_spin);
+    disc_s = -sinf(launch_spin);
     /* past 90 degrees the lid lies out to the left of the hinge: the pair (case and lid) is kept centred where the case was
     cx += 0.5f * case_w * scale * fmaxf(-lid_c, 0.0f); */
     draw_cx = cx;
