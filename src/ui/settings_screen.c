@@ -1609,12 +1609,13 @@ static void draw_help(const Row *r)
     else if (tab()->rows == ABOUT)
     {
         /* About: the GitHub page, for a phone */
-        float qs = 240, qx = x + (w - qs) * 0.5f, qy = top + 330;
+        float qs = 240, qx = x + (w - qs) * 0.5f, qy = top + 300;
         draw_project_qr(qx, qy, qs);
         text_draw(x + w * 0.5f, qy + qs + 30, 22, FONT_BOLD, TH_TEXT, ALIGN_CENTER,
                   tr("Scan for the GitHub page"));
-        text_draw(x + w * 0.5f, qy + qs + 64, 20, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER,
-                  "github.com/darkxex/SwanStationPS5");
+        text_draw(x + w * 0.5f, qy + qs + 60, 20, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER,
+                  "https://github.com/darkxex/SwanStationPS5");
+        text_draw(x + w * 0.5f, qy + qs + 88, 20, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, "https://x.com/AngelXex1");
     }
     if (r->kind != K_INFO && r->kind != K_ACTION)
     {
