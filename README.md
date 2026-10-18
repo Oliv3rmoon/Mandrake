@@ -271,6 +271,38 @@ The log shows the result: `storage: unlocked`, or `storage: sandboxed (...)` wit
 └── SwanStationPS5.ini                 settings
 ```
 
+## Covers for games without one
+
+Covers are downloaded by the game's serial. A game that is not found (a homebrew, a translation, a hack) shows a plain title card until you give it a cover.
+
+### Copy the image yourself (FTP, USB or the PC tool)
+
+Name the image like the game's disc file, without the extension. For `yume_nikki.cue`, the cover is `yume_nikki.png`, and it goes in one of these places:
+
+| Where | File name |
+|---|---|
+| The game's own folder, next to the `.cue` | `yume_nikki.png`, or just `cover.png` |
+| `/data/SwanStationPS5/covers/` | `yume_nikki.png`, the game's title (`Yume Nikki.png`) or its serial (`SLPS-01234.png`) |
+
+```text
+/data/SwanStationPS5/games/Yume Nikki/
+├── yume_nikki.cue
+├── yume_nikki.bin
+└── yume_nikki.png        ← the cover
+```
+
+SwanStationPS5 looks for covers in this order and uses the first it finds:
+
+1. `cover` or the disc file's name in the game's folder.
+2. The game's title, the disc file's name or the serial in `covers/`.
+3. Covers already downloaded (`covers/default/`, `covers/3d/`), then a download by serial.
+
+### Good to know
+
+- Formats: `.png`, `.jpg` and `.jpeg`, with the extension in lowercase. Other formats (`.webp`, `.bmp`, `.gif`) are not read.
+- Large images are scaled down to 640 px tall, so there is no need for more.
+- If the new cover does not show up, restart SwanStationPS5 so it scans the library again.
+
 ## Controls
 
 **On the shelf**
