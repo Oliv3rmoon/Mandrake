@@ -66,6 +66,14 @@ def build(jobs, use_nice):
         sys.exit(f"error: the build failed (make exit code {result.returncode}); no zip was made")
 
 
+def refresh_cheat_indexes():
+    """The cheat file lists in assets/, downloaded again; the current ones stay if there is no connection."""
+    for script in ("make-cheat-index.py", "make-chtdb-index.py"):
+        print(f"==> python3 tools/{script}", flush=True)
+        if subprocess.run([sys.executable, str(ROOT / "tools" / script)], cwd=ROOT).returncode != 0:
+            print(f"warning: tools/{script} failed; keeping the current index")
+
+
 def build_daemon():
     """The disc daemon payload, dist/SwanStationPS5-DiscDaemon.elf (make disc-daemon)."""
     print("==> make disc-daemon", flush=True)
@@ -116,6 +124,7 @@ def main():
         sync_content_version(version)
         return
     if not args.skip_build:
+        refresh_cheat_indexes()
         sync_content_version(version)
         # the payload first: it takes seconds, and if it fails nobody waits for the app to build to find out
         daemon = build_daemon()

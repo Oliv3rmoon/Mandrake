@@ -24,6 +24,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <utime.h>
 
 /* ---------------------------------------------------------------- parsing */
 
@@ -415,6 +418,8 @@ static int fetch_main(void *unused)
     bool ok = r == NET_OK && rename(temp, fetch_dest) == 0;
     if (!ok)
         remove(temp);
+    if (r == NET_NOT_FOUND)
+        utime(fetch_dest, NULL);
     SwanStationPS5_log("cheats: download %s: %s", fetch_dest, ok ? "ok" : r == NET_NOT_FOUND ? "not found" : "failed");
     SDL_AtomicSet(&fetch_state, ok ? 2 : 0);
     return 0;
@@ -445,6 +450,21 @@ static void fetch_start(const char *base, const char *name, const char *dest)
         SDL_DetachThread(t);
     else
         SDL_AtomicSet(&fetch_state, 0);
+}
+
+#define CHEAT_REFRESH_SECONDS (24 * 60 * 60)
+
+static void refresh_if_old(const char *base, const char *name, const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) == 0 && time(NULL) - st.st_mtime > CHEAT_REFRESH_SECONDS)
+        fetch_start(base, name, path);
+}
+
+static void mark_old(const char *path)
+{
+    struct utimbuf old = {1, 1};
+    utime(path, &old);
 }
 
 bool cheats_fetch_finished(void)
@@ -572,6 +592,30 @@ static void load_user(CheatList *list, const Game *game, const char *cheats_dir)
         fclose(f);
 }
 
+void cheats_mark_old(const Game *game, const char *cheats_dir)
+{
+    char name[256], serial[16], dir[SwanStationPS5_PATH_MAX], path[SwanStationPS5_PATH_MAX];
+    if (cheats_best_in_index(game, "cheats-index.txt", name, sizeof(name)))
+    {
+        path_join(path, sizeof(path), cheats_dir, name);
+        mark_old(path);
+    }
+    if (!game->serial[0] || !disc_format_serial(game->serial, serial, sizeof(serial)))
+        return;
+    path_join(dir, sizeof(dir), cheats_dir, "duckstation");
+    if (chtdb_file_for("chtdb-index.txt", serial, name, sizeof(name)))
+    {
+        path_join(path, sizeof(path), dir, name);
+        mark_old(path);
+    }
+    path_join(dir, sizeof(dir), cheats_dir, "duckstation/patches");
+    if (chtdb_file_for("chtdb-patches-index.txt", serial, name, sizeof(name)))
+    {
+        path_join(path, sizeof(path), dir, name);
+        mark_old(path);
+    }
+}
+
 bool cheats_load(CheatList *list, const Game *game, const char *cheats_dir)
 {
     cheats_clear(list);
@@ -613,6 +657,8 @@ bool cheats_load(CheatList *list, const Game *game, const char *cheats_dir)
                 make_dirs(cheats_dir);
                 fetch_start(LIBRETRO_BASE, name, path);
             }
+            else
+                refresh_if_old(LIBRETRO_BASE, name, path);
         }
     }
     bool library = found && parse_cht(list, path);
@@ -628,7 +674,10 @@ bool cheats_load(CheatList *list, const Game *game, const char *cheats_dir)
             path_join(dir, sizeof(dir), cheats_dir, "duckstation");
             path_join(path, sizeof(path), dir, name);
             if (file_opens(path))
+            {
                 library = parse_chtdb(list, path, false);
+                refresh_if_old(CHTDB_BASE, name, path);
+            }
             else if (!found)
             {
                 make_dirs(dir);
@@ -649,6 +698,7 @@ bool cheats_load(CheatList *list, const Game *game, const char *cheats_dir)
             {
                 int before = list->count;
                 parse_chtdb(list, patch_path, true);
+                refresh_if_old(PATCHES_BASE, name, patch_path);
                 /* the patches go first in the list */
                 Cheat moved[CHEATS_MAX];
                 int n = 0;

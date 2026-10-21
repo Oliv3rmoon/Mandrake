@@ -127,6 +127,11 @@ static const char *const SOUND_STYLES[] = {"Soft", "Wood", "Pop", "Chime", "Clas
 static const char *const VOLUMES[] = {"25%", "50%", "75%", "100%"};
 static const char *const VIBRATIONS[] = {"Off", "25%", "50%", "75%", "100%"};
 static const char *const STICK_MODES[] = {"Auto (digital games)", "Always", "Off"};
+static const char *const ANALOG_COMBOS[] = {
+    "{L1} + {R1} + {L3} + {R3}", "{L1} + {L2} + {R1} + {R2} + {Options} + {Touchpad}", "{L1} + {R1} + {Touchpad}",
+    "{L1} + {R1} + {Options}", "{L1} + {R1} + {L3}", "{L1} + {R1} + {R3}", "{L2} + {R2} + {Touchpad}",
+    "{L2} + {R2} + {Options}", "{L2} + {R2} + {L3}", "{L2} + {R2} + {R3}", "{L3} + {R3}"};
+static const char *const MENU_COMBOS[] = {"Hold {Touchpad}", "Hold {L3} + {R3}", "Hold {Options} + {Touchpad}"};
 static const char *const BACKGROUNDS[] = {"Dark", "Cover colour"};
 static const char *const CRT_LEVELS[] = {"Off", "Light", "Strong"};
 static const char *const BORDERS[] = {"Black", "Current background", "TV frame"};
@@ -437,6 +442,8 @@ static bool is_texture_filter_option(int i)
     return strcmp(SS_OPTS[i].key, "swanstation_GPU_TextureFilter") == 0;
 }
 
+static int ac_opt(void);
+
 static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, const int *categories, int ncat)
 {
     static char groups[SSC_COUNT][48];
@@ -463,7 +470,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
     {
         const Row nostalgia = {"Picture",
                                "Nostalgia mode",
-                               "While a game is played, the app makes no sounds and no notices, trophies or progress cards appear. The game menu still opens by holding the {Touchpad}.",
+                               "While a game is played, the app makes no sounds and no notices, trophies or progress cards appear. The game menu still opens with its combination (Settings > Controls).",
                                K_TOGGLE,
                                APPLY_NOW,
                                SP_NONE,
@@ -610,6 +617,22 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                 is_texture_filter_option(i) || ss_opt_is_bios(i) || /* they go with Start BIOS, in SwanStationPS5 */
                 (base == DISPLAY && custom[0] >= 0 && is_custom_aspect_option(i)))
                 continue;
+            if (base == CONTROLS && i == ac_opt())
+            {
+                Row m = {first ? groups[categories[c]] : NULL,
+                         "Game menu combination",
+                         "How the game menu opens during a game: holding the {Touchpad}, holding {L3} + {R3}, or holding {Options} + {Touchpad}, for 1 second. A combination the analog mode combo already uses can't be chosen.",
+                         K_CHOICE,
+                         APPLY_NOW,
+                         SP_NONE,
+                         true,
+                         INT_FIELD(menu_combo),
+                         MENU_COMBOS,
+                         3,
+                         0};
+                rows[n++] = m;
+                first = false;
+            }
             Row r = {first ? groups[categories[c]] : NULL,
                      SS_OPTS[i].label,
                      SS_OPTS[i].help,
@@ -619,7 +642,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                      ss_opt_is_bios(i), /* global_only: the console's BIOS is the same for every game */
                      (int)(offsetof(Settings, ss_opt) + (size_t)i * sizeof(int)),
                      false,
-                     ss_opt_labels(i),
+                     i == ac_opt() ? ANALOG_COMBOS : ss_opt_labels(i),
                      ss_opt_count(i),
                      0};
             rows[n++] = r;
@@ -835,6 +858,31 @@ static void widescreen_follow(Settings *t, const Row *r, int before)
     }
 }
 
+static int ac_opt(void)
+{
+    static int idx = -2;
+    if (idx == -2)
+    {
+        idx = -1;
+        for (int i = 0; i < SS_OPT_COUNT; ++i)
+            if (strcmp(SS_OPTS[i].key, "swanstation_Controller_AnalogCombo") == 0)
+                idx = i;
+    }
+    return idx;
+}
+
+static bool value_conflicts(const Row *r, int v)
+{
+    const int a = ac_opt();
+    if (a < 0)
+        return false;
+    if (r->offset == (int)offsetof(Settings, menu_combo))
+        return v == 1 && (app.global.ss_opt[a] == 10 || app.settings.ss_opt[a] == 10);
+    if (r->offset == (int)(offsetof(Settings, ss_opt) + (size_t)a * sizeof(int)))
+        return v == 10 && app.global.menu_combo == 1;
+    return false;
+}
+
 static int read_value(const Row *r)
 {
     switch (r->special)
@@ -865,7 +913,7 @@ static bool row_blocked(const Row *r)
 
 static void write_value(const Row *r, int v)
 {
-    if (row_locked(r) || row_blocked(r))
+    if (row_locked(r) || row_blocked(r) || value_conflicts(r, v))
         return;
     switch (r->special)
     {
@@ -2092,7 +2140,14 @@ void settings_screen(uint32_t pressed)
         if (delta && (r->kind == K_CHOICE || r->kind == K_TOGGLE))
         {
             int count = r->kind == K_TOGGLE ? 2 : r->count;
-            write_value(r, (read_value(r) + count + delta) % count);
+            int v = read_value(r);
+            for (int k = 0; k < count; ++k)
+            {
+                v = (v + count + delta) % count;
+                if (!value_conflicts(r, v))
+                    break;
+            }
+            write_value(r, v);
             sfx_play(SFX_CLICK); /* also previews a new interface sound */
         }
         if (r->special == SP_DRIVES && (delta || (pressed & BIT(BTN_CROSS))))
@@ -2270,7 +2325,7 @@ const char *settings_set_by_key(const char *key, int value)
     if (r->kind != K_CHOICE && r->kind != K_TOGGLE)
         return NULL;
     int count = r->kind == K_TOGGLE ? 2 : r->count;
-    if (value < 0 || value >= count)
+    if (value < 0 || value >= count || value_conflicts(r, value))
         return NULL;
     /* the phone edits what the console's settings would: this game's own when it has them */
     bool scope = S.game_scope;

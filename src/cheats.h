@@ -33,6 +33,10 @@ void cheats_clear(CheatList *list);
 /* True once when a cheat file cheats_load started downloading has arrived:
  * load again then. */
 bool cheats_fetch_finished(void);
+/* Marks the downloaded files of this game as old, so the next cheats_load
+ * downloads them again (the old ones stay until the new ones arrive). Files
+ * also refresh on their own once they are a day old. */
+void cheats_mark_old(const Game *game, const char *cheats_dir);
 /* A code of the player's own (Find a code): saved to cheats/mine/<id>.txt,
  * added to the list and switched on. */
 bool cheats_add_user(CheatList *list, const Game *game, const char *cheats_dir, const char *desc,

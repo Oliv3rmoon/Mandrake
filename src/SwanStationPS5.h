@@ -17,7 +17,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.4.2"
+#define SwanStationPS5_VERSION "1.4.3"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -99,6 +99,7 @@ typedef struct
     int ui_sound;     /* SFX_STYLE_* in ui/sfx.h; SFX_STYLE_OFF mutes */
     int ui_volume;    /* 0..3 = 25/50/75/100 % */
     int stick_dpad;   /* enum StickDpad */
+    int menu_combo;   /* how the game menu opens: 0 touchpad held, 1 L3 + R3 held, 2 Options + touchpad held */
     int language;     /* enum Lang in i18n.h */
     int vibration;        /* controller vibration: 0 off, 1..4 = 25/50/75/100 % */
     /* Button mapping: for each controller button (BTN_CROSS..BTN_R3), the PS1
