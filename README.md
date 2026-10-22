@@ -325,7 +325,7 @@ SwanStationPS5 looks for covers in this order and uses the first it finds:
 |---|---|
 | OPTIONS | PS1 START |
 | Touchpad tap | PS1 SELECT |
-| Hold the touchpad for 1 second | The SwanStationPS5 menu |
+| Hold L3 + R3 for 1 second | The SwanStationPS5 menu (*Settings → Controls → Game menu combination* can change it to the touchpad, or OPTIONS + touchpad) |
 | Hold the touchpad + R2 | Fast forward |
 | Hold the touchpad + L2 | Rewind (turn on *Settings → System → Rewind*) |
 | Hold the touchpad + Square | Screenshot (in `/data/SwanStationPS5/screenshots`) |

@@ -442,12 +442,24 @@ static bool is_texture_filter_option(int i)
     return strcmp(SS_OPTS[i].key, "swanstation_GPU_TextureFilter") == 0;
 }
 
+static bool is_sprite_filter_option(int i)
+{
+    return strcmp(SS_OPTS[i].key, "swanstation_GPU_SpriteTextureFilter") == 0;
+}
+
+/* Turned on only by the game database, for the games that need them */
+static bool is_db_only_option(int i)
+{
+    return strncmp(SS_OPTS[i].key, "swanstation_GPU_FilterFramebufferUploads", 40) == 0 ||
+           strcmp(SS_OPTS[i].key, "swanstation_GPU_ForceRoundTextureCoordinates") == 0;
+}
+
 static int ac_opt(void);
 
 static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, const int *categories, int ncat)
 {
     static char groups[SSC_COUNT][48];
-    int extra = 0, aspect = -1, wide = -1, tfilter = -1, custom[2] = {-1, -1};
+    int extra = 0, aspect = -1, wide = -1, tfilter = -1, sfilter = -1, custom[2] = {-1, -1};
     for (int i = 0; i < SS_OPT_COUNT; ++i)
     {
         if (base == DISPLAY && is_aspect_option(i))
@@ -458,6 +470,8 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
             custom[custom[0] < 0 ? 0 : 1] = i;
         if (base == DISPLAY && is_texture_filter_option(i))
             tfilter = i;
+        if (base == DISPLAY && is_sprite_filter_option(i))
+            sfilter = i;
     }
     for (int c = 0; c < ncat; ++c)
         for (int i = 0; i < SS_OPT_COUNT; ++i)
@@ -512,6 +526,17 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
             r.apply = ss_needs_reload(SS_OPTS[tfilter].key) ? APPLY_NEXT_GAME : APPLY_NOW;
             r.labels = ss_opt_labels(tfilter);
             r.count = ss_opt_count(tfilter);
+            rows[n++] = r;
+        }
+        if (sfilter >= 0)
+        {
+            r.group = NULL;
+            r.name = SS_OPTS[sfilter].label;
+            r.help = SS_OPTS[sfilter].help;
+            r.offset = (int)(offsetof(Settings, ss_opt) + (size_t)sfilter * sizeof(int));
+            r.apply = ss_needs_reload(SS_OPTS[sfilter].key) ? APPLY_NEXT_GAME : APPLY_NOW;
+            r.labels = ss_opt_labels(sfilter);
+            r.count = ss_opt_count(sfilter);
             rows[n++] = r;
         }
     }
@@ -614,7 +639,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
         for (int i = 0; i < SS_OPT_COUNT; ++i)
         {
             if (SS_OPTS[i].category != categories[c] || n >= MAX_ROWS || is_aspect_option(i) || is_widescreen_option(i) ||
-                is_texture_filter_option(i) || ss_opt_is_bios(i) || /* they go with Start BIOS, in SwanStationPS5 */
+                is_texture_filter_option(i) || is_sprite_filter_option(i) || is_db_only_option(i) || ss_opt_is_bios(i) || /* they go with Start BIOS, in SwanStationPS5 */
                 (base == DISPLAY && custom[0] >= 0 && is_custom_aspect_option(i)))
                 continue;
             if (base == CONTROLS && i == ac_opt())

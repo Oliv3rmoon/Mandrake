@@ -33,7 +33,7 @@ void config_defaults(Settings *s)
     s->ui_sound = 0;  /* Soft */
     s->ui_volume = 1; /* 50 % */
     s->vibration = 4;
-    s->menu_combo = 0;
+    s->menu_combo = 1;
     s->quick_resume = true;
     s->update_check = true;
     snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/ext0/psx, /mnt/ext1/psx and /mnt/usb0/psx to /mnt/usb7/psx */
@@ -132,7 +132,7 @@ static bool config_apply(Settings *s, const char *path)
         else if (strcmp(key, "stick_dpad") == 0)
             s->stick_dpad = atoi(value) % STICK_DPAD_COUNT;
         else if (strcmp(key, "menu_combo") == 0)
-            s->menu_combo = atoi(value) >= 0 && atoi(value) < 3 ? atoi(value) : 0;
+            s->menu_combo = atoi(value) >= 0 && atoi(value) < 3 ? atoi(value) : 1;
         else if (strcmp(key, "integer_scale") == 0)
             s->integer_scale = as_bool(value);
         else if (strcmp(key, "internal_scale") == 0)

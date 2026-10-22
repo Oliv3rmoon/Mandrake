@@ -34,6 +34,7 @@ enum
     GDB_NO_PGXP_CULL = 1u << 20,   /* PGXP culling correction breaks it */
     GDB_NO_TRUE_COLOR = 1u << 21,
     GDB_SW_READBACKS = 1u << 22,   /* needs the software renderer for VRAM readbacks */
+    GDB_ROUND_TEXCOORDS = 1u << 23, /* rounds upscaled texture coordinates */
 };
 enum
 {
@@ -45,10 +46,11 @@ enum
     GDT_DMA_HALT = 1u << 4,
     GDT_PGXP_TOLERANCE = 1u << 5,
     GDT_PGXP_PROJ = 1u << 6,
+    GDT_FILTER_UPLOADS = 1u << 7, /* gpuFilterFramebufferUploads: filters VRAM writes of at least this size */
 };
 #define GDB_FIXES (GDB_NO_WIDESCREEN | GDB_NO_PGXP | GDB_PGXP_CPU | GDB_NO_UPSCALING | GDB_NO_TEXTURE_FILTER | \
                    GDB_NO_SPRITE_FILTER | GDB_DEINTERLACE | GDB_NO_MULTITAP | GDB_NO_CD_SPEEDUP | GDB_ICACHE | GDB_PGXP_VCACHE | \
-                   GDB_NO_PGXP_CULL | GDB_NO_TRUE_COLOR | GDB_SW_READBACKS)
+                   GDB_NO_PGXP_CULL | GDB_NO_TRUE_COLOR | GDB_SW_READBACKS | GDB_ROUND_TEXCOORDS)
 
 typedef struct
 {
@@ -60,6 +62,7 @@ typedef struct
     int active_start, active_end, line_start, dma_slice, dma_halt;
     float pgxp_tolerance;
     bool pgxp_proj;
+    int filter_uploads_w, filter_uploads_h;
 } GameInfo;
 
 /* The index the app keeps (the payload reads it too). */

@@ -28,7 +28,7 @@
 
 static SDL_atomic_t state; /* 0 idle, 1 downloading, 2 a new index is there */
 /* the index's first line: the version of its format */
-#define GAMEDB_HEADER "#v4"
+#define GAMEDB_HEADER "#v7"
 
 static char yaml_path[SwanStationPS5_PATH_MAX], index_path[SwanStationPS5_PATH_MAX];
 
@@ -65,6 +65,7 @@ static const struct
     {"DisablePGXPCulling", GDB_NO_PGXP_CULL},
     {"DisableTrueColor", GDB_NO_TRUE_COLOR},
     {"ForceSoftwareRendererForReadbacks", GDB_SW_READBACKS},
+    {"ForceRoundTextureCoordinates", GDB_ROUND_TEXCOORDS},
 };
 
 /* the database's own settings for a disc that are applied, and the short name each has in the index */
@@ -74,7 +75,7 @@ static const struct
 } SETTINGS[] = {
     {"displayActiveStartOffset", "as"}, {"displayActiveEndOffset", "ae"}, {"displayLineStartOffset", "ls"},
     {"dmaMaxSliceTicks", "ds"},         {"dmaHaltTicks", "dh"},           {"gpuPGXPTolerance", "pt"},
-    {"gpuPGXPPreserveProjFP", "pp"},
+    {"gpuPGXPPreserveProjFP", "pp"},    {"gpuFilterFramebufferUploads", "fu"},
 };
 
 typedef struct
@@ -179,11 +180,14 @@ static bool build_index(const char *yaml, const char *index)
         if (!strncmp(line, "    - ", 6))
         {
             const char *item = line + 6;
+            char bare[96]; /* "DisableWidescreen # Breaks the menus." without its comment */
+            str_copy(bare, sizeof(bare), item);
+            bare[strcspn(bare, " #")] = '\0';
             if (!strcmp(section, "codes") && r.code_count < 8)
                 unquote(r.codes[r.code_count++], sizeof(r.codes[0]), item);
             else
                 for (size_t i = 0; i < sizeof(WORDS) / sizeof(WORDS[0]); ++i)
-                    if (!strcmp(item, WORDS[i].name))
+                    if (!strcmp(bare, WORDS[i].name))
                         r.flags |= WORDS[i].flag;
             continue;
         }
@@ -195,6 +199,7 @@ static bool build_index(const char *yaml, const char *index)
             *colon = '\0';
             char value[32];
             unquote(value, sizeof(value), colon + 1);
+            value[strcspn(value, " #")] = '\0'; /* "256x224 # Enables background texture filtering." */
             if (!strcmp(value, "true"))
                 str_copy(value, sizeof(value), "1");
             else if (!strcmp(value, "false"))
@@ -389,6 +394,9 @@ static void load(void)
                     g->pgxp_tolerance = (float)atof(eq + 1), g->set |= GDT_PGXP_TOLERANCE;
                 else if (!strncmp(tag, "pp", 2))
                     g->pgxp_proj = n != 0, g->set |= GDT_PGXP_PROJ;
+                else if (!strncmp(tag, "fu", 2) &&
+                         sscanf(eq + 1, "%dx%d", &g->filter_uploads_w, &g->filter_uploads_h) == 2)
+                    g->set |= GDT_FILTER_UPLOADS;
             }
             if (!end)
                 break;

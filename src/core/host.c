@@ -222,6 +222,8 @@ static void apply_game_fixes(void)
         set_option("swanstation_GPU_PGXPCPU", "true");
     if (game_fixes & GDB_NO_TEXTURE_FILTER)
         set_option("swanstation_GPU_TextureFilter", "Nearest");
+    if (game_fixes & GDB_NO_SPRITE_FILTER)
+        set_option("swanstation_GPU_SpriteTextureFilter", "Nearest");
     if (game_fixes & GDB_ICACHE)
         set_option("swanstation_CPU_RecompilerICache", "true");
     if (game_fixes & GDB_PGXP_VCACHE)
@@ -232,6 +234,8 @@ static void apply_game_fixes(void)
         set_option("swanstation_GPU_TrueColor", "false");
     if (game_fixes & GDB_SW_READBACKS)
         set_option("swanstation_GPU_UseSoftwareRendererForReadbacks", "true");
+    if (game_fixes & GDB_ROUND_TEXCOORDS)
+        set_option("swanstation_GPU_ForceRoundTextureCoordinates", "true");
     const GameInfo *g = &game_info;
     if (g->set & GDT_ACTIVE_START)
         set_option_int("swanstation_Display_ActiveStartOffset", g->active_start);
@@ -251,6 +255,12 @@ static void apply_game_fixes(void)
     }
     if (g->set & GDT_PGXP_PROJ)
         set_option("swanstation_GPU_PGXPPreserveProjFP", g->pgxp_proj ? "true" : "false");
+    if (g->set & GDT_FILTER_UPLOADS)
+    {
+        set_option("swanstation_GPU_FilterFramebufferUploads", "true");
+        set_option_int("swanstation_GPU_FilterFramebufferUploadsMinimumWidth", g->filter_uploads_w);
+        set_option_int("swanstation_GPU_FilterFramebufferUploadsMinimumHeight", g->filter_uploads_h);
+    }
 }
 
 static void apply_swanstation_options(const Settings *s)

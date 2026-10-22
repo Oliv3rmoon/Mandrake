@@ -172,6 +172,11 @@ opt("swanstation_GPU_ChromaSmoothing24Bit",
      "aplica ao renderizador por hardware.",
      "Atenúa el efecto de bloques en las transiciones de color del contenido de 24 bits, normalmente videos (FMV). "
      "Solo se aplica al renderizador por hardware."))
+opt("swanstation_GPU_SpriteTextureFilter",
+    ("Filtrage des sprites", "Filtragem de sprites", "Filtrado de sprites"),
+    ("Atténue l'aspect pixelisé des textures agrandies des objets 2D. L'effet est plus marqué à haute résolution. Uniquement avec le rendu matériel.",
+     "Atenua o aspeto de blocos das texturas ampliadas dos objetos 2D. O efeito é maior com resoluções mais altas. Só se aplica ao renderizador por hardware.",
+     "Suaviza el aspecto pixelado de las texturas ampliadas de los objetos 2D. Tiene más efecto con resoluciones altas. Solo se aplica al renderizador por hardware."))
 opt("swanstation_GPU_TextureFilter",
     ("Filtrage des textures", "Filtragem de texturas", "Filtrado de texturas"),
     ("Atténue l'aspect pixelisé des textures agrandies des objets 3D par un filtrage bilinéaire. L'effet est plus "
