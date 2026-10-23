@@ -95,9 +95,11 @@ int controls_kind(const Game *g)
     const GameInfo *info = gamedb_get(g->serial);
     if (info)
     {
-        if (info->flags & GDB_JUSTIFIER)
+        /* some games list a gun they only tolerate (Silent Hill, a music disc): they are not light gun games */
+        const bool gun_game = !strstr(info->genre, "Survival Horror") && !strstr(info->genre, "Music");
+        if (gun_game && (info->flags & GDB_JUSTIFIER))
             found |= KIND_JUSTIFIER;
-        else if (info->flags & GDB_GUNCON)
+        else if (gun_game && (info->flags & GDB_GUNCON))
             found |= KIND_GUNCON;
         if ((info->flags & GDB_NEGCON) || strstr(info->genre, "Racing") || strstr(info->genre, "Driving"))
             found |= KIND_PEDAL;

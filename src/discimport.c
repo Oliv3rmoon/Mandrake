@@ -787,13 +787,20 @@ static bool read_disc(const CdPass *pass, DiscId *id)
     return identify(pass, toc, got, tracks[0].lba, id, &sense);
 }
 
+static bool skip_present;
+
+void discwatch_skip_present(void)
+{
+    skip_present = true;
+}
+
 static int watch_thread(void *unused)
 {
     (void)unused;
-    bool was_ready[8] = {false}, need[8];
+    bool was_ready[8] = {false}, need[8], skipped[8] = {false};
     int gone[8] = {0}; /* polls in a row that found the drive empty after a disc */
     for (int u = 0; u < 8; ++u)
-        need[u] = true; /* a disc already in when the app starts is news too */
+        need[u] = !skip_present; /* a disc already in when the app starts is news too, unless the app only started again after a game */
     bool first = true;
     for (;;)
     {
@@ -846,7 +853,12 @@ static int watch_thread(void *unused)
                     P("watch: the disc in cd%u was changed", u);
                 }
                 if (!was_ready[u] || ready == 2)
-                    need[u] = true;
+                {
+                    if (skip_present && !skipped[u])
+                        skipped[u] = true; /* the disc that was in when the app started again is not news */
+                    else
+                        need[u] = true;
+                }
                 was_ready[u] = true;
                 if (need[u] && SDL_AtomicGet(&W.active) && !SDL_AtomicGet(&W.have))
                 {

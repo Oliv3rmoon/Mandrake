@@ -1808,6 +1808,34 @@ void app_start_bios(void)
     app.screen = SCREEN_GAME;
 }
 
+/* A game leaves memory behind that the heap cannot give back (a console that rests with it mapped does not wake up), so
+ * going back to the library starts the title again: the system ends this process and runs the title's executable. */
+static void restart_for_clean_memory(void)
+{
+#if defined(__PROSPERO__)
+    static bool asked;
+    if (asked)
+        return;
+    asked = true;
+    app_save_settings();
+    stats_save();
+    char path[SwanStationPS5_PATH_MAX];
+    path_join(path, sizeof(path), app.paths.root, "open-library");
+    FILE *f = fopen(path, "w");
+    if (f)
+    {
+        fprintf(f, "%lld\n", (long long)time(NULL));
+        fclose(f);
+    }
+    SwanStationPS5_log("restart: the title starts again to give the game's memory back");
+    extern int sceSystemServiceLoadExec(const char *path, const char **arguments);
+    int rc = sceSystemServiceLoadExec("/app0/eboot.bin", NULL);
+    SwanStationPS5_log("restart: refused (0x%x), staying in this process", (unsigned)rc);
+    remove(path);
+    asked = false;
+#endif
+}
+
 void app_stop_game(void)
 {
     host_set_region_override(NULL);
@@ -1838,6 +1866,8 @@ void app_stop_game(void)
         SwanStationPS5_log("forwarder: the game ended, closing (--exit-after-game)");
         app.quit_requested = true;
     }
+    else
+        restart_for_clean_memory();
 }
 
 /* The library game a forwarder's --rom names: that file, else the game in the folder holding it (or in that folder).
@@ -2489,11 +2519,19 @@ int main(int argc, char **argv)
         remove(marker);
         SwanStationPS5_log("started by the disc daemon: no notice sounds for the first seconds");
     }
+    if (stamp_is_fresh("open-library", 60))
+    {
+        char marker[SwanStationPS5_PATH_MAX];
+        path_join(marker, sizeof(marker), app.paths.root, "open-library");
+        remove(marker);
+        discwatch_skip_present();
+        SwanStationPS5_log("started again after a game: the disc in the drive is not news");
+    }
     SwanStationPS5_log("SwanStationPS5 %s starting, data root %s", SwanStationPS5_VERSION, app.paths.root);
     SwanStationPS5_log("screen: %s", plat_screen_info());
 #if defined(__PROSPERO__)
     extern size_t ps5_heap_size_mb(void);
-    SwanStationPS5_log("heap: %zu MB of direct memory%s", ps5_heap_size_mb(),
+    SwanStationPS5_log("heap: %zu MB of address range%s", ps5_heap_size_mb(),
               ps5_heap_size_mb() ? "" : " (unavailable: using the system heap)");
 #endif
     SwanStationPS5_log(app.sandboxed ? "storage: sandboxed (%s)" : "storage: unlocked%s",

@@ -37,6 +37,7 @@ typedef struct
 
 /* Starts the import into `games_dir`; false if one is already running (or its result has not been taken). */
 bool discimport_start(const char *games_dir);
+void discwatch_skip_present(void);
 /* DI_RUNNING while it works, then the result until discimport_ack(). */
 DiscImportState discimport_state(void);
 void discimport_ack(void);

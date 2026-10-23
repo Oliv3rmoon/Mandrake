@@ -142699,7 +142699,7 @@ index 918acd79..0c7efa2c 100644
    /// Returns a setting value from the configuration.
    std::string GetStringSettingValue(const char* section, const char* key, const char* default_value = "");
 diff --git a/src/core/pgxp.cpp b/src/core/pgxp.cpp
-index 1c1eb1ff..094884b4 100644
+index 1c1eb1ff..0166de3c 100644
 --- a/src/core/pgxp.cpp
 +++ b/src/core/pgxp.cpp
 @@ -21,6 +21,7 @@
@@ -142710,7 +142710,15 @@ index 1c1eb1ff..094884b4 100644
  #include "settings.h"
  #include <climits>
  #include <cmath>
-@@ -132,6 +133,28 @@ ALWAYS_INLINE_RELEASE void MaskValidate(PGXP_value* pV, uint32_t psxV, uint32_t
+@@ -43,6 +44,7 @@ inline constexpr uint32_t VERTEX_CACHE_WIDTH = 0x800 * 2, VERTEX_CACHE_HEIGHT =
+ #define VALID_012 (VALID_0 | VALID_1 | VALID_2)
+ #define VALID_ALL (VALID_0 | VALID_1 | VALID_2 | VALID_3)
+ #define INV_VALID_ALL (ALL ^ VALID_ALL)
++#define TZ (1u << 31)
+ 
+ typedef struct PGXP_value_Tag
+ {
+@@ -132,6 +134,28 @@ ALWAYS_INLINE_RELEASE void MaskValidate(PGXP_value* pV, uint32_t psxV, uint32_t
    pV->flags &= ((pV->value & mask) == (psxV & mask)) ? ALL : (ALL ^ (validMask));
  }
  
@@ -142732,14 +142740,14 @@ index 1c1eb1ff..094884b4 100644
 +
 +ALWAYS_INLINE_RELEASE void SZ(float& z, uint32_t& f, const PGXP_value& a, const PGXP_value& b)
 +{
-+  z = (a.flags & VALID_2) ? a.z : b.z;
++  z = (!(a.flags & VALID_2) || ((a.flags & TZ) && (b.flags & (VALID_2 | TZ)) == VALID_2)) ? b.z : a.z;
 +  f |= ((a.flags | b.flags) & VALID_2);
 +}
 +
  ALWAYS_INLINE_RELEASE double f16Sign(double in)
  {
    /* Scale to 16.16, keep the low 32 bits (mod 2^32), then reinterpret those
-@@ -371,6 +394,7 @@ void GTE_PushSXYZ2f(float x, float y, float z, uint32_t v)
+@@ -371,6 +395,7 @@ void GTE_PushSXYZ2f(float x, float y, float z, uint32_t v)
    SXY2.z = z;
    SXY2.value = v;
    SXY2.flags = VALID_ALL;
@@ -142747,7 +142755,7 @@ index 1c1eb1ff..094884b4 100644
  
    if (g_settings.gpu_pgxp_vertex_cache)
      PGXP_CacheVertex(static_cast<int16_t>(static_cast<uint16_t>(v)), static_cast<int16_t>(static_cast<uint16_t>(v >> 16)), SXY2);
-@@ -537,7 +561,7 @@ bool GetPreciseVertex(uint32_t addr, uint32_t value, int x, int y, int xOffs, in
+@@ -537,7 +562,7 @@ bool GetPreciseVertex(uint32_t addr, uint32_t value, int x, int y, int xOffs, in
      // There is a value here with valid X and Y coordinates
      *out_x = TruncateVertexPosition(vert->x) + static_cast<float>(xOffs);
      *out_y = TruncateVertexPosition(vert->y) + static_cast<float>(yOffs);
@@ -142756,7 +142764,7 @@ index 1c1eb1ff..094884b4 100644
  
      if (IsWithinTolerance(*out_x, *out_y, x, y))
      {
-@@ -557,7 +581,7 @@ bool GetPreciseVertex(uint32_t addr, uint32_t value, int x, int y, int xOffs, in
+@@ -557,7 +582,7 @@ bool GetPreciseVertex(uint32_t addr, uint32_t value, int x, int y, int xOffs, in
      {
        *out_x = TruncateVertexPosition(vert->x) + static_cast<float>(xOffs);
        *out_y = TruncateVertexPosition(vert->y) + static_cast<float>(yOffs);
@@ -142765,7 +142773,187 @@ index 1c1eb1ff..094884b4 100644
  
        if (IsWithinTolerance(*out_x, *out_y, x, y))
          return false;
-@@ -750,16 +774,17 @@ void CPU_XORI(uint32_t instr, uint32_t rsVal)
+@@ -630,136 +655,119 @@ void CPU_MOVE(uint32_t rd_and_rs, uint32_t rsVal)
+ 
+ void CPU_ADDI(uint32_t instr, uint32_t rsVal)
+ {
+-  // Rt = Rs + Imm (signed)
+-  psx_value tempImm;
+-  PGXP_value ret;
+-
+   Validate(&CPU_reg[rs(instr)], rsVal);
+-  ret = CPU_reg[rs(instr)];
+-  tempImm.d = imm(instr);
+-  tempImm.sd = (tempImm.sd << 16) >> 16; // sign extend
++  PGXP_value& prs = CPU_reg[rs(instr)];
+ 
+-  if (tempImm.d != 0)
+-  {
+-    ret.x = (float)f16Unsign(ret.x);
+-    ret.x += (float)tempImm.w.l;
++  const uint32_t immVal = static_cast<uint32_t>(imm_sext(instr));
+ 
+-    // carry on over/underflow
+-    float of = (ret.x > USHRT_MAX) ? 1.f : (ret.x < 0) ? -1.f : 0.f;
+-    ret.x = (float)f16Sign(ret.x);
+-    // ret.x -= of * (USHRT_MAX + 1);
+-    ret.y += tempImm.sw.h + of;
++  PGXP_value& prt = CPU_reg[rt(instr)];
++  prt = prs;
+ 
+-    // truncate on overflow/underflow
+-    ret.y += (ret.y > SHRT_MAX) ? -(USHRT_MAX + 1) : (ret.y < SHRT_MIN) ? USHRT_MAX + 1 : 0.f;
++  if (immVal == 0)
++    return;
++
++  if (rsVal == 0)
++  {
++    prt.x = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(immVal)));
++    prt.y = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(immVal >> 16)));
++    prt.flags |= VALID_01 | TZ;
++    prt.value = immVal;
++    return;
+   }
+ 
+-  CPU_reg[rt(instr)] = ret;
+-  CPU_reg[rt(instr)].value = rsVal + imm_sext(instr);
++  prt.x = static_cast<float>(f16Unsign(prt.x));
++  prt.x += static_cast<float>(static_cast<uint16_t>(immVal));
++
++  const float of = (prt.x > USHRT_MAX) ? 1.f : (prt.x < 0.f) ? -1.f : 0.f;
++  prt.x = static_cast<float>(f16Sign(prt.x));
++  prt.y += static_cast<int16_t>(static_cast<uint16_t>(immVal >> 16)) + of;
++
++  prt.y += (prt.y > SHRT_MAX) ? -(USHRT_MAX + 1) : (prt.y < SHRT_MIN) ? (USHRT_MAX + 1) : 0.f;
++
++  prt.value = rsVal + immVal;
++
++  prt.flags |= TZ;
+ }
+ 
+ void CPU_ANDI(uint32_t instr, uint32_t rsVal)
+ {
+-  // Rt = Rs & Imm
+-  const uint32_t rtVal = rsVal & imm(instr);
+-  psx_value vRt;
+-  PGXP_value ret;
+-
++  const uint32_t im = imm(instr);
++  const uint32_t rtVal = rsVal & im;
+   Validate(&CPU_reg[rs(instr)], rsVal);
+-  ret = CPU_reg[rs(instr)];
++  PGXP_value& prs = CPU_reg[rs(instr)];
++  PGXP_value& prt = CPU_reg[rt(instr)];
+ 
+-  vRt.d = rtVal;
++  prt.y = 0.f;
++  prt.z = prs.z;
++  prt.value = rtVal;
++  prt.flags = prs.flags | VALID_1 | TZ;
+ 
+-  ret.y = 0.f; // remove upper 16-bits
+-
+-  switch (imm(instr))
++  switch (im)
+   {
+     case 0:
+-      // if 0 then x == 0
+-      ret.x = 0.f;
++      prt.x = 0.f;
++      prt.flags |= VALID_0;
+       break;
+-    case 0xFFFF:
+-      // if saturated then x == x
++    case 0xFFFFu:
++      prt.x = prs.x;
+       break;
+     default:
+-      // otherwise x is low precision value
+-      ret.x = vRt.sw.l;
+-      ret.flags |= VALID_0;
++      prt.x = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(rtVal)));
++      prt.flags |= VALID_0;
++      break;
+   }
+-
+-  ret.flags |= VALID_1;
+-
+-  CPU_reg[rt(instr)] = ret;
+-  CPU_reg[rt(instr)].value = rtVal;
+ }
+ 
+ void CPU_ORI(uint32_t instr, uint32_t rsVal)
+ {
+-  // Rt = Rs | Imm
+-  const uint32_t rtVal = rsVal | imm(instr);
+-  psx_value vRt;
+-  PGXP_value ret;
++  const uint32_t im = imm(instr);
++  const uint32_t rtVal = rsVal | im;
+ 
+   Validate(&CPU_reg[rs(instr)], rsVal);
+-  ret = CPU_reg[rs(instr)];
+-
+-  vRt.d = rtVal;
++  PGXP_value& prs = CPU_reg[rs(instr)];
++  PGXP_value& prt = CPU_reg[rt(instr)];
++  prt = prs;
++  prt.value = rtVal;
+ 
+-  switch (imm(instr))
++  if (im != 0)
+   {
+-    case 0:
+-      // if 0 then x == x
+-      break;
+-    default:
+-      // otherwise x is low precision value
+-      ret.x = vRt.sw.l;
+-      ret.flags |= VALID_0;
++    prt.x = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(rtVal)));
++    prt.flags |= VALID_0 | TZ;
+   }
+-
+-  ret.value = rtVal;
+-  CPU_reg[rt(instr)] = ret;
+ }
+ 
+ void CPU_XORI(uint32_t instr, uint32_t rsVal)
+ {
+-  // Rt = Rs ^ Imm
+-  const uint32_t rtVal = rsVal ^ imm(instr);
+-  psx_value vRt;
+-  PGXP_value ret;
++  const uint32_t im = imm(instr);
++  const uint32_t rtVal = rsVal ^ im;
+ 
+   Validate(&CPU_reg[rs(instr)], rsVal);
+-  ret = CPU_reg[rs(instr)];
+-
+-  vRt.d = rtVal;
++  PGXP_value& prs = CPU_reg[rs(instr)];
++  PGXP_value& prt = CPU_reg[rt(instr)];
++  prt = prs;
++  prt.value = rtVal;
+ 
+-  switch (imm(instr))
++  if (im != 0)
+   {
+-    case 0:
+-      // if 0 then x == x
+-      break;
+-    default:
+-      // otherwise x is low precision value
+-      ret.x = vRt.sw.l;
+-      ret.flags |= VALID_0;
++    prt.x = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(rtVal)));
++    prt.flags |= VALID_0 | TZ;
+   }
+-
+-  ret.value = rtVal;
+-  CPU_reg[rt(instr)] = ret;
+ }
+ 
  void CPU_SLTI(uint32_t instr, uint32_t rsVal)
  {
    // Rt = Rs < Imm (signed)
@@ -142783,11 +142971,11 @@ index 1c1eb1ff..094884b4 100644
    ret.y = 0.f;
 -  ret.x = (CPU_reg[rs(instr)].x < tempImm.sw.h) ? 1.f : 0.f;
 -  ret.flags |= VALID_1;
-+  ret.flags |= VALID_01;
++  ret.flags |= VALID_01 | TZ;
    ret.value = static_cast<uint32_t>(static_cast<int32_t>(rsVal) < imm_sext(instr));
  
    CPU_reg[rt(instr)] = ret;
-@@ -768,17 +793,18 @@ void CPU_SLTI(uint32_t instr, uint32_t rsVal)
+@@ -768,17 +776,18 @@ void CPU_SLTI(uint32_t instr, uint32_t rsVal)
  void CPU_SLTIU(uint32_t instr, uint32_t rsVal)
  {
    // Rt = Rs < Imm (Unsigned)
@@ -142806,12 +142994,12 @@ index 1c1eb1ff..094884b4 100644
 -  ret.x = (f16Unsign(CPU_reg[rs(instr)].x) < tempImm.w.h) ? 1.f : 0.f;
 -  ret.flags |= VALID_1;
 -  ret.value = static_cast<uint32_t>(rsVal < imm(instr));
-+  ret.flags |= VALID_01;
++  ret.flags |= VALID_01 | TZ;
 +  ret.value = static_cast<uint32_t>(rsVal < imm_sext(instr));
  
    CPU_reg[rt(instr)] = ret;
  }
-@@ -806,36 +832,31 @@ void CPU_ADD(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -806,36 +815,31 @@ void CPU_ADD(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -142823,10 +143011,13 @@ index 1c1eb1ff..094884b4 100644
 -      MakeValid(&CPU_reg[rs(instr)], rsVal);
 -      MakeValid(&CPU_reg[rt(instr)], rtVal);
 -    }
+-
+-    ret = CPU_reg[rs(instr)];
 +  const PGXP_value& a = CPU_reg[rs(instr)];
 +  const PGXP_value& b = CPU_reg[rt(instr)];
  
--    ret = CPU_reg[rs(instr)];
+-    ret.x = (float)f16Unsign(ret.x);
+-    ret.x += (float)f16Unsign(CPU_reg[rt(instr)].x);
 +  if (rtVal == 0)
 +  {
 +    ret = a;
@@ -142841,18 +143032,15 @@ index 1c1eb1ff..094884b4 100644
 +  {
 +    const double x = f16Unsign(GVX(a, rsVal)) + f16Unsign(GVX(b, rtVal));
  
--    ret.x = (float)f16Unsign(ret.x);
--    ret.x += (float)f16Unsign(CPU_reg[rt(instr)].x);
-+    const float of = (x > USHRT_MAX) ? 1.f : (x < 0.0) ? -1.f : 0.f;
-+    ret.x = static_cast<float>(f16Sign(x));
-+    ret.y = GVY(a, rsVal) + GVY(b, rtVal) + of;
- 
 -    // carry on over/underflow
 -    float of = (ret.x > USHRT_MAX) ? 1.f : (ret.x < 0) ? -1.f : 0.f;
 -    ret.x = (float)f16Sign(ret.x);
 -    // ret.x -= of * (USHRT_MAX + 1);
 -    ret.y += CPU_reg[rt(instr)].y + of;
--
++    const float of = (x > USHRT_MAX) ? 1.f : (x < 0.0) ? -1.f : 0.f;
++    ret.x = static_cast<float>(f16Sign(x));
++    ret.y = GVY(a, rsVal) + GVY(b, rtVal) + of;
+ 
 -    // truncate on overflow/underflow
      ret.y += (ret.y > SHRT_MAX) ? -(USHRT_MAX + 1) : (ret.y < SHRT_MIN) ? USHRT_MAX + 1 : 0.f;
  
@@ -142863,12 +143051,12 @@ index 1c1eb1ff..094884b4 100644
 -  else
 -  {
 -    ret = CPU_reg[rs(instr)];
-+    ret.flags = a.flags | (b.flags & VALID_01);
++    ret.flags = a.flags | (b.flags & VALID_01) | TZ;
 +    SZ(ret.z, ret.flags, a, b);
    }
  
    ret.value = rsVal + rtVal;
-@@ -850,28 +871,27 @@ void CPU_SUB(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -850,28 +854,27 @@ void CPU_SUB(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -142907,13 +143095,13 @@ index 1c1eb1ff..094884b4 100644
 +    ret.y += (ret.y > SHRT_MAX) ? -(USHRT_MAX + 1) : (ret.y < SHRT_MIN) ? USHRT_MAX + 1 : 0.f;
  
 -  ret.halfFlags[0] &= CPU_reg[rt(instr)].halfFlags[0];
-+    ret.flags = a.flags | (b.flags & VALID_01);
++    ret.flags = a.flags | (b.flags & VALID_01) | TZ;
 +    SZ(ret.z, ret.flags, a, b);
 +  }
  
    ret.value = rsVal - rtVal;
  
-@@ -881,82 +901,35 @@ void CPU_SUB(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -881,82 +884,35 @@ void CPU_SUB(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
  static void CPU_BITWISE(uint32_t instr, uint32_t rdVal, uint32_t rsVal, uint32_t rtVal)
  {
    // Rd = Rs & Rt
@@ -142933,12 +143121,12 @@ index 1c1eb1ff..094884b4 100644
 -  vald.d = rdVal;
 -  vals.d = rsVal;
 -  valt.d = rtVal;
--
--  //	CPU_reg[rd(instr)].valid = CPU_reg[rs(instr)].valid && CPU_reg[rt(instr)].valid;
--  ret.flags = VALID_01;
 +  const PGXP_value& a = CPU_reg[rs(instr)];
 +  const PGXP_value& b = CPU_reg[rt(instr)];
  
+-  //	CPU_reg[rd(instr)].valid = CPU_reg[rs(instr)].valid && CPU_reg[rt(instr)].valid;
+-  ret.flags = VALID_01;
+-
 -  if (vald.w.l == 0)
 -  {
 +  if (static_cast<uint16_t>(rdVal) == 0)
@@ -143008,12 +143196,12 @@ index 1c1eb1ff..094884b4 100644
 -    ret.compFlags[2] = CPU_reg[rt(instr)].compFlags[2];
 -  }
 +  ret.z = 0.f;
-+  ret.flags = ((a.flags | b.flags) & VALID_01) ? VALID_01 : 0;
++  ret.flags = ((a.flags | b.flags) & VALID_01) ? (VALID_01 | TZ) : 0;
 +  SZ(ret.z, ret.flags, a, b);
  
    ret.value = rdVal;
    CPU_reg[rd(instr)] = ret;
-@@ -997,20 +970,16 @@ void CPU_SLT(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -997,20 +953,16 @@ void CPU_SLT(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -143038,11 +143226,11 @@ index 1c1eb1ff..094884b4 100644
 -  ret.x = (CPU_reg[rs(instr)].y < CPU_reg[rt(instr)].y)                       ? 1.f :
 -          (f16Unsign(CPU_reg[rs(instr)].x) < f16Unsign(CPU_reg[rt(instr)].x)) ? 1.f :
 -                                                                                0.f;
-+  ret.flags |= VALID_01;
++  ret.flags |= VALID_01 | TZ;
  
    ret.value = static_cast<uint32_t>(static_cast<int32_t>(rsVal) < static_cast<int32_t>(rtVal));
    CPU_reg[rd(instr)] = ret;
-@@ -1023,20 +992,16 @@ void CPU_SLTU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -1023,20 +975,16 @@ void CPU_SLTU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -143067,11 +143255,11 @@ index 1c1eb1ff..094884b4 100644
 -  ret.x = (f16Unsign(CPU_reg[rs(instr)].y) < f16Unsign(CPU_reg[rt(instr)].y)) ? 1.f :
 -          (f16Unsign(CPU_reg[rs(instr)].x) < f16Unsign(CPU_reg[rt(instr)].x)) ? 1.f :
 -                                                                                0.f;
-+  ret.flags |= VALID_01;
++  ret.flags |= VALID_01 | TZ;
  
    ret.value = static_cast<uint32_t>(rsVal < rtVal);
    CPU_reg[rd(instr)] = ret;
-@@ -1052,43 +1017,35 @@ void CPU_MULT(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -1052,43 +1000,35 @@ void CPU_MULT(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -143081,54 +143269,54 @@ index 1c1eb1ff..094884b4 100644
 -    MakeValid(&CPU_reg[rs(instr)], rsVal);
 -    MakeValid(&CPU_reg[rt(instr)], rtVal);
 -  }
--
--  CPU_Lo = CPU_Hi = CPU_reg[rs(instr)];
--
--  CPU_Lo.halfFlags[0] = CPU_Hi.halfFlags[0] = (CPU_reg[rs(instr)].halfFlags[0] & CPU_reg[rt(instr)].halfFlags[0]);
--
--  double xx, xy, yx, yy;
--  double lx = 0, ly = 0, hx = 0, hy = 0;
 +  const PGXP_value& a = CPU_reg[rs(instr)];
 +  const PGXP_value& b = CPU_reg[rt(instr)];
+ 
+-  CPU_Lo = CPU_Hi = CPU_reg[rs(instr)];
++  CPU_Lo = a;
++  CZ(CPU_Lo, b);
++  CPU_Hi = CPU_Lo;
+ 
+-  CPU_Lo.halfFlags[0] = CPU_Hi.halfFlags[0] = (CPU_reg[rs(instr)].halfFlags[0] & CPU_reg[rt(instr)].halfFlags[0]);
++  const float rsx = GVX(a, rsVal);
++  const float rsy = GVY(a, rsVal);
++  const float rtx = GVX(b, rtVal);
++  const float rty = GVY(b, rtVal);
+ 
+-  double xx, xy, yx, yy;
+-  double lx = 0, ly = 0, hx = 0, hy = 0;
++  const double xx = f16Unsign(rsx) * f16Unsign(rtx);
++  const double xy = f16Unsign(rsx) * rty;
++  const double yx = rsy * f16Unsign(rtx);
++  const double yy = rsy * rty;
  
 -  // Multiply out components
 -  xx = f16Unsign(CPU_reg[rs(instr)].x) * f16Unsign(CPU_reg[rt(instr)].x);
 -  xy = f16Unsign(CPU_reg[rs(instr)].x) * (CPU_reg[rt(instr)].y);
 -  yx = (CPU_reg[rs(instr)].y) * f16Unsign(CPU_reg[rt(instr)].x);
 -  yy = (CPU_reg[rs(instr)].y) * (CPU_reg[rt(instr)].y);
-+  CPU_Lo = a;
-+  CZ(CPU_Lo, b);
-+  CPU_Hi = CPU_Lo;
- 
--  // Split values into outputs
--  lx = xx;
-+  const float rsx = GVX(a, rsVal);
-+  const float rsy = GVY(a, rsVal);
-+  const float rtx = GVX(b, rtVal);
-+  const float rty = GVY(b, rtVal);
- 
--  ly = f16Overflow(xx);
--  ly += xy + yx;
-+  const double xx = f16Unsign(rsx) * f16Unsign(rtx);
-+  const double xy = f16Unsign(rsx) * rty;
-+  const double yx = rsy * f16Unsign(rtx);
-+  const double yy = rsy * rty;
- 
--  hx = f16Overflow(ly);
--  hx += yy;
 +  const double lx = xx;
 +  const double ly = f16Overflow(xx) + (xy + yx);
 +  const double hx = f16Overflow(ly) + yy;
 +  const double hy = f16Overflow(hx);
  
--  hy = f16Overflow(hx);
+-  // Split values into outputs
+-  lx = xx;
 +  CPU_Lo.x = static_cast<float>(f16Sign(lx));
 +  CPU_Lo.y = static_cast<float>(f16Sign(ly));
-+  CPU_Lo.flags |= (b.flags & VALID_01);
++  CPU_Lo.flags |= TZ | (b.flags & VALID_01);
 +  CPU_Hi.x = static_cast<float>(f16Sign(hx));
 +  CPU_Hi.y = static_cast<float>(f16Sign(hy));
-+  CPU_Hi.flags |= (b.flags & VALID_01);
++  CPU_Hi.flags |= TZ | (b.flags & VALID_01);
  
+-  ly = f16Overflow(xx);
+-  ly += xy + yx;
+-
+-  hx = f16Overflow(ly);
+-  hx += yy;
+-
+-  hy = f16Overflow(hx);
+-
 -  CPU_Lo.x = (float)f16Sign(lx);
 -  CPU_Lo.y = (float)f16Sign(ly);
 -  CPU_Hi.x = (float)f16Sign(hx);
@@ -143138,7 +143326,7 @@ index 1c1eb1ff..094884b4 100644
    const uint64_t result = static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(rsVal)) * static_cast<int64_t>(static_cast<int32_t>(rtVal)));
    CPU_Hi.value = static_cast<uint32_t>(result >> 32);
    CPU_Lo.value = static_cast<uint32_t>(result);
-@@ -1100,43 +1057,35 @@ void CPU_MULTU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -1100,43 +1040,35 @@ void CPU_MULTU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -143152,60 +143340,60 @@ index 1c1eb1ff..094884b4 100644
 -  CPU_Lo = CPU_Hi = CPU_reg[rs(instr)];
 -
 -  CPU_Lo.halfFlags[0] = CPU_Hi.halfFlags[0] = (CPU_reg[rs(instr)].halfFlags[0] & CPU_reg[rt(instr)].halfFlags[0]);
--
++  const PGXP_value& a = CPU_reg[rs(instr)];
++  const PGXP_value& b = CPU_reg[rt(instr)];
+ 
 -  double xx, xy, yx, yy;
 -  double lx = 0, ly = 0, hx = 0, hy = 0;
--
++  CPU_Lo = a;
++  CZ(CPU_Lo, b);
++  CPU_Hi = CPU_Lo;
+ 
 -  // Multiply out components
 -  xx = f16Unsign(CPU_reg[rs(instr)].x) * f16Unsign(CPU_reg[rt(instr)].x);
 -  xy = f16Unsign(CPU_reg[rs(instr)].x) * f16Unsign(CPU_reg[rt(instr)].y);
 -  yx = f16Unsign(CPU_reg[rs(instr)].y) * f16Unsign(CPU_reg[rt(instr)].x);
 -  yy = f16Unsign(CPU_reg[rs(instr)].y) * f16Unsign(CPU_reg[rt(instr)].y);
-+  const PGXP_value& a = CPU_reg[rs(instr)];
-+  const PGXP_value& b = CPU_reg[rt(instr)];
- 
--  // Split values into outputs
--  lx = xx;
-+  CPU_Lo = a;
-+  CZ(CPU_Lo, b);
-+  CPU_Hi = CPU_Lo;
- 
--  ly = f16Overflow(xx);
--  ly += xy + yx;
 +  const float rsx = GVX(a, rsVal);
 +  const float rsy = GVY(a, rsVal);
 +  const float rtx = GVX(b, rtVal);
 +  const float rty = GVY(b, rtVal);
  
--  hx = f16Overflow(ly);
--  hx += yy;
+-  // Split values into outputs
+-  lx = xx;
 +  const double xx = f16Unsign(rsx) * f16Unsign(rtx);
 +  const double xy = f16Unsign(rsx) * f16Unsign(rty);
 +  const double yx = f16Unsign(rsy) * f16Unsign(rtx);
 +  const double yy = f16Unsign(rsy) * f16Unsign(rty);
  
--  hy = f16Overflow(hx);
+-  ly = f16Overflow(xx);
+-  ly += xy + yx;
 +  const double lx = xx;
 +  const double ly = f16Overflow(xx) + (xy + yx);
 +  const double hx = f16Overflow(ly) + yy;
 +  const double hy = f16Overflow(hx);
  
+-  hx = f16Overflow(ly);
+-  hx += yy;
++  CPU_Lo.x = static_cast<float>(f16Sign(lx));
++  CPU_Lo.y = static_cast<float>(f16Sign(ly));
++  CPU_Lo.flags |= TZ | (b.flags & VALID_01);
++  CPU_Hi.x = static_cast<float>(f16Sign(hx));
++  CPU_Hi.y = static_cast<float>(f16Sign(hy));
++  CPU_Hi.flags |= TZ | (b.flags & VALID_01);
+ 
+-  hy = f16Overflow(hx);
+-
 -  CPU_Lo.x = (float)f16Sign(lx);
 -  CPU_Lo.y = (float)f16Sign(ly);
 -  CPU_Hi.x = (float)f16Sign(hx);
 -  CPU_Hi.y = (float)f16Sign(hy);
-+  CPU_Lo.x = static_cast<float>(f16Sign(lx));
-+  CPU_Lo.y = static_cast<float>(f16Sign(ly));
-+  CPU_Lo.flags |= (b.flags & VALID_01);
-+  CPU_Hi.x = static_cast<float>(f16Sign(hx));
-+  CPU_Hi.y = static_cast<float>(f16Sign(hy));
-+  CPU_Hi.flags |= (b.flags & VALID_01);
- 
+-
 -  // compute PSX value
    const uint64_t result = static_cast<uint64_t>(rsVal) * static_cast<uint64_t>(rtVal);
    CPU_Hi.value = static_cast<uint32_t>(result >> 32);
    CPU_Lo.value = static_cast<uint32_t>(result);
-@@ -1149,27 +1098,25 @@ void CPU_DIV(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -1149,27 +1081,25 @@ void CPU_DIV(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -143234,17 +143422,17 @@ index 1c1eb1ff..094884b4 100644
 +  const double lo = vs / vt;
    CPU_Lo.y = (float)f16Sign(f16Overflow(lo));
    CPU_Lo.x = (float)f16Sign(lo);
-+  CPU_Lo.flags |= (b.flags & VALID_01);
++  CPU_Lo.flags |= TZ | (b.flags & VALID_01);
  
 -  double hi = fmod(vs, vt);
 +  const double hi = fmod(vs, vt);
    CPU_Hi.y = (float)f16Sign(f16Overflow(hi));
    CPU_Hi.x = (float)f16Sign(hi);
-+  CPU_Hi.flags |= (b.flags & VALID_01);
++  CPU_Hi.flags |= TZ | (b.flags & VALID_01);
  
    // compute PSX value
    if (static_cast<int32_t>(rtVal) == 0)
-@@ -1198,27 +1145,25 @@ void CPU_DIVU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -1198,27 +1128,25 @@ void CPU_DIVU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
    Validate(&CPU_reg[rs(instr)], rsVal);
    Validate(&CPU_reg[rt(instr)], rtVal);
  
@@ -143273,17 +143461,17 @@ index 1c1eb1ff..094884b4 100644
 +  const double lo = vs / vt;
    CPU_Lo.y = (float)f16Sign(f16Overflow(lo));
    CPU_Lo.x = (float)f16Sign(lo);
-+  CPU_Lo.flags |= (b.flags & VALID_01);
++  CPU_Lo.flags |= TZ | (b.flags & VALID_01);
  
 -  double hi = fmod(vs, vt);
 +  const double hi = fmod(vs, vt);
    CPU_Hi.y = (float)f16Sign(f16Overflow(hi));
    CPU_Hi.x = (float)f16Sign(hi);
-+  CPU_Hi.flags |= (b.flags & VALID_01);
++  CPU_Hi.flags |= TZ | (b.flags & VALID_01);
  
    if (rtVal == 0)
    {
-@@ -1236,51 +1181,47 @@ void CPU_DIVU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
+@@ -1236,146 +1164,81 @@ void CPU_DIVU(uint32_t instr, uint32_t rsVal, uint32_t rtVal)
  ////////////////////////////////////
  // Shift operations (sa)
  ////////////////////////////////////
@@ -143308,7 +143496,7 @@ index 1c1eb1ff..094884b4 100644
 -    y = 0.f;
 +    ret.x = 0.f;
 +    ret.y = 0.f;
-+    ret.flags |= VALID_01;
++    ret.flags |= VALID_01 | TZ;
    }
    else if (sh == 16)
    {
@@ -143316,7 +143504,7 @@ index 1c1eb1ff..094884b4 100644
 -    x = 0.f;
 +    ret.y = ret.x;
 +    ret.x = 0.f;
-+    ret.flags |= ((ret.flags & VALID_1) >> 8);
++    ret.flags |= TZ | ((ret.flags & VALID_1) >> 8);
    }
    else if (sh >= 16)
    {
@@ -143325,7 +143513,7 @@ index 1c1eb1ff..094884b4 100644
 -    x = 0.f;
 +    ret.y = static_cast<float>(f16Sign(f16Unsign(ret.x * static_cast<double>(1 << (sh - 16)))));
 +    ret.x = 0.f;
-+    ret.flags |= ((ret.flags & VALID_1) >> 8);
++    ret.flags |= TZ | ((ret.flags & VALID_1) >> 8);
    }
    else
    {
@@ -143338,6 +143526,7 @@ index 1c1eb1ff..094884b4 100644
 +    const double y = (f16Unsign(ret.y) * static_cast<double>(1 << sh)) + f16Overflow(x);
 +    ret.x = static_cast<float>(f16Sign(x));
 +    ret.y = static_cast<float>(f16Sign(y));
++    ret.flags |= TZ;
    }
  
 -  ret.x = (float)x;
@@ -143348,58 +143537,185 @@ index 1c1eb1ff..094884b4 100644
    CPU_reg[rd(instr)] = ret;
  }
  
+-void CPU_SRL(uint32_t instr, uint32_t rtVal)
 +void CPU_SLL(uint32_t instr, uint32_t rtVal)
-+{
+ {
+-  // Rd = Rt >> Sa
+-  const uint32_t rdVal = rtVal >> sa(instr);
+-  PGXP_value ret;
+-  uint32_t sh = sa(instr);
+-  Validate(&CPU_reg[rt(instr)], rtVal);
+-
+-  ret = CPU_reg[rt(instr)];
+-
+-  double x = CPU_reg[rt(instr)].x, y = f16Unsign(CPU_reg[rt(instr)].y);
+-
+-  psx_value iX;
+-  iX.d = rtVal;
+-  psx_value iY;
+-  iY.d = rtVal;
+-
+-  iX.sd = (iX.sd << 16) >> 16; // remove Y
+-  iY.sw.l = iX.sw.h;           // overwrite x with sign(x)
+-
+-  // Shift test values
+-  psx_value dX;
+-  dX.sd = iX.sd >> sh;
+-  psx_value dY;
+-  dY.d = iY.d >> sh;
+-
+-  if (dX.sw.l != iX.sw.h)
+-    x = x / (1 << sh);
+-  else
+-    x = dX.sw.l; // only sign bits left
+-
+-  if (dY.sw.l != iX.sw.h)
+-  {
+-    if (sh == 16)
+-    {
+-      x = y;
+-    }
+-    else if (sh < 16)
+-    {
+-      x += y * (1 << (16 - sh));
+-      if (CPU_reg[rt(instr)].x < 0)
+-        x += 1 << (16 - sh);
+-    }
+-    else
+-    {
+-      x += y / (1 << (sh - 16));
+-    }
+-  }
+-
+-  if ((dY.sw.h == 0) || (dY.sw.h == -1))
+-    y = dY.sw.h;
+-  else
+-    y = y / (1 << sh);
+-
+-  x = f16Sign(x);
+-  y = f16Sign(y);
+-
+-  ret.x = (float)x;
+-  ret.y = (float)y;
+-
+-  ret.value = rdVal;
+-  CPU_reg[rd(instr)] = ret;
 +  SLS(instr, rtVal, sa(instr));
-+}
-+
- void CPU_SRL(uint32_t instr, uint32_t rtVal)
+ }
+ 
+-void CPU_SRA(uint32_t instr, uint32_t rtVal)
++ALWAYS_INLINE_RELEASE void SRX(uint32_t instr, uint32_t rtVal, uint32_t sh, bool sign, bool var)
  {
-   // Rd = Rt >> Sa
-@@ -1291,6 +1232,13 @@ void CPU_SRL(uint32_t instr, uint32_t rtVal)
- 
-   ret = CPU_reg[rt(instr)];
- 
-+  if (sh == 0)
-+  {
-+    ret.value = rtVal;
-+    CPU_reg[rd(instr)] = ret;
-+    return;
-+  }
-+
-   double x = CPU_reg[rt(instr)].x, y = f16Unsign(CPU_reg[rt(instr)].y);
- 
-   psx_value iX;
-@@ -1354,6 +1302,13 @@ void CPU_SRA(uint32_t instr, uint32_t rtVal)
+-  // Rd = Rt >> Sa
+-  const uint32_t rdVal = static_cast<uint32_t>(static_cast<int32_t>(rtVal) >> sa(instr));
+-  PGXP_value ret;
+-  uint32_t sh = sa(instr);
    Validate(&CPU_reg[rt(instr)], rtVal);
-   ret = CPU_reg[rt(instr)];
- 
+-  ret = CPU_reg[rt(instr)];
++  PGXP_value& prt = CPU_reg[rt(instr)];
++  PGXP_value& prd = CPU_reg[rd(instr)];
 +  if (sh == 0)
 +  {
-+    ret.value = rtVal;
-+    CPU_reg[rd(instr)] = ret;
++    prd = prt;
 +    return;
 +  }
 +
-   double x = CPU_reg[rt(instr)].x, y = CPU_reg[rt(instr)].y;
++  const uint32_t rdVal = sign ? static_cast<uint32_t>(static_cast<int32_t>(rtVal) >> sh) : (rtVal >> sh);
  
-   psx_value iX;
-@@ -1414,46 +1369,8 @@ void CPU_SRA(uint32_t instr, uint32_t rtVal)
- void CPU_SLLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
- {
-   // Rd = Rt << Rs
+-  double x = CPU_reg[rt(instr)].x, y = CPU_reg[rt(instr)].y;
++  double x = prt.x;
++  double y = sign ? prt.y : f16Unsign(prt.y);
+ 
+-  psx_value iX;
+-  iX.d = rtVal;
+-  psx_value iY;
+-  iY.d = rtVal;
++  const uint32_t iX = static_cast<uint32_t>(static_cast<int32_t>(static_cast<int16_t>(static_cast<uint16_t>(rtVal))));
++  const uint32_t iY = (rtVal & 0xFFFF0000u) | static_cast<uint32_t>(static_cast<uint16_t>(iX >> 16));
+ 
+-  iX.sd = (iX.sd << 16) >> 16; // remove Y
+-  iY.sw.l = iX.sw.h;           // overwrite x with sign(x)
++  const uint32_t dX = static_cast<uint32_t>(static_cast<int32_t>(iX) >> sh);
++  const uint32_t dY = sign ? static_cast<uint32_t>(static_cast<int32_t>(iY) >> sh) : (iY >> sh);
+ 
+-  // Shift test values
+-  psx_value dX;
+-  dX.sd = iX.sd >> sh;
+-  psx_value dY;
+-  dY.sd = iY.sd >> sh;
++  const int16_t dXl = static_cast<int16_t>(static_cast<uint16_t>(dX));
++  const int16_t dYl = static_cast<int16_t>(static_cast<uint16_t>(dY));
++  const int16_t dYh = static_cast<int16_t>(static_cast<uint16_t>(dY >> 16));
++  const int16_t iXh = static_cast<int16_t>(static_cast<uint16_t>(iX >> 16));
+ 
+-  if (dX.sw.l != iX.sw.h)
+-    x = x / (1 << sh);
++  if (dXl != iXh)
++    x = x / static_cast<double>(1 << sh);
+   else
+-    x = dX.sw.l; // only sign bits left
++    x = dXl;
+ 
+-  if (dY.sw.l != iX.sw.h)
++  if (dYl != iXh)
+   {
+     if (sh == 16)
+     {
+@@ -1383,207 +1246,67 @@ void CPU_SRA(uint32_t instr, uint32_t rtVal)
+     }
+     else if (sh < 16)
+     {
+-      x += y * (1 << (16 - sh));
+-      if (CPU_reg[rt(instr)].x < 0)
+-        x += 1 << (16 - sh);
++      x += y * static_cast<double>(1 << (16 - sh));
++      if (prt.x < 0)
++        x += static_cast<double>(1 << (16 - sh));
+     }
+     else
+     {
+-      x += y / (1 << (sh - 16));
++      x += y / static_cast<double>(1 << (sh - 16));
+     }
+   }
+ 
+-  if ((dY.sw.h == 0) || (dY.sw.h == -1))
+-    y = dY.sw.h;
++  if ((dYh == 0) || (dYh == -1))
++    y = dYh;
+   else
+-    y = y / (1 << sh);
+-
+-  x = f16Sign(x);
+-  y = f16Sign(y);
+-
+-  ret.x = (float)x;
+-  ret.y = (float)y;
+-
+-  ret.value = rdVal;
+-  CPU_reg[rd(instr)] = ret;
+-}
+-
+-////////////////////////////////////
+-// Shift operations variable
+-////////////////////////////////////
+-void CPU_SLLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
+-{
+-  // Rd = Rt << Rs
 -  const uint32_t rdVal = rtVal << rsVal;
 -  PGXP_value ret;
 -  uint32_t sh = rsVal & 0x1F;
 -  Validate(&CPU_reg[rt(instr)], rtVal);
-   Validate(&CPU_reg[rs(instr)], rsVal);
+-  Validate(&CPU_reg[rs(instr)], rsVal);
 -
 -  ret = CPU_reg[rt(instr)];
--
++    y = y / static_cast<double>(1 << sh);
+ 
 -  double x = f16Unsign(CPU_reg[rt(instr)].x);
 -  double y = f16Unsign(CPU_reg[rt(instr)].y);
 -  if (sh >= 32)
--  {
++  if (sign && !var && !(prt.flags & VALID_2) && sh < 16)
+   {
 -    x = 0.f;
 -    y = 0.f;
 -  }
@@ -143413,53 +143729,183 @@ index 1c1eb1ff..094884b4 100644
 -    y = x * (1 << (sh - 16));
 -    y = f16Sign(y);
 -    x = 0.f;
--  }
--  else
--  {
++    prd.x = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(rdVal)));
++    prd.y = static_cast<float>(static_cast<int16_t>(static_cast<uint16_t>(rdVal >> 16)));
++    prd.z = 0.f;
++    prd.value = rdVal;
++    prd.flags = VALID_01 | TZ;
+   }
+   else
+   {
 -    x = x * (1 << sh);
 -    y = y * (1 << sh);
 -    y += f16Overflow(x);
 -    x = f16Sign(x);
 -    y = f16Sign(y);
++    prd.x = static_cast<float>(f16Sign(x));
++    prd.y = static_cast<float>(f16Sign(y));
++    prd.z = prt.z;
++    prd.value = rdVal;
++    prd.flags = prt.flags | TZ;
+   }
++}
+ 
+-  ret.x = (float)x;
+-  ret.y = (float)y;
++void CPU_SRL(uint32_t instr, uint32_t rtVal)
++{
++  SRX(instr, rtVal, sa(instr), false, false);
++}
+ 
+-  ret.value = rdVal;
+-  CPU_reg[rd(instr)] = ret;
++void CPU_SRA(uint32_t instr, uint32_t rtVal)
++{
++  SRX(instr, rtVal, sa(instr), true, false);
+ }
+ 
+ void CPU_SRLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
+ {
+-  // Rd = Rt >> Sa
+-  const uint32_t rdVal = rtVal >> rsVal;
+-  PGXP_value ret;
+-  uint32_t sh = rsVal & 0x1F;
+-  Validate(&CPU_reg[rt(instr)], rtVal);
+-  Validate(&CPU_reg[rs(instr)], rsVal);
+-
+-  ret = CPU_reg[rt(instr)];
+-
+-  double x = CPU_reg[rt(instr)].x, y = f16Unsign(CPU_reg[rt(instr)].y);
+-
+-  psx_value iX;
+-  iX.d = rtVal;
+-  psx_value iY;
+-  iY.d = rtVal;
+-
+-  iX.sd = (iX.sd << 16) >> 16; // remove Y
+-  iY.sw.l = iX.sw.h;           // overwrite x with sign(x)
+-
+-  // Shift test values
+-  psx_value dX;
+-  dX.sd = iX.sd >> sh;
+-  psx_value dY;
+-  dY.d = iY.d >> sh;
+-
+-  if (dX.sw.l != iX.sw.h)
+-    x = x / (1 << sh);
+-  else
+-    x = dX.sw.l; // only sign bits left
+-
+-  if (dY.sw.l != iX.sw.h)
+-  {
+-    if (sh == 16)
+-    {
+-      x = y;
+-    }
+-    else if (sh < 16)
+-    {
+-      x += y * (1 << (16 - sh));
+-      if (CPU_reg[rt(instr)].x < 0)
+-        x += 1 << (16 - sh);
+-    }
+-    else
+-    {
+-      x += y / (1 << (sh - 16));
+-    }
 -  }
+-
+-  if ((dY.sw.h == 0) || (dY.sw.h == -1))
+-    y = dY.sw.h;
+-  else
+-    y = y / (1 << sh);
+-
+-  x = f16Sign(x);
+-  y = f16Sign(y);
 -
 -  ret.x = (float)x;
 -  ret.y = (float)y;
 -
 -  ret.value = rdVal;
 -  CPU_reg[rd(instr)] = ret;
++  SRX(instr, rtVal, rsVal & 0x1F, false, true);
+ }
+ 
+ void CPU_SRAV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
+ {
+-  // Rd = Rt >> Sa
+-  const uint32_t rdVal = static_cast<uint32_t>(static_cast<int32_t>(rtVal) >> rsVal);
+-  PGXP_value ret;
+-  uint32_t sh = rsVal & 0x1F;
+-  Validate(&CPU_reg[rt(instr)], rtVal);
+-  Validate(&CPU_reg[rs(instr)], rsVal);
+-
+-  ret = CPU_reg[rt(instr)];
+-
+-  double x = CPU_reg[rt(instr)].x, y = CPU_reg[rt(instr)].y;
+-
+-  psx_value iX;
+-  iX.d = rtVal;
+-  psx_value iY;
+-  iY.d = rtVal;
+-
+-  iX.sd = (iX.sd << 16) >> 16; // remove Y
+-  iY.sw.l = iX.sw.h;           // overwrite x with sign(x)
+-
+-  // Shift test values
+-  psx_value dX;
+-  dX.sd = iX.sd >> sh;
+-  psx_value dY;
+-  dY.sd = iY.sd >> sh;
+-
+-  if (dX.sw.l != iX.sw.h)
+-    x = x / (1 << sh);
+-  else
+-    x = dX.sw.l; // only sign bits left
+-
+-  if (dY.sw.l != iX.sw.h)
+-  {
+-    if (sh == 16)
+-    {
+-      x = y;
+-    }
+-    else if (sh < 16)
+-    {
+-      x += y * (1 << (16 - sh));
+-      if (CPU_reg[rt(instr)].x < 0)
+-        x += 1 << (16 - sh);
+-    }
+-    else
+-    {
+-      x += y / (1 << (sh - 16));
+-    }
+-  }
+-
+-  if ((dY.sw.h == 0) || (dY.sw.h == -1))
+-    y = dY.sw.h;
+-  else
+-    y = y / (1 << sh);
+-
+-  x = f16Sign(x);
+-  y = f16Sign(y);
+-
+-  ret.x = (float)x;
+-  ret.y = (float)y;
++  SRX(instr, rtVal, rsVal & 0x1F, true, true);
++}
+ 
+-  ret.value = rdVal;
+-  CPU_reg[rd(instr)] = ret;
++////////////////////////////////////
++// Shift operations variable
++////////////////////////////////////
++void CPU_SLLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
++{
++  // Rd = Rt << Rs
++  Validate(&CPU_reg[rs(instr)], rsVal);
 +  SLS(instr, rtVal, rsVal & 0x1F);
  }
  
- void CPU_SRLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
-@@ -1467,6 +1384,13 @@ void CPU_SRLV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
- 
-   ret = CPU_reg[rt(instr)];
- 
-+  if (sh == 0)
-+  {
-+    ret.value = rtVal;
-+    CPU_reg[rd(instr)] = ret;
-+    return;
-+  }
-+
-   double x = CPU_reg[rt(instr)].x, y = f16Unsign(CPU_reg[rt(instr)].y);
- 
-   psx_value iX;
-@@ -1532,6 +1456,13 @@ void CPU_SRAV(uint32_t instr, uint32_t rtVal, uint32_t rsVal)
- 
-   ret = CPU_reg[rt(instr)];
- 
-+  if (sh == 0)
-+  {
-+    ret.value = rtVal;
-+    CPU_reg[rd(instr)] = ret;
-+    return;
-+  }
-+
-   double x = CPU_reg[rt(instr)].x, y = CPU_reg[rt(instr)].y;
- 
-   psx_value iX;
+ void CPU_MFHI(uint32_t instr, uint32_t hiVal)
 diff --git a/src/core/settings.cpp b/src/core/settings.cpp
 index f676325b..e397eaa2 100644
 --- a/src/core/settings.cpp
