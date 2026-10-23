@@ -156,8 +156,9 @@ int profiles_add(const char *name)
     if (at >= 0)
         return at;
     str_copy(names[count], PROFILE_NAME_LEN, name);
+    ++count;
     save_list();
-    return count++;
+    return count - 1;
 }
 
 bool profiles_remove(int i)
@@ -195,6 +196,7 @@ bool profiles_switch(int i)
         app.global = before;
         config_save(&app.global, app.paths.config);
     }
+    app_close_shelf_settings();
     app.settings = app.global;
     i18n_set(app.global.language);
     theme_apply(app.global.theme);
