@@ -54,7 +54,6 @@
 #define SIDE_SQUEEZE 1.0f /* the covers beside the selected one keep their width */
 #define LAUNCH_TIME 0.5f /* the fade to black */
 #define DELETE_HOLD 2.0f /* seconds Triangle is held in Details to delete the game's files */
-#define QUIT_HOLD 2.0f   /* seconds O is held on the shelf to close the app */
 #define DISC_TIME 0.95f  /* before it, with the disc animation: the disc slides out and spins up */
 #define CASE_SPIN_START 0.8f /* with the 3D cases: when the CD starts to spin (the sound of the disc starts then) */
 #define CASE_DISC_TIME 2.4f /* the same with the 3D cases: the lid opens and the CD spins up on its tray */
@@ -83,7 +82,7 @@ static struct
     bool buzz_locked; /* it buzzed already: not again until the direction is let go (holding it auto-repeats) */
     float nudge, nudge_v; /* a knock to the left or right, as if the right stick had been flicked: on a spring */
     bool details;
-    float details_t, launch_t, quit_hold, delete_hold;
+    float details_t, launch_t, delete_hold;
     bool delete_armed; /* Triangle was pressed with Details already open: not the press that opened it */
     bool starting; /* the launch is over: this frame shows "Loading", the next one loads */
     float chip_x, chip_w; /* animated category highlight (from the start of the row of chips) */
@@ -1694,10 +1693,6 @@ void shelf_screen(uint32_t pressed)
         storage_screen(pressed);
         return;
     }
-    /* O pressed with the shelf free: only such a press can start the hold-to-exit */
-    const bool circle_on_shelf =
-        (pressed & BIT(BTN_CIRCLE)) && !(S.dialog || S.details || P.open || F.open || S.launch_t > 0.0f);
-
     /* ------------------------------------------------ input */
     if (P.open)
     {
@@ -1883,30 +1878,6 @@ void shelf_screen(uint32_t pressed)
             /* with the game under the cursor, so Settings can be for "This game" or "All games" */
             app_open_shelf_settings(game >= 0 ? &app.library.games[game] : NULL);
         }
-    }
-
-    /* holding O on the shelf closes the app */
-    {
-        const bool circle = (app.pads[app_nav_pad()].buttons & BIT(BTN_CIRCLE)) != 0;
-        static float hold;
-        static bool armed; /* O was pressed on the free shelf: not carried over from a menu, details or a dialog */
-        if (!circle)
-        {
-            if (armed && hold > 0.0f && hold < QUIT_HOLD) /* a tap, not a hold */
-                app_toast("Hold to exit SwanStationPS5...");
-            hold = 0.0f, armed = false;
-        }
-        else if (hold == 0.0f && !armed)
-            armed = circle_on_shelf;
-        if (circle && armed && !S.dialog && !P.open && S.launch_t <= 0.0f)
-        {
-            hold += app.dt;
-            if (hold >= QUIT_HOLD)
-                app.quit_requested = true;
-        }
-        else if (!circle)
-            hold = 0.0f;
-        S.quit_hold = hold;
     }
 
     /* ------------------------------------------------ animation */
@@ -2296,17 +2267,6 @@ void shelf_screen(uint32_t pressed)
         text_draw(CENTER_X, y + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
         draw_rrect(x + 32, y + 56, w - 64, 12, 6, TH_DIVIDER);
         draw_rrect(x + 32, y + 56, fmaxf(12.0f, (w - 64) * fminf(S.delete_hold / DELETE_HOLD, 1.0f)), 12, 6, TH_DANGER);
-    }
-    if (S.quit_hold > 0.5f)
-    {
-        /* O held for a while: a bar fills up to the close */
-        const char *msg = tr("Keep holding to close SwanStationPS5...");
-        float w = text_width(26, FONT_REGULAR, msg) + 96, h = 84;
-        float x = (plat_width() - w) * 0.5f, y = plat_height() - 300;
-        draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));
-        text_draw(CENTER_X, y + 12, 26, FONT_REGULAR, TH_TEXT, ALIGN_CENTER, msg);
-        draw_rrect(x + 32, y + 56, w - 64, 12, 6, TH_DIVIDER);
-        draw_rrect(x + 32, y + 56, fmaxf(12.0f, (w - 64) * fminf(S.quit_hold / QUIT_HOLD, 1.0f)), 12, 6, TH_DANGER);
     }
     app_draw_toast();
 }
