@@ -26,6 +26,7 @@ void config_defaults(Settings *s)
     s->upscale_filter = UPSCALE_XBR;
     s->region = REGION_AUTO;
     s->dithering = true;
+    s->lightgun = 1; /* Off */
     s->analog = true; /* DualShock: it starts in digital mode, so digital-only games still work */
     s->boot_intro = true; /* the BIOS runs its full start-up (no fast boot) */
     s->cover_style = COVER_FLAT;
@@ -54,7 +55,7 @@ void config_defaults(Settings *s)
     s->play_from_disc = false;
     s->install_to_ext = false;
     s->negcon = false;
-    s->touch_mouse = true;
+    s->touch_mouse = false;
     s->racing_triggers = false;
     for (int i = 0; i < 16; ++i)
         s->button_map[i] = (int8_t)i;
