@@ -2381,6 +2381,17 @@ static void count_play_time(void)
 
 /* ---------------------------------------------------------------- main */
 
+#if defined(__PROSPERO__)
+static int stop_services(void *done)
+{
+    remote_update(false);
+    ra_shutdown();
+    covers_stop();
+    SDL_AtomicSet((SDL_atomic_t *)done, 1);
+    return 0;
+}
+#endif
+
 int main(int argc, char **argv)
 {
     for (int i = 1; i < argc; ++i)
@@ -2871,6 +2882,23 @@ int main(int argc, char **argv)
     /* extern int sceSystemServiceGetAppIdOfRunningBigApp(void);
      * extern int sceSystemServiceKillApp(int app_id, int how, int reason, int core_dump); */
     SwanStationPS5_log("shutdown: closing the title");
+    {
+        static SDL_atomic_t services_done;
+        SDL_Thread *stopper = SDL_CreateThread(stop_services, "stop-services", &services_done);
+        for (int waited = 0; stopper && !SDL_AtomicGet(&services_done) && waited < 2000; waited += 10)
+            plat_sleep_us(10000);
+        if (stopper && SDL_AtomicGet(&services_done))
+        {
+            SDL_WaitThread(stopper, NULL);
+            SwanStationPS5_log("shutdown: network and RetroAchievements stopped");
+        }
+        else
+        {
+            if (stopper)
+                SDL_DetachThread(stopper);
+            SwanStationPS5_log("shutdown: services did not stop in 2 s, closing anyway");
+        }
+    }
     icons_shutdown();
     text_shutdown();
     library_free(&app.library);
