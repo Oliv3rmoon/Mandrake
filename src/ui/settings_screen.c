@@ -312,10 +312,8 @@ static const Row LIBRARY[] = {
 static const Row SYSTEM[] = {
     {"SwanStationPS5", "Start BIOS", "Starts the console's BIOS with no disc, to manage memory cards. While Memory Card 1 Type (Restart) is set to Libretro, the saves will not show: that card belongs to each game, and with no game there is none.",
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
-    {NULL, "Play from disc", "A disc put in the USB CD drive is read into memory and played from there, without installing it: nothing is written to the console's storage. The game is on the shelf while the disc is in. While it is on, Install to external memory is not available.", K_TOGGLE,
-     APPLY_NOW, SP_NONE, true, BOOL_FIELD(play_from_disc), OFF_ON, 2, 0},
-    {NULL, "Do not start the game automatically", "A disc put in the USB CD drive only brings its game to the shelf and moves to it: the game does not start. With Play from disc off, the disc is installed first. With the disc daemon the app is not opened. Off: the game starts by itself.", K_TOGGLE,
-     APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_install_only), OFF_ON, 2, 0},
+    {NULL, "Ask when a disc is put in", "A disc put in the USB CD drive opens its question by itself: play it from the disc or copy it, or start its game if it is installed already. Off: its game is only shown on the shelf, and the question comes when {Cross} is pressed on it.", K_TOGGLE,
+     APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_ask), OFF_ON, 2, 0},
     {NULL, "Install to external memory", "A disc is installed on the extended storage when it has at least 1 GB free, in its SwanStationPS5/games folder, instead of /data. Off: it is installed in /data.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(install_to_ext), OFF_ON, 2, 0},
     {NULL, "Games folder on drives", "A folder name to look for games in on drives. It is looked for on /mnt/ext0/, /mnt/ext1/ and /mnt/usb0/ to /mnt/usb7/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx, /mnt/usb1/psx and so on. Leave it empty to turn it off.",
@@ -930,15 +928,9 @@ static bool row_locked(const Row *r)
     return r->global_only && S.game_scope && scope_game() && (r->kind == K_CHOICE || r->kind == K_TOGGLE);
 }
 
-/* The switch that does nothing while Play from disc is on: the disc is not installed */
-static bool row_blocked(const Row *r)
-{
-    return app.global.play_from_disc && r->kind == K_TOGGLE && r->offset == (int)offsetof(Settings, install_to_ext);
-}
-
 static void write_value(const Row *r, int v)
 {
-    if (row_locked(r) || row_blocked(r) || value_conflicts(r, v))
+    if (row_locked(r) || value_conflicts(r, v))
         return;
     switch (r->special)
     {
@@ -1847,9 +1839,8 @@ static void draw_rows(void)
             continue;
         bool sel = i == S.cursor;
         bool dimmed = r->global_only && S.game_scope && scope_game();
-        const bool blocked = row_blocked(r);
-        const bool locked = row_locked(r) || blocked;
-        text_draw(x + 30, ry + 21, 28, FONT_REGULAR, ((dimmed && (locked || !sel)) || blocked) ? TH_TEXT_DIM : TH_TEXT, ALIGN_LEFT,
+        const bool locked = row_locked(r);
+        text_draw(x + 30, ry + 21, 28, FONT_REGULAR, (dimmed && (locked || !sel)) ? TH_TEXT_DIM : TH_TEXT, ALIGN_LEFT,
                   tr(row_name(r)));
         if (dimmed)
             icon_draw(ICON_WORLD, x + 40 + text_width(28, FONT_REGULAR, tr(row_name(r))), ry + 24, 24,
@@ -1859,7 +1850,7 @@ static void draw_rows(void)
         if (locked)
         {
             /* greyed out, with a lock: not editable here */
-            const char *label = blocked ? tr("Not available with Play from disc.") : tr("Global setting.");
+            const char *label = tr("Global setting.");
             float pw = text_width(22, FONT_REGULAR, label) + 84;
             draw_rrect(right - pw, ry + 15, pw, 46, 23, argb_alpha(TH_PILL, 0.55f));
             icon_draw(ICON_LOCK, right - pw + 18, ry + 25, 26, TH_TEXT_DIM);

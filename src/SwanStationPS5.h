@@ -17,7 +17,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.4.9"
+#define SwanStationPS5_VERSION "1.5.0"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -153,9 +153,8 @@ typedef struct
     int sharpen;          /* 0 off, 1 light, 2 strong (AMD FidelityFX CAS) */
     bool disc_in_tray;    /* the disc spins flat on its tray, without lifting or growing, as in 1.3.7 */
     bool disc_animation;  /* the disc slides out of its case when a game starts */
+    bool disc_ask; /* a disc put in opens its question by itself; off: only when the game is pressed on the shelf */
     bool install_to_ext; /* a disc is installed on the first extended storage with room (1 GB free) instead of /data */
-    bool play_from_disc; /* a disc put in is read into memory and played from there: nothing is installed (install_to_ext does not apply) */
-    bool disc_install_only; /* a disc put in does not start its game: it is installed (or, with play_from_disc, read) and the shelf moves to it; the disc daemon does not open the app */
     bool case_lighting;   /* the cover in the jewel case gets light: its shading and the glare over the lid; off: the picture as it is */
     bool jewel_cases;     /* the shelf shows 3D jewel cases; off: the flat covers with a reflection, as in 1.1.8 */
     bool negcon;          /* racing games that take a NeGcon: analog gas and brake on R2 / L2 */

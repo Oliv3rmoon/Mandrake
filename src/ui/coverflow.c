@@ -1450,6 +1450,8 @@ static bool start_black; /* the frame in which the game starts: all black, with 
  * it starts from the beginning, with no Continue box. `silent`: without the click of the button press. */
 static void play_game(int game, bool ask, bool silent)
 {
+    if (ask && app_disc_pending(game))
+        return;
     const Game *g = &app.library.games[game];
     S.details = false;
     if (ask && app.global.quick_resume && !ra_hardcore() && play_has_resume(g, &S.resume_age))

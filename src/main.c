@@ -421,6 +421,11 @@ void app_restart_covers(void)
 }
 
 static Game dg;                  /* the disc played from the drive, while it is in (see disc_play_frame) */
+static Game dp;                  /* a disc put in that is not in the library: its entry on the shelf asks again (see disc_ask_open) */
+static bool dp_active, dp_gone;
+static int dp_removed_mark;
+static DiscId dp_id;
+static void dp_drop(void);
 static bool dg_active, dg_gone;
 static int dg_removed_mark;
 
@@ -503,6 +508,8 @@ void app_rescan(void)
     }
     if (dg_active)
         library_add_game(&app.library, &dg);
+    if (dp_active)
+        library_add_game(&app.library, &dp);
     if (nfs_rescan_from_mount)
         shelf_library_changed(); /* the shares came up on their own: the player stays where they were */
     else
@@ -1255,7 +1262,7 @@ static const char *import_why(DiscImportState s)
     return WHY[s];
 }
 
-/* Play from disc (Settings > System > SwanStationPS5): the disc in the drive is read into memory and its game is on the
+/* Play from disc (the answer to a disc put in): the disc in the drive is read into memory and its game is on the
  * shelf, started by itself, for as long as the disc is in. It is a Game of its own (not in any folder): the library
  * gets it back after a rescan, and it goes when the disc is taken out (or, if it is being played, when that ends). */
 static const char *play_why(DiscImportState s)
@@ -1319,6 +1326,7 @@ static void disc_play_frame(void)
         dg_make();
         char key[24];
         str_copy(key, sizeof(key), discplay_id()->key);
+        dp_drop();
         if (!library_add_game(&app.library, &dg))
         {
             discplay_stop();
@@ -1330,15 +1338,12 @@ static void disc_play_frame(void)
         app_restart_covers();
         shelf_show_all();
         SwanStationPS5_log("disc: '%s' (%s) is read into memory and starts from the disc", dg.title, key);
-        if (app.global.disc_install_only)
-            shelf_show_game(app.library.count - 1);
-        else
-            play_from_disc(app.library.count - 1, key);
+        play_from_disc(app.library.count - 1, key);
         return;
     }
     if (!dg_active)
         return;
-    if (!dg_gone && (discwatch_removed() != dg_removed_mark || discplay_lost() || !app.global.play_from_disc))
+    if (!dg_gone && (discwatch_removed() != dg_removed_mark || discplay_lost()))
         dg_gone = true;
     if (dg_gone && !app.game && app.screen == SCREEN_LIBRARY && shelf_idle() && !SC.active)
         dg_drop();
@@ -1412,14 +1417,17 @@ static bool import_input(uint32_t *pressed)
     {
     case DI_OK: /* no notice: the game appears on the shelf, and starts by itself if a disc put in began this */
         msg[0] = '\0';
+        dp_drop();
         app_rescan();
         break;
     case DI_OK_INCOMPLETE:
         snprintf(msg, sizeof(msg), tr("Installed with %d unreadable sectors: %s"), discimport_bad(), discimport_title());
+        dp_drop();
         app_rescan();
         break;
     case DI_ALREADY:
         snprintf(msg, sizeof(msg), tr("Already in your games: %s"), discimport_title());
+        dp_drop();
         app_rescan();
         break;
     default: break;
@@ -1442,10 +1450,8 @@ static bool import_input(uint32_t *pressed)
     if (launch) /* a disc put in on the shelf: the game starts by itself once it is in */
     {
         int game = find_game_by_key(key);
-        if (game >= 0 && !app.global.disc_install_only)
+        if (game >= 0)
             play_from_disc(game, key);
-        else if (game >= 0) /* install only: the game, new or there already, is only shown */
-            shelf_show_game(game);
     }
     return true;
 }
@@ -1489,23 +1495,259 @@ static void write_alive_stamp(void)
     }
 }
 
-/* Every frame: on the shelf, a disc newly put in the USB CD drive is started (or imported first, then started) */
+/* A disc put in the drive: one that is not in the library asks how to play it (from the disc, or copied first); one that
+ * is there is shown on the shelf and asks whether to start it. Nothing starts by itself. */
+static struct
+{
+    bool open;
+    bool known;
+    int sel;
+    int game;
+    int removed_mark;
+    float t;
+    DiscId id;
+} dq;
+
+static int dp_index(void)
+{
+    if (!dp_active)
+        return -1;
+    for (int i = 0; i < app.library.count; ++i)
+        if (!strcmp(app.library.games[i].path, dp.path))
+            return i;
+    return -1;
+}
+
+static void dp_make(const DiscId *id)
+{
+    memset(&dp, 0, sizeof(dp));
+    str_copy(dp.title, sizeof(dp.title), id->title);
+    str_copy(dp.serial, sizeof(dp.serial), id->serial);
+    snprintf(dp.path, sizeof(dp.path), "/discpending/%s", id->key);
+    str_copy(dp.folder, sizeof(dp.folder), "/discpending");
+    str_copy(dp.disc_name, sizeof(dp.disc_name), id->key);
+    str_copy(dp.id, sizeof(dp.id), id->serial[0] ? id->serial : id->key);
+    dp.discs = 1;
+    dp_id = *id;
+}
+
+static void dp_drop(void)
+{
+    if (!dp_active)
+        return;
+    library_remove_path(&app.library, dp.path);
+    dp_active = dp_gone = false;
+    shelf_library_changed();
+}
+
+static void disc_ask_close(void)
+{
+    dq.open = false;
+}
+
+static void disc_ask_open(const DiscId *id, int game)
+{
+    memset(&dq, 0, sizeof(dq));
+    dq.open = true;
+    dq.known = game >= 0;
+    dq.game = game;
+    dq.id = *id;
+    dq.removed_mark = discwatch_removed();
+}
+
+/* X on the entry of a disc that is not in the library: the question again. True when the game was that entry. */
+bool app_disc_pending(int index)
+{
+    if (!dp_active || index < 0 || index >= app.library.count || strcmp(app.library.games[index].path, dp.path))
+        return false;
+    if (dq.open || discimport_state() != DI_IDLE || discplay_state() != DP_IDLE)
+        return true;
+    disc_ask_open(&dp_id, -1);
+    sfx_play(SFX_SELECT);
+    return true;
+}
+
+static bool disc_ask_input(uint32_t *pressed)
+{
+    if (!dq.open)
+        return false;
+    if (discwatch_removed() != dq.removed_mark)
+    {
+        disc_ask_close();
+        return false;
+    }
+    if (!dq.known && (*pressed & (BIT(BTN_LEFT) | BIT(BTN_RIGHT))))
+    {
+        dq.sel ^= 1;
+        sfx_play(SFX_CLICK);
+    }
+    else if (*pressed & BIT(BTN_CROSS))
+    {
+        const DiscId id = dq.id;
+        const bool known = dq.known;
+        const int sel = dq.sel;
+        disc_ask_close();
+        sfx_play(SFX_SELECT);
+        if (known)
+        {
+            int game = find_game_by_key(id.key);
+            if (game >= 0)
+                play_from_disc(game, id.key);
+        }
+        else if (sel == 0)
+        {
+            if (!discplay_start())
+                SwanStationPS5_log("disc: the disc could not be read for playing");
+        }
+        else
+        {
+            char ext_games[SwanStationPS5_PATH_MAX];
+            auto_launch = discimport_start(app.global.install_to_ext && drives_ext_games(ext_games, sizeof(ext_games)) ? ext_games : app.paths.games);
+        }
+    }
+    else if (*pressed & BIT(BTN_CIRCLE))
+    {
+        disc_ask_close();
+        sfx_play(SFX_BACK);
+    }
+    *pressed = 0;
+    return true;
+}
+
+static void disc_ask_wrap(const char *m, float x, float y, float size, float width, uint32_t color)
+{
+    char line[256];
+    while (*m)
+    {
+        size_t best = 0, i = 0;
+        for (;;)
+        {
+            size_t j = i;
+            while (m[j] && m[j] != ' ')
+                ++j;
+            size_t n = j < sizeof(line) - 1 ? j : sizeof(line) - 1;
+            memcpy(line, m, n);
+            line[n] = '\0';
+            if (best > 0 && text_width(size, FONT_REGULAR, line) > width)
+                break;
+            best = n;
+            if (!m[j])
+                break;
+            i = j + 1;
+        }
+        if (best == 0)
+            best = strlen(m) < sizeof(line) - 1 ? strlen(m) : sizeof(line) - 1;
+        memcpy(line, m, best);
+        line[best] = '\0';
+        text_draw(x, y, size, FONT_REGULAR, color, ALIGN_CENTER, line);
+        y += size * 1.45f;
+        m += best;
+        while (*m == ' ')
+            ++m;
+    }
+}
+
+static void disc_ask_card(float x, float y, float w, float h, bool sel, const char *title, const char *l1, const char *l2, float a)
+{
+    draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(sel ? TH_ROW_SELECTED : TH_PILL, a));
+    if (sel)
+        draw_rrect_outline(x, y, w, h, TH_RADIUS, 3, argb_alpha(TH_FOCUS, a));
+    text_draw_fit(x + w * 0.5f, y + 22, 32, FONT_BOLD, argb_alpha(TH_TEXT, a), ALIGN_CENTER, w - 32, title);
+    text_draw_fit(x + w * 0.5f, y + 78, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, a), ALIGN_CENTER, w - 32, l1);
+    text_draw_fit(x + w * 0.5f, y + 78 + 34, 24, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, a), ALIGN_CENTER, w - 32, l2);
+}
+
+static void disc_ask_draw(void)
+{
+    if (!dq.open)
+        return;
+    dq.t = fminf(dq.t + app.dt * 8.0f, 1.0f);
+    const float a = dq.t, w = 940, h = dq.known ? 540 : 640, pad = 48, cs = 190;
+    float x = (plat_width() - w) * 0.5f, y = (plat_height() - h) * 0.5f + (1.0f - a) * 24.0f;
+    draw_rect(0, 0, plat_width(), plat_height(), argb_alpha(0xa0000000u, a));
+    draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_PILL_A(0xf8), a));
+
+    PlatTexture *cover = NULL;
+    const int cover_game = dq.known ? dq.game : dp_index();
+    if (cover_game >= 0 && cover_game < app.library.count)
+        cover = shelf_cover_or_none(cover_game);
+    else
+        cover = shelf_no_cover();
+    draw_rrect(x + pad, y + pad, cs, cs, TH_RADIUS_SMALL, argb_alpha(TH_DIVIDER, a));
+    if (cover)
+    {
+        int tw, th;
+        plat_texture_size(cover, &tw, &th);
+        float k = fminf(cs / (float)tw, cs / (float)th), dw = tw * k, dh = th * k;
+        plat_draw_texture(cover, x + pad + (cs - dw) * 0.5f, y + pad + (cs - dh) * 0.5f, dw, dh, argb_alpha(0xffffffffu, a), true);
+    }
+
+    const char *drive = tr("Disc in the drive");
+    const float ds = 22, is = 36;
+    float dw = text_width(ds, FONT_REGULAR, drive);
+    icon_draw(ICON_DISC, x + w - pad - dw - is - 10, y + pad - 4, is, argb_alpha(TH_FOCUS, a));
+    text_draw(x + w - pad, y + pad + 2, ds, FONT_REGULAR, argb_alpha(TH_HINT, a), ALIGN_RIGHT, drive);
+
+    const float tx = x + pad + cs + 32, tw = x + w - pad - tx;
+    text_draw_fit(tx, y + pad + 62, 38, FONT_BOLD, argb_alpha(TH_TEXT, a), ALIGN_LEFT, tw, dq.id.title);
+    if (dq.id.serial[0])
+        text_draw(tx, y + pad + 118, 22, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, a), ALIGN_LEFT, dq.id.serial);
+
+    float yy = y + pad + cs + 40;
+    const float hs = 28, gap = hs * 0.4f;
+    if (dq.known)
+    {
+        disc_ask_wrap(tr("This game is already in your games. Do you want to start it?"), x + w * 0.5f, yy, 30, w - 2 * pad,
+                      argb_alpha(TH_TEXT, a));
+        const char *yes = tr("Start"), *no = tr("Cancel");
+        const float gw1 = pad_glyph_width(GLYPH_CROSS, hs), gw2 = pad_glyph_width(GLYPH_CIRCLE, hs);
+        const float w1 = gw1 + gap + text_width(hs, FONT_BOLD, yes), w2 = gw2 + gap + text_width(hs, FONT_REGULAR, no);
+        const float space = 56, hy = y + h - pad - hs;
+        float hx = x + (w - (w1 + space + w2)) * 0.5f;
+        draw_pad_glyph(GLYPH_CROSS, hx + gw1 * 0.5f, hy + hs * 0.6f, hs);
+        text_draw(hx + gw1 + gap, hy, hs, FONT_BOLD, argb_alpha(TH_FOCUS, a), ALIGN_LEFT, yes);
+        hx += w1 + space;
+        draw_pad_glyph(GLYPH_CIRCLE, hx + gw2 * 0.5f, hy + hs * 0.6f, hs);
+        text_draw(hx + gw2 + gap, hy, hs, FONT_REGULAR, argb_alpha(TH_TEXT, a), ALIGN_LEFT, no);
+        return;
+    }
+    text_draw(x + w * 0.5f, yy, 28, FONT_REGULAR, argb_alpha(TH_TEXT, a), ALIGN_CENTER, tr("How do you want to play it?"));
+    const float cg = 24, cw = (w - 2 * pad - cg) * 0.5f, ch = 150, cy = yy + 46;
+    disc_ask_card(x + pad, cy, cw, ch, dq.sel == 0, tr("Play from disc"), tr("Starts right now."), tr("The disc stays in the drive."), a);
+    disc_ask_card(x + pad + cw + cg, cy, cw, ch, dq.sel == 1, tr("Copy to storage"), tr("A few minutes, then it plays."),
+                  tr("After that the disc can come out."), a);
+    const float fs = 24, hy = y + h - pad - fs;
+    const int dirs[2] = {GLYPH_LEFT, GLYPH_RIGHT};
+    const char *l1 = tr("Choose"), *l2 = tr("Select"), *l3 = tr("Cancel");
+    const float w1 = hint_combo_width(dirs, 2, l1, fs), w2 = pad_glyph_width(GLYPH_CROSS, fs) + fs * 0.35f + text_width(fs, FONT_REGULAR, l2),
+                w3 = pad_glyph_width(GLYPH_CIRCLE, fs) + fs * 0.35f + text_width(fs, FONT_REGULAR, l3), sp = 40;
+    float hx = x + (w - (w1 + w2 + w3 + 2 * sp)) * 0.5f;
+    hx += draw_hint_combo(hx, hy, dirs, 2, '/', l1, fs, argb_alpha(TH_HINT, a)) + sp;
+    hx += draw_hint(hx, hy, GLYPH_CROSS, l2, fs, argb_alpha(TH_HINT, a)) + sp;
+    draw_hint(hx, hy, GLYPH_CIRCLE, l3, fs, argb_alpha(TH_HINT, a));
+}
+
+/* Every frame: on the shelf, a disc newly put in the USB CD drive asks what to do with it */
 static void disc_auto_frame(void)
 {
     write_alive_stamp();
+    if (dp_active && !dp_gone && discwatch_removed() != dp_removed_mark)
+        dp_gone = true;
+    if (dp_gone && !dq.open && !app.game && app.screen == SCREEN_LIBRARY && shelf_idle() && !SC.active)
+        dp_drop();
     disc_play_frame();
     const bool daemon_busy = daemon_installing();
     discwatch_pause(daemon_busy); /* the daemon is at the drive */
     if (daemon_busy)
         return;
-    /* a disc taken out forgets that it was started: put back, it starts again. One left in does not start twice. */
+    /* a disc taken out forgets that it was handled: put back, it asks again. One left in does not ask twice. */
     static int removed_seen;
     if (discwatch_removed() != removed_seen)
     {
         removed_seen = discwatch_removed();
         handled_count = 0;
     }
-    bool free_for_disc = app.screen == SCREEN_LIBRARY && !app.game && shelf_idle() &&
+    bool free_for_disc = app.screen == SCREEN_LIBRARY && !app.game && shelf_idle() && !dq.open &&
                          discimport_state() == DI_IDLE && discplay_state() == DP_IDLE && !box_open && !SC.active;
     discwatch_set_active(free_for_disc);
     DiscId id;
@@ -1513,23 +1755,25 @@ static void disc_auto_frame(void)
         return;
     disc_mark_handled(id.key);
     int game = find_game_by_key(id.key);
-    SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, starting it (or showing it, with install only)" : "importing it");
+    SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, asking whether to start it" : "asking how to play it");
     if (game >= 0)
+        shelf_show_game(game);
+    else
     {
-        if (app.global.disc_install_only) /* it is installed already: only shown on the shelf */
-            shelf_show_game(game);
-        else
-            play_from_disc(game, id.key);
-        return;
+        dp_drop();
+        dp_make(&id);
+        if (library_add_game(&app.library, &dp))
+        {
+            dp_active = true;
+            dp_gone = false;
+            dp_removed_mark = discwatch_removed();
+            app_restart_covers();
+            shelf_show_all();
+            shelf_show_game(dp_index());
+        }
     }
-    if (app.global.play_from_disc)
-    {
-        if (!discplay_start())
-            SwanStationPS5_log("disc: the disc could not be read for playing");
-        return;
-    }
-    char ext_games[SwanStationPS5_PATH_MAX];
-    auto_launch = discimport_start(app.global.install_to_ext && drives_ext_games(ext_games, sizeof(ext_games)) ? ext_games : app.paths.games);
+    if (app.global.disc_ask)
+        disc_ask_open(&id, game);
 }
 
 static void import_draw(void)
@@ -2646,7 +2890,7 @@ int main(int argc, char **argv)
         memcpy(app.pads, pads, sizeof(app.pads));
         uint32_t pressed = nav_pressed(pads);
         disc_auto_frame();
-        if (!question_input(&pressed) && !sbi_check_input(&pressed) && !play_input(&pressed) && !import_input(&pressed))
+        if (!question_input(&pressed) && !sbi_check_input(&pressed) && !disc_ask_input(&pressed) && !play_input(&pressed) && !import_input(&pressed))
             message_box_input(&pressed);
         /* the shelf and settings paint a full-screen backdrop: no clear needed */
         bool backdrop = app.screen == SCREEN_LIBRARY || (app.screen == SCREEN_SETTINGS && !app.game);
@@ -2850,6 +3094,7 @@ int main(int argc, char **argv)
         sbi_check_draw();
         play_draw();
         import_draw();
+        disc_ask_draw();
         message_box_draw();
         question_draw();
         toast_render();

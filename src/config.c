@@ -51,8 +51,7 @@ void config_defaults(Settings *s)
     s->disc_animation = true;
     s->jewel_cases = true;
     s->case_lighting = true;
-    s->disc_install_only = false;
-    s->play_from_disc = false;
+    s->disc_ask = false;
     s->install_to_ext = false;
     s->negcon = false;
     s->touch_mouse = false;
@@ -263,12 +262,10 @@ static bool config_apply(Settings *s, const char *path)
             s->disc_in_tray = as_bool(value);
         else if (strcmp(key, "disc_animation") == 0)
             s->disc_animation = as_bool(value);
+        else if (strcmp(key, "disc_ask") == 0)
+            s->disc_ask = as_bool(value);
         else if (strcmp(key, "install_to_ext") == 0)
             s->install_to_ext = as_bool(value);
-        else if (strcmp(key, "play_from_disc") == 0)
-            s->play_from_disc = as_bool(value);
-        else if (strcmp(key, "disc_install_only") == 0)
-            s->disc_install_only = as_bool(value);
         else if (strcmp(key, "jewel_cases") == 0)
             s->jewel_cases = as_bool(value);
         else if (strcmp(key, "case_lighting") == 0)
@@ -472,8 +469,8 @@ bool config_save(const Settings *s, const char *path)
             s->overclock, s->brightness, s->colour, s->autosave, s->bezel);
     fprintf(f, "msaa=%d\ntexture_filter=%d\nfilter_2d=%d\nsupersampling=%d\ndeinterlace=%d\npal60=%d\ngame_fixes=%d\n",
             s->msaa, s->texture_filter, s->filter_2d, s->supersampling, s->deinterlace, s->pal60, s->game_fixes);
-    fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\ndisc_in_tray=%d\nnegcon=%d\njewel_cases=%d\ncase_lighting=%d\ndisc_install_only=%d\ninstall_to_ext=%d\nplay_from_disc=%d\n",
-            s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->disc_in_tray, s->negcon, s->jewel_cases, s->case_lighting, s->disc_install_only, s->install_to_ext, s->play_from_disc);
+    fprintf(f, "fmv_smooth=%d\ntrue_colour=%d\nboot_intro=%d\nsharpen=%d\ndisc_animation=%d\ndisc_in_tray=%d\nnegcon=%d\njewel_cases=%d\ncase_lighting=%d\ndisc_ask=%d\ninstall_to_ext=%d\n",
+            s->fmv_smooth, s->true_colour, s->boot_intro, s->sharpen, s->disc_animation, s->disc_in_tray, s->negcon, s->jewel_cases, s->case_lighting, s->disc_ask, s->install_to_ext);
     fprintf(f, "touch_mouse=%d\nrun_ahead=%d\nfast_effects=%d\nframegen=%d\nvideo_out=%d\nfsr=%d\nframe_pacing=%d\nnostalgia=%d\n", s->touch_mouse, s->run_ahead,
             s->fast_effects, s->framegen, s->video_out, s->fsr, s->frame_pacing, s->nostalgia);
     for (int i = 0; i < SS_OPT_COUNT; ++i)

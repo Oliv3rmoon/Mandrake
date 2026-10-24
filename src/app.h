@@ -76,6 +76,8 @@ void app_restart_covers(void);
 int app_nav_pad(void);
 /* resume: continue from the quick-resume save */
 void app_start_game(int index, bool resume);
+/* X on a game that stands for a disc in the drive not in the library yet: asks about it again (true: nothing else starts) */
+bool app_disc_pending(int index);
 /* Boots the console's BIOS with no disc (Settings > About > Start BIOS) */
 void app_start_bios(void);
 void app_stop_game(void);
