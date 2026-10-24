@@ -423,6 +423,7 @@ void app_restart_covers(void)
 static Game dg;                  /* the disc played from the drive, while it is in (see disc_play_frame) */
 static Game dp;                  /* a disc put in that is not in the library: its entry on the shelf asks again (see disc_ask_open) */
 static bool dp_active, dp_gone;
+static bool disc_after_game;
 static int dp_removed_mark;
 static DiscId dp_id;
 static void dp_drop(void);
@@ -1563,7 +1564,6 @@ bool app_disc_pending(int index)
     if (dq.open || discimport_state() != DI_IDLE || discplay_state() != DP_IDLE)
         return true;
     disc_ask_open(&dp_id, -1);
-    sfx_play(SFX_SELECT);
     return true;
 }
 
@@ -1587,12 +1587,15 @@ static bool disc_ask_input(uint32_t *pressed)
         const bool known = dq.known;
         const int sel = dq.sel;
         disc_ask_close();
-        sfx_play(SFX_SELECT);
         if (known)
         {
             int game = find_game_by_key(id.key);
             if (game >= 0)
-                play_from_disc(game, id.key);
+            {
+                host_set_initial_disc(disc_index_in_playlist(&app.library.games[game], id.key));
+                if (!shelf_start_game(game))
+                    SwanStationPS5_log("disc: the game could not be started from the shelf");
+            }
         }
         else if (sel == 0)
         {
@@ -1755,6 +1758,8 @@ static void disc_auto_frame(void)
         return;
     disc_mark_handled(id.key);
     int game = find_game_by_key(id.key);
+    const bool after = disc_after_game && plat_ticks_us() - app_started_us < 15000000u;
+    const bool ask = app.global.disc_ask && !after;
     SwanStationPS5_log("disc: '%s' (%s) put in: %s", id.title, id.key, game >= 0 ? "it is in the library, asking whether to start it" : "asking how to play it");
     if (game >= 0)
         shelf_show_game(game);
@@ -1772,7 +1777,8 @@ static void disc_auto_frame(void)
             shelf_show_game(dp_index());
         }
     }
-    if (app.global.disc_ask)
+    disc_after_game = false;
+    if (ask)
         disc_ask_open(&id, game);
 }
 
@@ -2783,8 +2789,8 @@ int main(int argc, char **argv)
         char marker[SwanStationPS5_PATH_MAX];
         path_join(marker, sizeof(marker), app.paths.root, "open-library");
         remove(marker);
-        discwatch_skip_present();
-        SwanStationPS5_log("started again after a game: the disc in the drive is not news");
+        disc_after_game = true;
+        SwanStationPS5_log("started again after a game: the disc in the drive is shown on the shelf, with no question");
     }
     SwanStationPS5_log("SwanStationPS5 %s starting, data root %s", SwanStationPS5_VERSION, app.paths.root);
     SwanStationPS5_log("screen: %s", plat_screen_info());

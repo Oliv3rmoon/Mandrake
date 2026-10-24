@@ -51,7 +51,7 @@ void config_defaults(Settings *s)
     s->disc_animation = true;
     s->jewel_cases = true;
     s->case_lighting = true;
-    s->disc_ask = false;
+    s->disc_ask = true;
     s->install_to_ext = false;
     s->negcon = false;
     s->touch_mouse = false;

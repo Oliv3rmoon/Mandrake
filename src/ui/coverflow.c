@@ -1466,12 +1466,10 @@ static void play_game(int game, bool ask, bool silent)
                              : NULL;
         S.dialog = true;
         S.dialog_choice = 0;
+        return;
     }
-    else
-    {
-        S.resume = false;
-        S.launch_t = 0.0001f;
-    }
+    S.resume = false;
+    S.launch_t = 0.0001f;
     if (!silent)
         sfx_play(SFX_SELECT);
 }
@@ -1679,13 +1677,21 @@ bool shelf_play_game(int library_index, bool direct)
 {
     if (!shelf_show_game(library_index))
         return false;
-    play_game(library_index, false, direct);
+    play_game(library_index, false, true);
     if (direct)
     {
         /* the disc daemon opened the app: nobody is watching the case open, so the animation is skipped and only its
          * last frame is shown while the game loads */
         S.launch_t = fmaxf(S.launch_t, launch_total() - 0.001f);
     }
+    return true;
+}
+
+bool shelf_start_game(int library_index)
+{
+    if (!shelf_show_game(library_index))
+        return false;
+    play_game(library_index, true, false);
     return true;
 }
 
@@ -1723,7 +1729,6 @@ void shelf_screen(uint32_t pressed)
             S.dialog = false;
             S.resume = S.dialog_choice == 0;
             S.launch_t = 0.0001f;
-            sfx_play(SFX_SELECT);
         }
         if (pressed & BIT(BTN_CIRCLE))
         {

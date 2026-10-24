@@ -142,6 +142,8 @@ struct PlatTexture *shelf_cover_or_none(int index);
  * click; otherwise it plays as when ✕ is pressed. False if the shelf is busy or the game cannot be shown. */
 bool shelf_show_game(int library_index); /* moves the cursor to the game (the shelf shows all if its category hides it) */
 bool shelf_play_game(int library_index, bool direct);
+/* The same as pressing X on the game: offers Continue or Start over when it has a quick-resume save, else starts it. */
+bool shelf_start_game(int library_index);
 void shelf_library_changed(void); /* after a rescan */
 void shelf_show_all(void);        /* after a rescan the player asked for: the category All, without a filter */
 
