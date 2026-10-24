@@ -43,8 +43,8 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from psx_disc import disc_serial  # noqa: E402
 
-DISC_EXTS = {".cue", ".bin", ".chd", ".pbp", ".iso", ".img", ".m3u", ".ccd", ".sub", ".mdf", ".mds"}
-LOADABLE = {".cue", ".chd", ".pbp", ".iso", ".m3u", ".ccd", ".mds"}
+DISC_EXTS = {".cue", ".bin", ".chd", ".pbp", ".iso", ".img", ".m3u", ".ccd", ".sub", ".mdf", ".mds", ".ecm"}
+LOADABLE = {".cue", ".chd", ".pbp", ".iso", ".m3u", ".ccd", ".mds", ".ecm"}
 ARCHIVE_EXTS = {".7z", ".rar", ".zip"}
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 REMOTE_ROOT = "/data/SwanStationPS5"

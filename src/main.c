@@ -1171,7 +1171,8 @@ static bool folder_has_disc(const Game *g, const char *tag)
         if (strstr(e->d_name, tag))
         {
             const char *ext = path_ext(e->d_name);
-            found = !str_icmp(ext, "cue") || !str_icmp(ext, "chd") || !str_icmp(ext, "iso") || !str_icmp(ext, "pbp");
+            found = !str_icmp(ext, "cue") || !str_icmp(ext, "chd") || !str_icmp(ext, "iso") || !str_icmp(ext, "pbp") ||
+                    !str_icmp(ext, "ecm") || !str_icmp(ext, "mds");
         }
     if (d)
         closedir(d);

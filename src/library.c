@@ -28,9 +28,10 @@ static int image_rank(const char *name)
         return 5;
     if (str_icmp(ext, "chd") == 0)
         return 4;
-    if (str_icmp(ext, "cue") == 0 || str_icmp(ext, "ccd") == 0)
+    if (str_icmp(ext, "cue") == 0 || str_icmp(ext, "ccd") == 0 || str_icmp(ext, "mds") == 0)
         return 3;
-    if (str_icmp(ext, "iso") == 0 || str_icmp(ext, "img") == 0 || str_icmp(ext, "mdf") == 0)
+    if (str_icmp(ext, "iso") == 0 || str_icmp(ext, "img") == 0 || str_icmp(ext, "mdf") == 0 ||
+        str_icmp(ext, "ecm") == 0)
         return 2;
     if (str_icmp(ext, "bin") == 0)
         return 1; /* only used when no sheet describes it */
@@ -787,7 +788,7 @@ static void del_collect(DelList *l, const char *folder, const char *file, int de
             fclose(f);
     }
     if (cue || str_icmp(ext, "chd") == 0 || str_icmp(ext, "iso") == 0 || str_icmp(ext, "bin") == 0 ||
-        str_icmp(ext, "pbp") == 0 || str_icmp(ext, "img") == 0)
+        str_icmp(ext, "pbp") == 0 || str_icmp(ext, "img") == 0 || str_icmp(ext, "ecm") == 0)
     {
         char sbi[SwanStationPS5_PATH_MAX];
         str_copy(sbi, sizeof(sbi), full);
