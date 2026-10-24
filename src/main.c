@@ -2871,7 +2871,11 @@ int main(int argc, char **argv)
     /* extern int sceSystemServiceGetAppIdOfRunningBigApp(void);
      * extern int sceSystemServiceKillApp(int app_id, int how, int reason, int core_dump); */
     SwanStationPS5_log("shutdown: closing the title");
-    plat_audio_close();
+    icons_shutdown();
+    text_shutdown();
+    library_free(&app.library);
+    SwanStationPS5_log("shutdown: interface freed");
+    plat_release();
     fflush(NULL);
     for (;;)
     {

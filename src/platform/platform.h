@@ -12,6 +12,7 @@ const char *plat_init_error(void); /* "SDL window failed: <reason>" after plat_i
 /* How frames reach the screen, for the log (plat_init runs before the log opens). */
 const char *plat_screen_info(void);
 void plat_shutdown(void);
+void plat_release(void);
 
 /* PS5: asks the HEN to let SwanStationPS5 list /data. Call before plat_init, while the
  * process is single-threaded. Returns false (with the reason) when SwanStationPS5 stays

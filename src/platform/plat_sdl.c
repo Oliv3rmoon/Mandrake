@@ -316,6 +316,28 @@ static bool init_desktop_window(void)
 }
 #endif
 
+#if defined(__PROSPERO__)
+void plat_release(void)
+{
+    plat_audio_close();
+    SwanStationPS5_log("shutdown: audio closed");
+    for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
+        if (controllers[i])
+            SDL_GameControllerClose(controllers[i]), controllers[i] = NULL;
+    SwanStationPS5_log("shutdown: controllers closed");
+    if (game_texture)
+        SDL_DestroyTexture(game_texture), game_texture = NULL;
+    if (renderer)
+        SDL_DestroyRenderer(renderer), renderer = NULL;
+    SwanStationPS5_log("shutdown: renderer destroyed");
+#if defined(SwanStationPS5_VULKAN)
+    if (use_vulkan)
+        vkp_close();
+    SwanStationPS5_log("shutdown: Vulkan closed");
+#endif
+}
+#endif
+
 void plat_shutdown(void)
 {
     plat_audio_close();
