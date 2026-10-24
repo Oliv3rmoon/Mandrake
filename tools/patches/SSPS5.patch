@@ -144181,10 +144181,38 @@ index b96b983c..1a8333bc 100644
     "PGXP Depth Buffer",
     NULL,
 diff --git a/src/libretro/libretro_host_interface.cpp b/src/libretro/libretro_host_interface.cpp
-index fc39fe0a..f906de44 100644
+index fc39fe0a..6cd0fecd 100644
 --- a/src/libretro/libretro_host_interface.cpp
 +++ b/src/libretro/libretro_host_interface.cpp
-@@ -390,7 +390,12 @@ void HostInterface::Shutdown()
+@@ -1,5 +1,6 @@
+ #include "core/host_interface.h"
+ #include "common/byte_stream.h"
++#include "common/cd_image.h"
+ #include "common/file_system.h"
+ #include "common/log.h"
+ #include "common/make_array.h"
+@@ -90,6 +91,20 @@ RETRO_API void retro_set_controller_port_device(unsigned port, unsigned device)
+   g_host_interface_storage.UpdateCoreOptionsDisplay(true);
+ }
+ 
++extern "C" RETRO_API bool retro_ds(const char* path, char* out, size_t size)
++{
++  if (!path || !out || size == 0)
++    return false;
++  std::unique_ptr<CDImage> image = CDImage::Open(path, CDImage::OpenFlags::None, nullptr);
++  if (!image)
++    return false;
++  const std::string code = System::GetGameCodeForImage(image.get(), false);
++  if (code.empty() || code.size() >= size)
++    return false;
++  std::memcpy(out, code.c_str(), code.size() + 1);
++  return true;
++}
++
+ RETRO_API void retro_reset(void)
+ {
+   g_host_interface_storage.ResetSystem();
+@@ -390,7 +405,12 @@ void HostInterface::Shutdown()
  
  void HostInterface::ReportError(const char* message)
  {
@@ -144198,7 +144226,7 @@ index fc39fe0a..f906de44 100644
    Log_ErrorPrint(message);
  }
  
-@@ -438,14 +443,27 @@ std::string HostInterface::GetGameMemoryCardPath(const char* game_code, uint32_t
+@@ -438,14 +458,27 @@ std::string HostInterface::GetGameMemoryCardPath(const char* game_code, uint32_t
                                           slot + 1);
  }
  
@@ -144229,7 +144257,7 @@ index fc39fe0a..f906de44 100644
          !cache_directory_ptr)
      {
        Log_WarningPrint("No shader cache directory available, startup will be slower.");
-@@ -1155,6 +1173,8 @@ bool HostInterface::UpdateCoreOptionsDisplay(bool controller)
+@@ -1155,6 +1188,8 @@ bool HostInterface::UpdateCoreOptionsDisplay(bool controller)
    g_retro_environment_callback(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
    option_display.key = "swanstation_GPU_TextureFilter";
    g_retro_environment_callback(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
@@ -144238,7 +144266,7 @@ index fc39fe0a..f906de44 100644
    option_display.key = "swanstation_GPU_DownsampleMode";
    g_retro_environment_callback(RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY, &option_display);
    option_display.key = "swanstation_GPU_ResolutionScale";
-@@ -2192,7 +2212,8 @@ void HostInterface::SwitchToSoftwareRenderer()
+@@ -2192,7 +2227,8 @@ void HostInterface::SwitchToSoftwareRenderer()
    m_display = std::make_unique<LibretroHostDisplay>();
    m_display->CreateRenderDevice(wi, {}, false, false);
    m_display->InitializeRenderDevice({}, false, false);

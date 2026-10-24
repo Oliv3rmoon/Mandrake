@@ -317,5 +317,5 @@ bool disc_read_serial(const char *path, char *serial, size_t size)
             strcpy(dot, ".img");
         return read_iso(next, serial, size);
     }
-    return false; /* .chd and the rest: SwanStation reads them, the serial is not known */
+    return false;
 }

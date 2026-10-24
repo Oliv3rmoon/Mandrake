@@ -44,6 +44,9 @@ void library_scan_append(Library *lib, const char *const *roots, int root_count)
 bool library_load_index(Library *lib, const char *index_path);
 void library_free(Library *lib);
 
+/* Where the serials the core read from .chd and the like are remembered (a tab-separated file); call before scanning. */
+void library_serial_cache_load(const char *file);
+
 /* Adds a game that is not in a folder (a disc played from the drive) as the last one; library_remove_path takes it out
  * again by its path. Both leave the games before it where they are. */
 bool library_add_game(Library *lib, const Game *g);

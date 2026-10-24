@@ -8,7 +8,7 @@
 #include "SwanStationPS5.h"
 
 /* Fills `serial` ("SLUS-01041") from SYSTEM.CNF (.cue/.bin/.iso/.img/.m3u) or
- * PARAM.SFO (.pbp). CHD is compressed and is not read here. */
+ * PARAM.SFO (.pbp). Not CHD, which is compressed: the library asks the core for those. */
 bool disc_read_serial(const char *path, char *serial, size_t size);
 
 /* The same, from any source of 2048-byte sectors (a disc in a drive): read() fills `length` bytes of user data

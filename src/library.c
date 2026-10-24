@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #define MAX_DIR_FILES 64
@@ -156,13 +157,130 @@ static void serial_from_playlist(const char *path, char *serial, size_t size)
     fclose(f);
 }
 
+bool swanstation_retro_ds(const char *path, char *out, size_t size);
+
+typedef struct
+{
+    char path[SwanStationPS5_PATH_MAX];
+    long long size;
+    long long mtime;
+    char serial[16];
+} SerialEntry;
+
+static SerialEntry *serial_cache;
+static int serial_cache_count, serial_cache_cap;
+static char serial_cache_path[SwanStationPS5_PATH_MAX];
+static bool serial_cache_dirty;
+
+static void serial_cache_add(const SerialEntry *e)
+{
+    if (serial_cache_count == serial_cache_cap)
+    {
+        int cap = serial_cache_cap ? serial_cache_cap * 2 : 128;
+        SerialEntry *grown = realloc(serial_cache, (size_t)cap * sizeof(SerialEntry));
+        if (!grown)
+            return;
+        serial_cache = grown;
+        serial_cache_cap = cap;
+    }
+    serial_cache[serial_cache_count++] = *e;
+}
+
+void library_serial_cache_load(const char *file)
+{
+    free(serial_cache);
+    serial_cache = NULL;
+    serial_cache_count = serial_cache_cap = 0;
+    serial_cache_dirty = false;
+    str_copy(serial_cache_path, sizeof(serial_cache_path), file);
+    FILE *f = fopen(file, "r");
+    if (!f)
+        return;
+    char line[SwanStationPS5_PATH_MAX + 80];
+    while (fgets(line, sizeof(line), f))
+    {
+        line[strcspn(line, "\r\n")] = '\0';
+        char *size = strchr(line, '\t');
+        if (!size)
+            continue;
+        *size++ = '\0';
+        char *mtime = strchr(size, '\t');
+        if (!mtime)
+            continue;
+        *mtime++ = '\0';
+        char *serial = strchr(mtime, '\t');
+        if (!serial)
+            continue;
+        *serial++ = '\0';
+        SerialEntry e;
+        str_copy(e.path, sizeof(e.path), line);
+        e.size = atoll(size);
+        e.mtime = atoll(mtime);
+        str_copy(e.serial, sizeof(e.serial), serial);
+        serial_cache_add(&e);
+    }
+    fclose(f);
+}
+
+static void serial_cache_save(void)
+{
+    if (!serial_cache_dirty || !serial_cache_path[0])
+        return;
+    FILE *f = fopen(serial_cache_path, "w");
+    if (!f)
+        return;
+    for (int i = 0; i < serial_cache_count; ++i)
+        fprintf(f, "%s\t%lld\t%lld\t%s\n", serial_cache[i].path, serial_cache[i].size, serial_cache[i].mtime,
+                serial_cache[i].serial);
+    fclose(f);
+    serial_cache_dirty = false;
+}
+
+bool swanstation_retro_ds(const char *path, char *out, size_t size);
+
+/* The core opens the image, which is slow for a .chd: what it answers is remembered
+ * by path, size and modification time ("-" when the disc has no serial). */
+static bool core_serial(const char *path, char *serial, size_t size)
+{
+    struct stat st;
+    if (stat(path, &st) != 0)
+        return false;
+    for (int i = 0; i < serial_cache_count; ++i)
+    {
+        SerialEntry *e = &serial_cache[i];
+        if (e->size != (long long)st.st_size || e->mtime != (long long)st.st_mtime || strcmp(e->path, path) != 0)
+            continue;
+        if (e->serial[0] == '-')
+            return false;
+        str_copy(serial, size, e->serial);
+        return true;
+    }
+    char code[32];
+    bool ok = swanstation_retro_ds(path, code, sizeof(code)) && disc_format_serial(code, serial, size);
+    SerialEntry e;
+    str_copy(e.path, sizeof(e.path), path);
+    e.size = st.st_size;
+    e.mtime = st.st_mtime;
+    str_copy(e.serial, sizeof(e.serial), ok ? serial : "-");
+    for (int i = 0; i < serial_cache_count; ++i)
+        if (strcmp(serial_cache[i].path, path) == 0)
+        {
+            serial_cache[i] = e;
+            serial_cache_dirty = true;
+            return ok;
+        }
+    serial_cache_add(&e);
+    serial_cache_dirty = true;
+    return ok;
+}
+
 /* Serial from the disc itself (exact), else serial.txt written by the sync
  * tool (needed for .chd), else whatever the file name carried. Then the id. */
 static void finish_game(Game *g)
 {
     char serial[16];
     char txt[SwanStationPS5_PATH_MAX];
-    if (disc_read_serial(g->path, serial, sizeof(serial)))
+    if (disc_read_serial(g->path, serial, sizeof(serial)) || core_serial(g->path, serial, sizeof(serial)))
         str_copy(g->serial, sizeof(g->serial), serial);
     else
     {
@@ -529,6 +647,7 @@ void library_scan_append(Library *lib, const char *const *roots, int root_count)
             scan_root(lib, roots[i]);
     if (lib->count > 1)
         qsort(lib->games, (size_t)lib->count, sizeof(Game), cmp_games);
+    serial_cache_save();
     SwanStationPS5_log("library: %d games", lib->count);
 }
 

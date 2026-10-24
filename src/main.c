@@ -485,6 +485,9 @@ void app_rescan(void)
         roots[root_count++] = nfs_roots[n];
     char index[SwanStationPS5_PATH_MAX];
     path_join(index, sizeof(index), app.paths.root, "library.txt");
+    char serials[SwanStationPS5_PATH_MAX];
+    path_join(serials, sizeof(serials), app.paths.cache, "serials.tsv");
+    library_serial_cache_load(serials);
     if (app.sandboxed)
     {
         /* Can't list folders: the sync tool's index is the library. */
