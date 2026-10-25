@@ -31,6 +31,8 @@ print("};")' "$1" "$2"
     echo "#define SwanStationPS5_SHADERS_SPV_H"
     echo "#include <stdint.h>"
     for src in "$dir"/*.vert "$dir"/*.frag; do
+        # the interface's two shaders are built by tools/make-ui-shaders.sh
+        case "$(basename "$src")" in ui.*) continue ;; esac
         name=$(basename "$src" | tr '.' '_')
         "$glslang" -V --target-env vulkan1.1 -o "$tmp/$name.spv" "$src" >/dev/null
         to_c "$tmp/$name.spv" "$name"

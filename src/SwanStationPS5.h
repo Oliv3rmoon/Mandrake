@@ -17,7 +17,7 @@
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
 #define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
-#define SwanStationPS5_VERSION "1.5.0"
+#define SwanStationPS5_VERSION "1.5.1"
 #define SwanStationPS5_PATH_MAX 512
 
 /* Pad bits use RetroPad numbering so the host can hand the mask to the core
@@ -117,7 +117,7 @@ typedef struct
     bool remote;          /* settings page for phones on the local network */
     bool update_check;    /* look for new SwanStationPS5 releases at start */
     bool pgxp;            /* precise geometry, no wobbling polygons */
-    int shader;           /* 0 off, 1 LCD3x, 2 CRT Royale, 3 CRT, 4 sharp bilinear */
+    int shader;           /* 0 off, 1 LCD3x, 2 CRT Royale Fast, 3 and 4 retired, 5 to 8 NTSC, 9 to 12 CRT Lottes, CRT Pi, Game Boy LCD, zfast LCD, 13 to 16 CRT Royale, Newpixie, Hyllian NTSC, Mattias */
     bool hd_textures;     /* use a texture pack beside the game when there is one */
     int theme;            /* enum ThemeId in ui/theme.h */
     int crop_edges;       /* 0 off, 1: 8 lines top and bottom, 2: 16 (the black a CRT hid) */

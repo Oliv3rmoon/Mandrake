@@ -7,7 +7,7 @@ enum { ROYALE_SCALE_SOURCE, ROYALE_SCALE_VIEWPORT, ROYALE_SCALE_ABSOLUTE };
 enum { ROYALE_PUSH_NONE, ROYALE_PUSH_SOURCE_SIZE, ROYALE_PUSH_ORIGINAL_SIZE, ROYALE_PUSH_OUTPUT_SIZE,
        ROYALE_PUSH_FINAL_SIZE, ROYALE_PUSH_FRAME, ROYALE_PUSH_PASS_SIZE, ROYALE_PUSH_TEXTURE_SIZE,
        ROYALE_PUSH_PARAM };
-enum { ROYALE_SAMPLER_SOURCE, ROYALE_SAMPLER_ORIGINAL, ROYALE_SAMPLER_PASS, ROYALE_SAMPLER_TEXTURE };
+enum { ROYALE_SAMPLER_SOURCE, ROYALE_SAMPLER_ORIGINAL, ROYALE_SAMPLER_PASS, ROYALE_SAMPLER_TEXTURE, ROYALE_SAMPLER_FEEDBACK };
 enum { ROYALE_WRAP_BORDER, ROYALE_WRAP_EDGE, ROYALE_WRAP_REPEAT };
 typedef struct { uint16_t offset; uint8_t kind; int8_t index; float value; } RoyalePush;
 typedef struct { uint8_t binding, kind; int8_t index; } RoyaleSampler;
@@ -20,9 +20,15 @@ typedef struct
     uint8_t linear, wrap, srgb; /* srgb: the image format, 0 linear, 1 sRGB, 2 float */
     uint16_t push_size;
     uint8_t push_count, sampler_count;
-    RoyalePush push[12];
-    RoyaleSampler samplers[6];
+    RoyalePush push[24];
+    RoyaleSampler samplers[8];
     uint8_t frame_mod; /* FrameCount modulo this, 0: as it is */
+    /* make-crt.py's presets: the pass's own uniform block (parameters' defaults and an identity MVP), and what the
+     * renderer writes into it each frame (sizes, FrameCount); no blob: the shared ROYALE_UBO */
+    const uint8_t *ubo_blob;
+    uint16_t ubo_size;
+    uint8_t ubo_sem_count;
+    RoyalePush ubo_sem[8];
 } RoyalePass;
 typedef struct { uint16_t width, height; uint8_t linear, wrap; const uint8_t *rgba; } RoyaleTexture;
 

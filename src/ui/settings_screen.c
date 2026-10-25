@@ -92,6 +92,7 @@ typedef struct
     bool is_bool;
     const char *const *labels;
     int count, base;
+    const unsigned char *order; /* the setting's value of each label, when the labels are not in the value's order */
 } Row;
 
 /* "Your profile" is for a signed-in account; without one the row signs in. */
@@ -136,9 +137,11 @@ static const char *const BACKGROUNDS[] = {"Dark", "Cover colour"};
 static const char *const CRT_LEVELS[] = {"Off", "Light", "Strong"};
 static const char *const BORDERS[] = {"Black", "Current background", "TV frame"};
 static const char *const CROPS[] = {"Off", "A little", "More"};
-static const char *const SHADERS[] = {"Off", "LCD3x", "CRT Royale", "CRT Basic", "Sharp bilinear",
-                                      "NTSC 320px S-Video", "NTSC 320px Composite", "NTSC 256px S-Video",
-                                      "NTSC 256px Composite"};
+static const char *const SHADERS[] = {"Off", "LCD3x", "NTSC 320px S-Video", "NTSC 320px Composite",
+                                      "NTSC 256px S-Video", "NTSC 256px Composite", "CRT Lottes", "CRT Pi",
+                                      "Game Boy LCD", "zfast LCD", "CRT Royale Fast", "CRT Royale", "CRT Newpixie",
+                                      "CRT Hyllian NTSC", "CRT Mattias"};
+static const unsigned char SHADER_ORDER[] = {0, 1, 5, 6, 7, 8, 9, 10, 11, 12, 2, 13, 14, 15, 16};
 static const char *const POPUP_STYLES[] = {"Banner", "Compact", "Big trophy"};
 static const char *const BIOS_START_REGIONS[] = {"NTSC-U/C (US, Canada)", "NTSC-J (Japan)", "PAL (Europe, Australia)"};
 static const char *const LIGHTBARS[] = {"System", "Player colours", "Game cover colour", "Analog mode"};
@@ -170,8 +173,8 @@ static const Row DISPLAY[] = {
     {NULL, "Upscale", "Enlarges the picture before it is scaled to the screen.", K_CHOICE, APPLY_NOW,
      SP_NONE, false, INT_FIELD(upscale), UPSCALE, 4, 1},
     */
-    {"Picture", "Shader", "Sharp bilinear keeps pixels crisp without shimmer. CRT Basic adds scanlines, an RGB grille and glow. LCD3x looks like a handheld's LCD. CRT Royale is a detailed CRT with bloom and a phosphor mask (heavy). NTSC recreates the analog TV signal: Composite shows the colour fringes of old consoles, S-Video is cleaner; pick 320px or 256px to match the game's width (heavy).",
-     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(shader), SHADERS, 9, 0},
+    {"Picture", "Shader", "Gives the picture the look of a CRT TV, a handheld LCD or the analog NTSC signal. The most detailed ones are heavy.",
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(shader), SHADERS, 15, 0, SHADER_ORDER},
     {NULL, "AMD FidelityFX Super Resolution",
      "Scales the picture to your screen before the shader, following the edges of the image, and sharpens it (AMD FSR 1).",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(fsr), OFF_ON, 2, 0},
@@ -906,6 +909,20 @@ static bool value_conflicts(const Row *r, int v)
     return false;
 }
 
+/* The label that shows a value of the setting, and the value a label stands for. */
+static int label_of(const Row *r, int value)
+{
+    for (int k = 0; r->order && k < r->count; ++k)
+        if (r->order[k] == value)
+            return k;
+    return value;
+}
+
+static int value_of(const Row *r, int label)
+{
+    return r->order && label >= 0 && label < r->count ? r->order[label] : label;
+}
+
 static int read_value(const Row *r)
 {
     switch (r->special)
@@ -918,7 +935,7 @@ static int read_value(const Row *r)
     if (r->offset < 0)
         return 0;
     const char *base = (const char *)target(r) + r->offset;
-    return r->is_bool ? (*(const bool *)base ? 1 : 0) : *(const int *)base - r->base;
+    return r->is_bool ? (*(const bool *)base ? 1 : 0) : label_of(r, *(const int *)base - r->base);
 }
 
 /* A choice or switch that is the same for every game, seen from "This game": it shows "Global setting." and can't be
@@ -969,7 +986,7 @@ static void write_value(const Row *r, int v)
     if (r->is_bool)
         *(bool *)base = v != 0;
     else
-        *(int *)base = v + r->base;
+        *(int *)base = value_of(r, v) + r->base;
     /* console-wide edits reach the running game unless it has its own settings */
     if (t == &app.global && (!scope_game() || !app.game_has_own || r->global_only))
     {
@@ -977,7 +994,7 @@ static void write_value(const Row *r, int v)
         if (r->is_bool)
             *(bool *)eff = v != 0;
         else
-            *(int *)eff = v + r->base;
+            *(int *)eff = value_of(r, v) + r->base;
     }
     widescreen_follow(t, r, was_t);
     if (t == &app.global && (!scope_game() || !app.game_has_own || r->global_only))
@@ -1100,7 +1117,7 @@ static void default_value(const Row *r)
     Settings d;
     config_defaults(&d);
     const char *base = (const char *)&d + r->offset;
-    write_value(r, r->is_bool ? (*(const bool *)base ? 1 : 0) : *(const int *)base - r->base);
+    write_value(r, r->is_bool ? (*(const bool *)base ? 1 : 0) : label_of(r, *(const int *)base - r->base));
 }
 
 /* ---------------------------------------------------------------- the button-mapping page */
@@ -1488,8 +1505,8 @@ static void who_page(uint32_t pressed)
 
 /* ---------------------------------------------------------------- help panel */
 
-/* Wrapped text; returns the height used. */
-static float draw_wrapped(float x, float y, float w, float size, uint32_t argb, const char *s)
+/* Wrapped text; returns the height used. With draw off, only the height. */
+static float wrap_text(float x, float y, float w, float size, uint32_t argb, const char *s, bool draw)
 {
     char line[256];
     float yy = y;
@@ -1515,13 +1532,27 @@ static float draw_wrapped(float x, float y, float w, float size, uint32_t argb, 
             best = strlen(s) < sizeof(line) - 1 ? strlen(s) : sizeof(line) - 1;
         memcpy(line, s, best);
         line[best] = '\0';
-        text_draw(x, yy, size, FONT_REGULAR, argb, ALIGN_LEFT, line);
+        if (draw)
+            text_draw(x, yy, size, FONT_REGULAR, argb, ALIGN_LEFT, line);
         yy += size * 1.45f;
         s += best;
         while (*s == ' ')
             ++s;
     }
     return yy - y;
+}
+
+static float draw_wrapped(float x, float y, float w, float size, uint32_t argb, const char *s)
+{
+    return wrap_text(x, y, w, size, argb, s, true);
+}
+
+/* Wrapped text that shrinks until it fits in `room` pixels of height (down to 16), so a long help stays inside its card. */
+static float draw_wrapped_fit(float x, float y, float w, float size, uint32_t argb, const char *s, float room)
+{
+    while (size > 16.0f && wrap_text(x, y, w, size, argb, s, false) > room)
+        size -= 1.0f;
+    return wrap_text(x, y, w, size, argb, s, true);
 }
 
 /* Before and after for the upscale filter: a tiny sprite, enlarged. */
@@ -1654,7 +1685,9 @@ static void draw_help(const Row *r)
         draw_filter_preview(x + 32, y, w - 64, app.settings.upscale_filter);
         y += (w - 64 - 16) * 0.5f + 56;
     }
-    y += draw_wrapped(x + 32, y, w - 64, 24, TH_TEXT_SOFT, tr(row_help(r))) + 20;
+    /* the card ends above its notes: "Same for every game" (top + 646) and when it applies (top + 684) */
+    const float room = (r->global_only && S.game_scope && scope_game() ? top + 630 : top + 668) - y;
+    y += draw_wrapped_fit(x + 32, y, w - 64, 24, TH_TEXT_SOFT, tr(row_help(r)), room) + 20;
     static const char *const notes[] = {"Applies right away", "From the next game you start",
                                         "After SwanStationPS5 restarts"};
     if (r->special == SP_REMOTE)

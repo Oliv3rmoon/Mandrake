@@ -25,6 +25,7 @@
 #include "fg_bridge.h"
 #include "shaders_royale.h"
 #include "shaders_ntsc.h"
+#include "shaders_crt.h"
 #include "shaders_spv.h"
 #include "shaders_ui_spv.h"
 
@@ -40,6 +41,8 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instan
 
 #define FRAMES 2 /* frames in flight */
 #define MAX_IMAGES 8
+#define SHADED_N 6 /* pipelines in shaded[] */
+#define MAXP 12    /* passes of a shader chain */
 
 /* ---------------------------------------------------------------- functions */
 
@@ -71,7 +74,7 @@ VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instan
     X(vkCmdBeginRenderPass) X(vkCmdEndRenderPass) X(vkCmdBindPipeline)                           \
     X(vkCmdBindDescriptorSets) X(vkCmdPushConstants) X(vkCmdDraw) X(vkCmdSetViewport)            \
     X(vkCmdSetScissor) X(vkCmdBlitImage) X(vkCmdCopyImageToBuffer) X(vkQueueWaitIdle) X(vkCreateFence) X(vkDestroyFence) X(vkWaitForFences) X(vkResetFences)    \
-    X(vkCreateSemaphore) X(vkDestroySemaphore) X(vkCmdBindVertexBuffers) X(vkFreeDescriptorSets)
+    X(vkCreateSemaphore) X(vkDestroySemaphore) X(vkCmdBindVertexBuffers) X(vkFreeDescriptorSets) X(vkCmdClearColorImage)
 
 #define DECLARE(name) static PFN_##name name;
 VK_INSTANCE_FUNCS(DECLARE)
@@ -99,7 +102,7 @@ static struct
     VkRenderPass pass;
     VkPipelineLayout layout;
     VkPipeline opaque, blended;
-    VkPipeline shaded[4]; /* the game through sharp.frag, crt.frag, lcd3x.frag, downsample.frag */
+    VkPipeline shaded[SHADED_N]; /* the game through lcd3x.frag, downsample.frag, then crt_lottes, crt_pi, sameboy_lcd, zfast_lcd */
     VkDescriptorSetLayout set_layout;
     VkDescriptorPool pool;
     VkSampler sampler, sampler_nearest; /* the game picture uses _nearest when the final scale is not smoothed */
@@ -128,7 +131,7 @@ static struct
     bool game_shown; /* plat asked for the picture this frame */
     float game_rect[4];
     float game_crop; /* share of the picture's height hidden at top and bottom */
-    int game_shader;  /* 0 none, 1 LCD3x, 2 CRT Royale, 3 CRT, 4 sharp bilinear, 5 to 8 NTSC, 99 supersampling */
+    int game_shader;  /* 0 none, 1 LCD3x, 2 CRT Royale Fast, 5 to 8 NTSC, 9 to 12 CRT Lottes, CRT Pi, Game Boy LCD, zfast LCD, 13 to 16 CRT Royale, Newpixie, Hyllian NTSC, Mattias, 99 supersampling */
     float game_tex[2], game_lines;
     /* frame generation (fg_bridge.h): the game drawn into the interpolator's frame,
      * the frame halfway to the previous one shown first, then this one */
@@ -609,10 +612,12 @@ static bool create_pipeline(char *error, size_t size)
     gp.renderPass = V.pass;
     VkResult r = vkCreateGraphicsPipelines(V.device, VK_NULL_HANDLE, 1, &gp, NULL, &V.opaque);
     /* the game's shaders: the same opaque pipeline with another fragment stage */
-    const uint32_t *shader_code[4] = {SPV_SHARP_FRAG, SPV_CRT_FRAG, SPV_LCD3X_FRAG, SPV_DOWNSAMPLE_FRAG};
-    const size_t shader_size[4] = {sizeof(SPV_SHARP_FRAG), sizeof(SPV_CRT_FRAG), sizeof(SPV_LCD3X_FRAG),
-                                   sizeof(SPV_DOWNSAMPLE_FRAG)};
-    for (int k = 0; k < 4 && r == VK_SUCCESS; ++k)
+    const uint32_t *shader_code[SHADED_N] = {SPV_LCD3X_FRAG,      SPV_DOWNSAMPLE_FRAG, SPV_CRT_LOTTES_FRAG,
+                                             SPV_CRT_PI_FRAG,     SPV_SAMEBOY_LCD_FRAG, SPV_ZFAST_LCD_FRAG};
+    const size_t shader_size[SHADED_N] = {sizeof(SPV_LCD3X_FRAG),      sizeof(SPV_DOWNSAMPLE_FRAG),
+                                          sizeof(SPV_CRT_LOTTES_FRAG), sizeof(SPV_CRT_PI_FRAG),
+                                          sizeof(SPV_SAMEBOY_LCD_FRAG), sizeof(SPV_ZFAST_LCD_FRAG)};
+    for (int k = 0; k < SHADED_N && r == VK_SUCCESS; ++k)
     {
         VkShaderModule fm;
         sm.codeSize = shader_size[k];
@@ -798,17 +803,16 @@ static void draw_quad(VkCommandBuffer cb, VkDescriptorSet set, float x, float y,
     draw_quad_in(cb, set, (float)V.extent.width, (float)V.extent.height, x, y, w, h, v0, v1, info, colour);
 }
 
-/* The pipeline of each shader value: shaded[] holds sharp, CRT, LCD3x, supersampling (the chains, CRT Royale
- * and NTSC, draw through their own passes). */
+/* The pipeline of each shader value: shaded[] holds LCD3x, supersampling, then the four single-pass
+ * shaders 9 to 12 (the chains, CRT Royale and NTSC, draw through their own passes). */
 static VkPipeline game_pipeline(int sh)
 {
-    static const int slot_of[5] = {-1, 2, -1, 1, 0};
-    int slot = sh == 99 ? 3 : sh >= 0 && sh <= 4 ? slot_of[sh] : -1;
+    int slot = sh == 99 ? 1 : sh == 1 ? 0 : sh >= 9 && sh <= 12 ? sh - 7 : -1;
     return slot >= 0 && V.shaded[slot] ? V.shaded[slot] : V.opaque;
 }
 
-/* What the picture's shader reads in `info`, for a picture shown w x h pixels big. Sharp: screen pixels per
- * texel; CRT and LCD3x: the PS1's line count. */
+/* What the picture's shader reads in `info`, for a picture shown w x h pixels big. Supersampling: screen pixels per
+ * texel; the others: the PS1's line count. */
 static void game_info(float info[4], int sh, float w, float h, float tw, float th, bool cropped)
 {
     /* tw x th: the picture being drawn (the core's, the interpolator's or FSR 1's); cropped: its top and bottom are
@@ -817,20 +821,8 @@ static void game_info(float info[4], int sh, float w, float h, float tw, float t
     float lines = V.game_lines * (1.0f - 2.0f * V.game_crop);
     info[0] = tw;
     info[1] = th;
-    info[2] = sh == 1 || sh == 3 ? lines : w / (tw > 0 ? tw : 1);
+    info[2] = sh == 1 || (sh >= 9 && sh <= 12) ? lines : w / (tw > 0 ? tw : 1);
     info[3] = h / (th * shown > 0 ? th * shown : 1);
-    if (sh == 4 && V.game_tex[0] >= 1.0f && V.game_tex[1] >= 1.0f)
-    {
-        /* sharp bilinear works on the PS1's own pixels, not on the bigger picture the core draws at the
-         * internal resolution (there a texel is smaller than a screen pixel and nothing would be sharpened) */
-        float native_h = V.game_lines >= 1.0f ? V.game_lines : 240.0f;
-        float native_w = V.game_tex[0] * native_h / V.game_tex[1];
-        float visible = native_h * (1.0f - 2.0f * V.game_crop);
-        info[0] = native_w;
-        info[1] = cropped ? visible : native_h;
-        info[2] = w / native_w;
-        info[3] = h / visible;
-    }
 }
 
 /* ---------------------------------------------------------------- frame generation */
@@ -1072,13 +1064,18 @@ static VkImageView fg_new_frame(VkCommandBuffer cb, int f)
 #define SHADER_ROYALE 2     /* the values of Settings > Display > Shader */
 #define SHADER_NTSC_FIRST 5 /* 5 to 8: the four NTSC presets (shaders_ntsc.h); FSR 1 is chain 5, run by its own switch */
 #define SHADER_NTSC_LAST 8
+#define SHADER_CRT_FIRST 13 /* 13 to 16: CRT Royale, Newpixie, Hyllian NTSC, Mattias (shaders_crt.h); chains 6 to 9 */
+#define SHADER_CRT_LAST 16
 #define SHADER_SUPERSAMPLE 99 /* not a choice of the settings */
 
-/* The chain a shader value runs: 0 CRT Royale, 1 to 4 the NTSC presets; -1 for the others. */
+/* The chain a shader value runs: 0 CRT Royale Fast, 1 to 4 the NTSC presets, 6 to 9 the presets of shaders_crt.h; -1 for
+ * the others. */
 static int chain_of_shader(int sh)
 {
     if (sh == SHADER_ROYALE)
         return 0;
+    if (sh >= SHADER_CRT_FIRST && sh <= SHADER_CRT_LAST)
+        return sh - SHADER_CRT_FIRST + 6;
     return sh >= SHADER_NTSC_FIRST && sh <= SHADER_NTSC_LAST ? sh - SHADER_NTSC_FIRST + 1 : -1;
 }
 
@@ -1088,32 +1085,39 @@ typedef struct Chain
     bool offscreen;           /* the last pass draws into an image too (FSR 1, before the picture's shader) */
     VkImageLayout source_layout; /* of source_view */
     const RoyalePass *passes; /* the chain being run */
+    const RoyaleTexture *textures;
     int n, tex_n, preset;     /* its passes, its textures, which one it is */
+    bool feed[MAXP];          /* a pass whose previous frame a pass reads: two images, taken in turns */
+    bool clear_pending;       /* the images of those passes start black */
     VkRenderPass rp[3]; /* an intermediate image: [0] linear, [1] sRGB, [2] float */
     VkDescriptorSetLayout set_layout;
     VkPipelineLayout layout;
-    VkPipeline pipe[8];
+    VkPipeline pipe[MAXP];
     VkSampler sampler[2][3]; /* [linear][border, edge, repeat] */
     VkDescriptorPool pool;
-    VkDescriptorSet sets[FRAMES][8];
+    VkDescriptorSet sets[FRAMES][MAXP];
     VkBuffer ubo;
     VkDeviceMemory ubo_memory;
-    VkImage tex_image[4];
-    VkDeviceMemory tex_memory[4];
-    VkImageView tex_view[4];
+    VkBuffer pass_ubo[FRAMES][MAXP]; /* the passes that have a uniform block of their own (RoyalePass.ubo_blob) */
+    VkDeviceMemory pass_ubo_memory[FRAMES][MAXP];
+    uint8_t *pass_ubo_map[FRAMES][MAXP];
+    VkImage tex_image[8];
+    VkDeviceMemory tex_memory[8];
+    VkImageView tex_view[8];
     struct
     {
-        VkImage image;
-        VkDeviceMemory memory;
-        VkImageView view;
-        VkFramebuffer fb;
-    } out[8]; /* the images of every pass but the last */
-    int size[8][2];    /* each pass's output size */
+        VkImage image[2];
+        VkDeviceMemory memory[2];
+        VkImageView view[2];
+        VkFramebuffer fb[2];
+    } out[MAXP]; /* the images of every pass but the last */
+    int size[MAXP][2]; /* each pass's output size */
     int native[2];     /* the PS1's picture */
     VkImageView source_view; /* frame generation: the picture the chain reads instead of the core's (GENERAL layout) */
     int built[4];      /* what the images were made for: native size, viewport size */
     bool have_images;
     uint32_t frames;
+    uint32_t frame_now; /* the frame being drawn: the last pass is drawn after royale_record has counted it */
 } Chain;
 
 /* Two chains can run in a frame: [0] the picture's shader (CRT Royale, NTSC), [1] FSR 1 before it. R is the one
@@ -1122,18 +1126,27 @@ static Chain CHS[2];
 static Chain *CH = &CHS[0];
 #define R (*CH)
 
+/* The image of pass i this frame: the passes some pass reads the previous frame of take turns between two. */
+static int royale_cur(int i)
+{
+    return R.feed[i] ? (int)(R.frame_now & 1) : 0;
+}
+
 static void royale_free_images(void)
 {
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < MAXP; ++i)
     {
-        if (R.out[i].fb)
-            vkDestroyFramebuffer(V.device, R.out[i].fb, NULL);
-        if (R.out[i].view)
-            vkDestroyImageView(V.device, R.out[i].view, NULL);
-        if (R.out[i].image)
-            vkDestroyImage(V.device, R.out[i].image, NULL);
-        if (R.out[i].memory)
-            vkFreeMemory(V.device, R.out[i].memory, NULL);
+        for (int b = 0; b < 2; ++b)
+        {
+            if (R.out[i].fb[b])
+                vkDestroyFramebuffer(V.device, R.out[i].fb[b], NULL);
+            if (R.out[i].view[b])
+                vkDestroyImageView(V.device, R.out[i].view[b], NULL);
+            if (R.out[i].image[b])
+                vkDestroyImage(V.device, R.out[i].image[b], NULL);
+            if (R.out[i].memory[b])
+                vkFreeMemory(V.device, R.out[i].memory[b], NULL);
+        }
         memset(&R.out[i], 0, sizeof(R.out[i]));
     }
     R.have_images = false;
@@ -1144,10 +1157,18 @@ static void royale_free(void)
     if (!V.device)
         return;
     royale_free_images();
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < MAXP; ++i)
         if (R.pipe[i])
             vkDestroyPipeline(V.device, R.pipe[i], NULL);
-    for (int t = 0; t < 4; ++t)
+    for (int f = 0; f < FRAMES; ++f)
+        for (int i = 0; i < MAXP; ++i)
+        {
+            if (R.pass_ubo[f][i])
+                vkDestroyBuffer(V.device, R.pass_ubo[f][i], NULL);
+            if (R.pass_ubo_memory[f][i])
+                vkFreeMemory(V.device, R.pass_ubo_memory[f][i], NULL);
+        }
+    for (int t = 0; t < 8; ++t)
     {
         if (R.tex_view[t])
             vkDestroyImageView(V.device, R.tex_view[t], NULL);
@@ -1244,8 +1265,8 @@ static VkPipeline royale_pipeline(const RoyalePass *p, VkRenderPass pass)
 /* The three phosphor masks, uploaded once. */
 static bool royale_textures(void)
 {
-    VkBuffer staging[4] = {0};
-    VkDeviceMemory staging_memory[4] = {0};
+    VkBuffer staging[8] = {0};
+    VkDeviceMemory staging_memory[8] = {0};
     VkCommandBuffer cb = VK_NULL_HANDLE;
     bool ok = false;
     VkCommandBufferAllocateInfo ca = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
@@ -1259,7 +1280,7 @@ static bool royale_textures(void)
     vkBeginCommandBuffer(cb, &begin);
     for (int t = 0; t < R.tex_n; ++t)
     {
-        const RoyaleTexture *tex = &ROYALE_TEXTURES[t];
+        const RoyaleTexture *tex = &R.textures[t];
         VkDeviceSize bytes = (VkDeviceSize)tex->width * tex->height * 4;
         VkMemoryRequirements req;
         VkImageCreateInfo ii = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
@@ -1316,7 +1337,7 @@ static bool royale_textures(void)
     ok = vkQueueSubmit(V.queue, 1, &submit, VK_NULL_HANDLE) == VK_SUCCESS && vkQueueWaitIdle(V.queue) == VK_SUCCESS;
 done:
     vkFreeCommandBuffers(V.device, V.commands, 1, &cb);
-    for (int t = 0; t < 4; ++t)
+    for (int t = 0; t < 8; ++t)
     {
         if (staging[t])
             vkDestroyBuffer(V.device, staging[t], NULL);
@@ -1370,13 +1391,13 @@ static bool royale_init(void)
             return false;
     }
 
-    /* binding 0: the parameters; 2 to 5: the pictures (1 is the push constants' in the .slang convention) */
-    VkDescriptorSetLayoutBinding binding[5] = {{0}};
+    /* binding 0: the parameters; 2 to 9: the pictures (1 is the push constants' in the .slang convention) */
+    VkDescriptorSetLayoutBinding binding[9] = {{0}};
     binding[0].binding = 0;
     binding[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     binding[0].descriptorCount = 1;
     binding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-    for (int k = 1; k < 5; ++k)
+    for (int k = 1; k < 9; ++k)
     {
         binding[k].binding = (uint32_t)k + 1;
         binding[k].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1384,7 +1405,7 @@ static bool royale_init(void)
         binding[k].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     }
     VkDescriptorSetLayoutCreateInfo dsl = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    dsl.bindingCount = 5;
+    dsl.bindingCount = 9;
     dsl.pBindings = binding;
     if (vkCreateDescriptorSetLayout(V.device, &dsl, NULL, &R.set_layout) != VK_SUCCESS)
         return false;
@@ -1411,27 +1432,27 @@ static bool royale_init(void)
                 return false;
         }
 
-    VkDescriptorPoolSize ps[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, FRAMES * 8},
-                                  {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, FRAMES * 8 * 4}};
+    VkDescriptorPoolSize ps[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, FRAMES * MAXP},
+                                  {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, FRAMES * MAXP * 8}};
     VkDescriptorPoolCreateInfo dp = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    dp.maxSets = FRAMES * 8;
+    dp.maxSets = FRAMES * MAXP;
     dp.poolSizeCount = 2;
     dp.pPoolSizes = ps;
     if (vkCreateDescriptorPool(V.device, &dp, NULL, &R.pool) != VK_SUCCESS)
         return false;
-    VkDescriptorSetLayout layouts[FRAMES * 8];
-    for (int k = 0; k < FRAMES * 8; ++k)
+    VkDescriptorSetLayout layouts[FRAMES * MAXP];
+    for (int k = 0; k < FRAMES * MAXP; ++k)
         layouts[k] = R.set_layout;
     VkDescriptorSetAllocateInfo da = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     da.descriptorPool = R.pool;
-    da.descriptorSetCount = FRAMES * 8;
+    da.descriptorSetCount = FRAMES * MAXP;
     da.pSetLayouts = layouts;
-    VkDescriptorSet all[FRAMES * 8];
+    VkDescriptorSet all[FRAMES * MAXP];
     if (vkAllocateDescriptorSets(V.device, &da, all) != VK_SUCCESS)
         return false;
     for (int f = 0; f < FRAMES; ++f)
-        for (int i = 0; i < 8; ++i)
-            R.sets[f][i] = all[f * 8 + i];
+        for (int i = 0; i < MAXP; ++i)
+            R.sets[f][i] = all[f * MAXP + i];
 
     /* the parameters: set once, from the defaults */
     VkBufferCreateInfo bi = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -1448,6 +1469,32 @@ static bool royale_init(void)
         return false;
     memset(map, 0, 256);
     memcpy(map, ROYALE_UBO, sizeof(ROYALE_UBO));
+
+    /* the passes with a uniform block of their own: one per frame in flight, as the renderer writes sizes into it */
+    for (int i = 0; i < R.n; ++i)
+    {
+        const RoyalePass *p = &R.passes[i];
+        if (!p->ubo_blob)
+            continue;
+        for (int f = 0; f < FRAMES; ++f)
+        {
+            VkBufferCreateInfo pb = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+            pb.size = p->ubo_size < 256 ? 256 : p->ubo_size;
+            pb.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            void *pmap = NULL;
+            if (vkCreateBuffer(V.device, &pb, NULL, &R.pass_ubo[f][i]) != VK_SUCCESS)
+                return false;
+            vkGetBufferMemoryRequirements(V.device, R.pass_ubo[f][i], &req);
+            if (!allocate(req, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                          &R.pass_ubo_memory[f][i]) ||
+                vkBindBufferMemory(V.device, R.pass_ubo[f][i], R.pass_ubo_memory[f][i], 0) != VK_SUCCESS ||
+                vkMapMemory(V.device, R.pass_ubo_memory[f][i], 0, VK_WHOLE_SIZE, 0, &pmap) != VK_SUCCESS)
+                return false;
+            memset(pmap, 0, pb.size);
+            memcpy(pmap, p->ubo_blob, p->ubo_size);
+            R.pass_ubo_map[f][i] = pmap;
+        }
+    }
 
     if (!royale_textures())
         return false;
@@ -1477,9 +1524,24 @@ static bool royale_prepare(int preset, bool offscreen, int native_w, int native_
         vkDeviceWaitIdle(V.device);
         royale_free();
         R.preset = preset;
-        R.passes = preset ? NTSC_PRESETS[preset - 1].passes : ROYALE_PASSES;
-        R.n = preset ? NTSC_PRESETS[preset - 1].count : (int)(sizeof(ROYALE_PASSES) / sizeof(ROYALE_PASSES[0]));
-        R.tex_n = preset ? 0 : (int)(sizeof(ROYALE_TEXTURES) / sizeof(ROYALE_TEXTURES[0]));
+        if (preset >= 6)
+        {
+            R.passes = CRT_PRESETS[preset - 6].passes;
+            R.n = CRT_PRESETS[preset - 6].count;
+            R.textures = CRT_PRESETS[preset - 6].textures;
+            R.tex_n = CRT_PRESETS[preset - 6].tex_count;
+        }
+        else
+        {
+            R.passes = preset ? NTSC_PRESETS[preset - 1].passes : ROYALE_PASSES;
+            R.n = preset ? NTSC_PRESETS[preset - 1].count : (int)(sizeof(ROYALE_PASSES) / sizeof(ROYALE_PASSES[0]));
+            R.textures = preset ? NULL : ROYALE_TEXTURES;
+            R.tex_n = preset ? 0 : (int)(sizeof(ROYALE_TEXTURES) / sizeof(ROYALE_TEXTURES[0]));
+        }
+        for (int i = 0; i < R.n; ++i)
+            for (int k = 0; k < R.passes[i].sampler_count; ++k)
+                if (R.passes[i].samplers[k].kind == ROYALE_SAMPLER_FEEDBACK)
+                    R.feed[R.passes[i].samplers[k].index] = true;
         R.offscreen = offscreen;
     }
     if (!R.tried)
@@ -1489,10 +1551,12 @@ static bool royale_prepare(int preset, bool offscreen, int native_w, int native_
         {
             SwanStationPS5_log("vulkan: shader chain %d could not be set up", preset);
             const RoyalePass *passes = R.passes;
+            const RoyaleTexture *textures = R.textures;
             int n = R.n, tex_n = R.tex_n;
             royale_free();
             R.preset = preset;
             R.passes = passes;
+            R.textures = textures;
             R.n = n;
             R.tex_n = tex_n;
             R.offscreen = offscreen;
@@ -1529,45 +1593,49 @@ static bool royale_prepare(int preset, bool offscreen, int native_w, int native_
         ii.mipLevels = ii.arrayLayers = 1;
         ii.samples = VK_SAMPLE_COUNT_1_BIT;
         ii.tiling = VK_IMAGE_TILING_OPTIMAL;
-        ii.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-        VkMemoryRequirements req;
-        bool ok = vkCreateImage(V.device, &ii, NULL, &R.out[i].image) == VK_SUCCESS;
-        if (ok)
+        ii.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        for (int b = 0; b < (R.feed[i] ? 2 : 1); ++b)
         {
-            vkGetImageMemoryRequirements(V.device, R.out[i].image, &req);
-            ok = allocate(req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &R.out[i].memory) &&
-                 vkBindImageMemory(V.device, R.out[i].image, R.out[i].memory, 0) == VK_SUCCESS;
-        }
-        if (ok)
-        {
-            VkImageViewCreateInfo view = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-            view.image = R.out[i].image;
-            view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            view.format = format;
-            view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            view.subresourceRange.levelCount = 1;
-            view.subresourceRange.layerCount = 1;
-            ok = vkCreateImageView(V.device, &view, NULL, &R.out[i].view) == VK_SUCCESS;
-        }
-        if (ok)
-        {
-            VkFramebufferCreateInfo fb = {VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-            fb.renderPass = R.rp[p->srgb];
-            fb.attachmentCount = 1;
-            fb.pAttachments = &R.out[i].view;
-            fb.width = (uint32_t)R.size[i][0];
-            fb.height = (uint32_t)R.size[i][1];
-            fb.layers = 1;
-            ok = vkCreateFramebuffer(V.device, &fb, NULL, &R.out[i].fb) == VK_SUCCESS;
-        }
-        if (!ok)
-        {
-            SwanStationPS5_log("vulkan: shader chain %d: no memory for its images", preset);
-            royale_free_images();
-            R.ok = false;
-            return false;
+            VkMemoryRequirements req;
+            bool ok = vkCreateImage(V.device, &ii, NULL, &R.out[i].image[b]) == VK_SUCCESS;
+            if (ok)
+            {
+                vkGetImageMemoryRequirements(V.device, R.out[i].image[b], &req);
+                ok = allocate(req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &R.out[i].memory[b]) &&
+                     vkBindImageMemory(V.device, R.out[i].image[b], R.out[i].memory[b], 0) == VK_SUCCESS;
+            }
+            if (ok)
+            {
+                VkImageViewCreateInfo view = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+                view.image = R.out[i].image[b];
+                view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                view.format = format;
+                view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                view.subresourceRange.levelCount = 1;
+                view.subresourceRange.layerCount = 1;
+                ok = vkCreateImageView(V.device, &view, NULL, &R.out[i].view[b]) == VK_SUCCESS;
+            }
+            if (ok)
+            {
+                VkFramebufferCreateInfo fb = {VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+                fb.renderPass = R.rp[p->srgb];
+                fb.attachmentCount = 1;
+                fb.pAttachments = &R.out[i].view[b];
+                fb.width = (uint32_t)R.size[i][0];
+                fb.height = (uint32_t)R.size[i][1];
+                fb.layers = 1;
+                ok = vkCreateFramebuffer(V.device, &fb, NULL, &R.out[i].fb[b]) == VK_SUCCESS;
+            }
+            if (!ok)
+            {
+                SwanStationPS5_log("vulkan: shader chain %d: no memory for its images", preset);
+                royale_free_images();
+                R.ok = false;
+                return false;
+            }
         }
     }
+    R.clear_pending = true;
     memcpy(R.built, key, sizeof(key));
     R.have_images = true;
     SwanStationPS5_log("vulkan: shader chain %d: PS1 %dx%d, viewport %dx%d", preset, native_w, native_h, viewport_w, viewport_h);
@@ -1582,46 +1650,54 @@ static void royale_size_vec(float *v, int w, int h)
     v[3] = 1.0f / (float)h;
 }
 
+/* One member of a pass's push constants or uniform block. */
+static void royale_member(int i, const RoyalePush *m, uint8_t *data)
+{
+    const RoyalePass *p = &R.passes[i];
+    int in_w = i == 0 ? R.native[0] : R.size[i - 1][0], in_h = i == 0 ? R.native[1] : R.size[i - 1][1];
+    float *v = (float *)(data + m->offset);
+    switch (m->kind)
+    {
+    case ROYALE_PUSH_SOURCE_SIZE: royale_size_vec(v, in_w, in_h); break;
+    case ROYALE_PUSH_ORIGINAL_SIZE: royale_size_vec(v, R.native[0], R.native[1]); break;
+    case ROYALE_PUSH_OUTPUT_SIZE: royale_size_vec(v, R.size[i][0], R.size[i][1]); break;
+    case ROYALE_PUSH_FINAL_SIZE: royale_size_vec(v, R.size[R.n - 1][0], R.size[R.n - 1][1]); break;
+    case ROYALE_PUSH_FRAME:
+    {
+        uint32_t frame = p->frame_mod ? R.frame_now % p->frame_mod : R.frame_now;
+        memcpy(v, &frame, sizeof(uint32_t));
+        break;
+    }
+    case ROYALE_PUSH_PASS_SIZE: royale_size_vec(v, R.size[m->index][0], R.size[m->index][1]); break;
+    case ROYALE_PUSH_TEXTURE_SIZE: royale_size_vec(v, R.textures[m->index].width, R.textures[m->index].height); break;
+    case ROYALE_PUSH_PARAM: *v = m->value; break;
+    default: break;
+    }
+}
+
 /* A pass's push constants. */
 static void royale_push(int i, uint8_t *data)
 {
     const RoyalePass *p = &R.passes[i];
     memset(data, 0, 128);
-    int in_w = i == 0 ? R.native[0] : R.size[i - 1][0], in_h = i == 0 ? R.native[1] : R.size[i - 1][1];
     for (int k = 0; k < p->push_count; ++k)
-    {
-        const RoyalePush *m = &p->push[k];
-        float *v = (float *)(data + m->offset);
-        switch (m->kind)
-        {
-        case ROYALE_PUSH_SOURCE_SIZE: royale_size_vec(v, in_w, in_h); break;
-        case ROYALE_PUSH_ORIGINAL_SIZE: royale_size_vec(v, R.native[0], R.native[1]); break;
-        case ROYALE_PUSH_OUTPUT_SIZE: royale_size_vec(v, R.size[i][0], R.size[i][1]); break;
-        case ROYALE_PUSH_FINAL_SIZE: royale_size_vec(v, R.size[R.n - 1][0], R.size[R.n - 1][1]); break;
-        case ROYALE_PUSH_FRAME:
-        {
-            uint32_t frame = p->frame_mod ? R.frames % p->frame_mod : R.frames;
-            memcpy(v, &frame, sizeof(uint32_t));
-            break;
-        }
-        case ROYALE_PUSH_PASS_SIZE: royale_size_vec(v, R.size[m->index][0], R.size[m->index][1]); break;
-        case ROYALE_PUSH_TEXTURE_SIZE:
-            royale_size_vec(v, ROYALE_TEXTURES[m->index].width, ROYALE_TEXTURES[m->index].height);
-            break;
-        case ROYALE_PUSH_PARAM: *v = m->value; break;
-        default: break;
-        }
-    }
+        royale_member(i, &p->push[k], data);
 }
 
 /* What a pass reads, written into this frame's descriptor set for it. */
 static void royale_set(int f, int i)
 {
     const RoyalePass *p = &R.passes[i];
-    VkWriteDescriptorSet w[5];
-    VkDescriptorImageInfo di[4];
+    VkWriteDescriptorSet w[9];
+    VkDescriptorImageInfo di[8];
     VkDescriptorBufferInfo bi = {R.ubo, 0, sizeof(ROYALE_UBO) <= 256 ? 256 : sizeof(ROYALE_UBO)};
     int n = 0;
+    if (p->ubo_blob)
+    {
+        for (int k = 0; k < p->ubo_sem_count; ++k)
+            royale_member(i, &p->ubo_sem[k], R.pass_ubo_map[f][i]);
+        bi = (VkDescriptorBufferInfo){R.pass_ubo[f][i], 0, p->ubo_size < 256 ? 256 : p->ubo_size};
+    }
     memset(w, 0, sizeof(w));
     w[n].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     w[n].dstSet = R.sets[f][i];
@@ -1630,7 +1706,7 @@ static void royale_set(int f, int i)
     w[n].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     w[n].pBufferInfo = &bi;
     ++n;
-    for (int s = 0; s < p->sampler_count && s < 4; ++s)
+    for (int s = 0; s < p->sampler_count && s < 8; ++s)
     {
         const RoyaleSampler *sm = &p->samplers[s];
         VkImageView view = VK_NULL_HANDLE;
@@ -1641,22 +1717,26 @@ static void royale_set(int f, int i)
         case ROYALE_SAMPLER_SOURCE:
             if (i == 0)
             {
-                view = R.source_view ? R.source_view : V.game_view; /* the PS1's picture is made from the bigger one, smoothly */
+                view = R.source_view ? R.source_view : V.game_view;
                 layout = R.source_view ? R.source_layout : V.game_layout;
-                sampler = R.sampler[1][1];
+                /* the PS1's picture is made from the bigger one, smoothly; a first pass that is not smaller than the
+                 * picture reads it as the preset says */
+                bool smaller = R.source_view || R.size[0][0] < (int)V.game_tex[0] || R.size[0][1] < (int)V.game_tex[1];
+                sampler = smaller ? R.sampler[1][1] : R.sampler[p->linear][p->wrap];
             }
             else
-                view = R.out[i - 1].view;
+                view = R.out[i - 1].view[royale_cur(i - 1)];
             break;
         case ROYALE_SAMPLER_ORIGINAL:
             view = R.source_view ? R.source_view : V.game_view;
             layout = R.source_view ? R.source_layout : V.game_layout;
             sampler = R.sampler[1][1];
             break;
-        case ROYALE_SAMPLER_PASS: view = R.out[sm->index].view; break;
+        case ROYALE_SAMPLER_PASS: view = R.out[sm->index].view[royale_cur(sm->index)]; break;
+        case ROYALE_SAMPLER_FEEDBACK: view = R.out[sm->index].view[royale_cur(sm->index) ^ 1]; break;
         default:
             view = R.tex_view[sm->index];
-            sampler = R.sampler[ROYALE_TEXTURES[sm->index].linear][ROYALE_TEXTURES[sm->index].wrap];
+            sampler = R.sampler[R.textures[sm->index].linear][R.textures[sm->index].wrap];
             break;
         }
         di[s] = (VkDescriptorImageInfo){sampler, view, layout};
@@ -1685,13 +1765,33 @@ static void royale_draw(VkCommandBuffer cb, int f, int i)
 /* Every pass but the last, each into its own image (outside the swapchain's render pass). */
 static void royale_record(VkCommandBuffer cb, int f)
 {
+    R.frame_now = R.frames;
+    if (R.clear_pending)
+    {
+        /* what a pass read before the chain ever drew it: black */
+        static const VkClearColorValue black = {{0.0f, 0.0f, 0.0f, 0.0f}};
+        VkImageSubresourceRange range = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        for (int i = 0; i < R.n; ++i)
+            for (int b = 0; b < 2; ++b)
+                if (R.feed[i] && R.out[i].image[b])
+                {
+                    barrier(cb, R.out[i].image[b], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0,
+                            VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+                    vkCmdClearColorImage(cb, R.out[i].image[b], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
+                    barrier(cb, R.out[i].image[b], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
+                            VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                }
+        R.clear_pending = false;
+    }
     for (int i = 0; i < R.n; ++i)
         royale_set(f, i);
     for (int i = 0; i < (R.offscreen ? R.n : R.n - 1); ++i)
     {
         VkRenderPassBeginInfo rp = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
         rp.renderPass = R.rp[R.passes[i].srgb];
-        rp.framebuffer = R.out[i].fb;
+        rp.framebuffer = R.out[i].fb[royale_cur(i)];
         rp.renderArea.extent = (VkExtent2D){(uint32_t)R.size[i][0], (uint32_t)R.size[i][1]};
         vkCmdBeginRenderPass(cb, &rp, VK_SUBPASS_CONTENTS_INLINE);
         VkViewport viewport = {0, 0, (float)R.size[i][0], (float)R.size[i][1], 0, 1};
@@ -1719,7 +1819,7 @@ static VkImageView fsr_scale(VkCommandBuffer cb, int f, int out_w, int out_h)
     {
         R.source_view = VK_NULL_HANDLE; /* the core's picture */
         royale_record(cb, f);
-        view = R.out[R.n - 1].view;
+        view = R.out[R.n - 1].view[royale_cur(R.n - 1)];
     }
     CH = &CHS[0];
     return view;
@@ -2114,10 +2214,11 @@ static void destroy_device_objects(void)
         vkDestroyPipeline(V.device, V.opaque, NULL);
     if (V.blended)
         vkDestroyPipeline(V.device, V.blended, NULL);
-    for (int k = 0; k < 3; ++k)
+    for (int k = 0; k < SHADED_N; ++k)
         if (V.shaded[k])
             vkDestroyPipeline(V.device, V.shaded[k], NULL);
-    V.shaded[0] = V.shaded[1] = V.shaded[2] = V.shaded[3] = VK_NULL_HANDLE;
+    for (int k = 0; k < SHADED_N; ++k)
+        V.shaded[k] = VK_NULL_HANDLE;
     if (V.layout)
         vkDestroyPipelineLayout(V.device, V.layout, NULL);
     if (V.set_layout)
