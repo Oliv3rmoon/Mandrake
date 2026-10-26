@@ -132,7 +132,8 @@ static const char *const ANALOG_COMBOS[] = {
     "{L1} + {R1} + {L3} + {R3}", "{L1} + {L2} + {R1} + {R2} + {Options} + {Touchpad}", "{L1} + {R1} + {Touchpad}",
     "{L1} + {R1} + {Options}", "{L1} + {R1} + {L3}", "{L1} + {R1} + {R3}", "{L2} + {R2} + {Touchpad}",
     "{L2} + {R2} + {Options}", "{L2} + {R2} + {L3}", "{L2} + {R2} + {R3}", "{L3} + {R3}"};
-static const char *const MENU_COMBOS[] = {"Hold {Touchpad}", "Hold {L3} + {R3}", "Hold {Options} + {Touchpad}"};
+static const char *const MENU_COMBOS[] = {"Hold {Touchpad} + {R3}", "Hold {L3} + {R3}", "Hold {Options} + {Touchpad}"};
+static const char *const MENU_HOLDS[] = {"Immediate", "0.5 seconds", "1 second"};
 static const char *const BACKGROUNDS[] = {"Dark", "Cover colour"};
 static const char *const CRT_LEVELS[] = {"Off", "Light", "Strong"};
 static const char *const BORDERS[] = {"Black", "Current background", "TV frame"};
@@ -649,7 +650,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
             {
                 Row m = {first ? groups[categories[c]] : NULL,
                          "Game menu combination",
-                         "How the game menu opens during a game: holding the {Touchpad}, holding {L3} + {R3}, or holding {Options} + {Touchpad}, for 1 second. A combination the analog mode combo already uses can't be chosen.",
+                         "How the game menu opens during a game: holding {Touchpad} + {R3}, holding {L3} + {R3}, or holding {Options} + {Touchpad}. A combination the analog mode combo already uses can't be chosen.",
                          K_CHOICE,
                          APPLY_NOW,
                          SP_NONE,
@@ -659,6 +660,18 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                          3,
                          0};
                 rows[n++] = m;
+                Row h = {NULL,
+                         "Game menu hold time",
+                         "How long the game menu combination must be held to open the menu.",
+                         K_CHOICE,
+                         APPLY_NOW,
+                         SP_NONE,
+                         true,
+                         INT_FIELD(menu_hold),
+                         MENU_HOLDS,
+                         3,
+                         0};
+                rows[n++] = h;
                 first = false;
             }
             Row r = {first ? groups[categories[c]] : NULL,

@@ -35,6 +35,7 @@ void config_defaults(Settings *s)
     s->ui_volume = 1; /* 50 % */
     s->vibration = 4;
     s->menu_combo = 1;
+    s->menu_hold = 1;
     s->quick_resume = true;
     s->update_check = true;
     snprintf(s->usb_folder, sizeof(s->usb_folder), "psx"); /* /mnt/ext0/psx, /mnt/ext1/psx and /mnt/usb0/psx to /mnt/usb7/psx */
@@ -134,6 +135,8 @@ static bool config_apply(Settings *s, const char *path)
             s->stick_dpad = atoi(value) % STICK_DPAD_COUNT;
         else if (strcmp(key, "menu_combo") == 0)
             s->menu_combo = atoi(value) >= 0 && atoi(value) < 3 ? atoi(value) : 1;
+        else if (strcmp(key, "menu_hold") == 0)
+            s->menu_hold = atoi(value) >= 0 && atoi(value) < 3 ? atoi(value) : 1;
         else if (strcmp(key, "integer_scale") == 0)
             s->integer_scale = as_bool(value);
         else if (strcmp(key, "internal_scale") == 0)
@@ -450,12 +453,12 @@ bool config_save(const Settings *s, const char *path)
             "dithering=%d\ncd_speed=%d\nanalog=%d\nstate_slot=%d\nlast_game=%d\n"
             "cover_style=%d\ncover_download=%d\nui_sound=%d\nui_volume=%d\n"
             "integer_scale=%d\ninternal_scale=%d\nupscale=%d\nupscale_filter=%d\nstick_dpad=%d\nlanguage=%d\n"
-            "vibration=%d\nsort_mode=%d\nshelf_category=%d\nbackground=%d\nmenu_combo=%d\n",
+            "vibration=%d\nsort_mode=%d\nshelf_category=%d\nbackground=%d\nmenu_combo=%d\nmenu_hold=%d\n",
             s->smooth, s->show_fps, s->region, s->dithering,
             s->cd_speed, s->analog, s->state_slot, s->last_game, s->cover_style,
             s->cover_download, s->ui_sound, s->ui_volume, s->integer_scale, s->internal_res, s->upscale,
             s->upscale_filter, s->stick_dpad, s->language, s->vibration,
-            s->sort_mode, s->shelf_category, s->background, s->menu_combo);
+            s->sort_mode, s->shelf_category, s->background, s->menu_combo, s->menu_hold);
     fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\n",
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
             s->update_check);

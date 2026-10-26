@@ -1925,9 +1925,9 @@ static void crop_ratio_text(char *out, size_t size, float r)
 
 static const char *menu_combo_hint(void)
 {
-    return app.global.menu_combo == 1   ? "Hold {L3} + {R3} for 1 second to open the game menu."
-           : app.global.menu_combo == 2 ? "Hold {Options} + {Touchpad} for 1 second to open the game menu."
-                                        : "Hold the {Touchpad} for 1 second to open the game menu.";
+    return app.global.menu_combo == 1   ? "Hold {L3} + {R3} to open the game menu."
+           : app.global.menu_combo == 2 ? "Hold {Options} + {Touchpad} to open the game menu."
+                                        : "Hold {Touchpad} + {R3} to open the game menu.";
 }
 
 void app_start_game(int index, bool resume)
@@ -2352,18 +2352,19 @@ static void game_screen(PadState *pads)
             touch_used[i] = false;
         }
     }
-    /* player 1's touchpad held for 1 second, with no shortcut used: the SwanStationPS5 menu */
+    /* player 1's menu combination held for the chosen time: the SwanStationPS5 menu */
     static uint64_t menu_since;
+    static const uint64_t MENU_HOLD_US[3] = {0, 500000, 1000000};
     const uint32_t first_pad = pads[0].buttons;
     const int menu_combo = app.global.menu_combo;
     const bool menu_held = menu_combo == 1 ? (first_pad & BIT(BTN_L3)) && (first_pad & BIT(BTN_R3)) && !(first_pad & shoulders)
                            : menu_combo == 2 ? touch_of[0] && !chord_of[0] && (first_pad & BIT(BTN_START))
-                                             : touch_of[0] && !touch_used[0];
+                                             : touch_of[0] && !chord_of[0] && (first_pad & BIT(BTN_R3));
     if (!menu_held)
         menu_since = 0;
     else if (!menu_since)
         menu_since = t_now;
-    if (menu_held && t_now - menu_since >= 1000000)
+    if (menu_held && t_now - menu_since >= MENU_HOLD_US[app.global.menu_hold])
     {
         open_menu = true;
         menu_since = 0;
