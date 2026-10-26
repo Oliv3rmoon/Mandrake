@@ -206,6 +206,16 @@ Useful options go after a `?`: `?version=4` (NFS v4 only), `?nfsport=2049&mountp
 - **If the connection is lost in the middle of a game** (the server is closed or the network goes), the game is left, the library is reloaded and a notice says *NFS communication was lost*.
 - **Not connecting?** The notice says why: the server did not answer, the connection was refused or closed, the name was not found, the server denies the console, or the folder is not exported (it then lists what the server does export, so you can copy the right path).
 
+## Games on an NTFS disk
+
+A USB disk or hard drive formatted as NTFS (the format of most Windows disks) works with no copy to the console. The console cannot mount NTFS, so SwanStationPS5 reads the disk itself, read only; only the app sees it. The reader comes from [PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER) (GPL-3.0-or-later, without its writing part).
+
+- Put one folder per game in a `psx` folder (or the name set in Settings > System > Games folder on drives) or in `SwanStationPS5/games` on the disk, as in [Supported folders](#supported-folders-for-games-and-bios).
+- Plug the disk in, and open **Settings > Library > Rescan library**: the games show on the shelf. Settings > System > NTFS disks turns this off.
+- MBR and GPT disks work. Encrypted (EFS, BitLocker) files cannot be read. Compressed NTFS files work but read slower.
+- Turn the disk off in Windows properly (not Fast Startup, which leaves it unfinished): otherwise its latest changes may not show.
+- If the disk is unplugged in the middle of a game, the game is left and a notice says *The NTFS disk was disconnected*.
+
 ## What you need
 
 - **A jailbroken PS5** with [etaHEN](https://github.com/etaHEN/etaHEN) and kstuff loaded. Development happens on firmware 13.60.

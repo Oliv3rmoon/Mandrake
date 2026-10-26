@@ -118,6 +118,14 @@ application that ships that helper ships miniz and must carry its notice. The
 helper's archive validation and file helpers are original BlackBearReloaded
 code (GPL-3.0-or-later), taken from the ProsperoStore project.
 
+## NTFS reader
+
+`src/ntfs/` (`ntfs.c`, `bdev.c`, `part.c`, `utf.c` and their headers) is the
+read-only NTFS reader of [abcde6543/PS5-NTFS-BROWSER](https://github.com/abcde6543/PS5-NTFS-BROWSER),
+GPL-3.0-or-later, without its writing code, and with its internal symbols
+prefixed `nt_`. `src/ntfs/ntfsfs.cpp` is original code that serves the volumes
+to the app under `/ntfs`.
+
 ## Optional UFS2Tool dependency
 
 When `.ffpkg` output is requested, the platform bootstrapper fetches

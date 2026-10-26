@@ -12,6 +12,7 @@
  */
 #include "nfs.h"
 #include "../discplay.h"
+#include "../ntfs/ntfsfs.h"
 
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>
@@ -150,6 +151,7 @@ struct File
     bool eof = false, err = false;
     Cache *cache = nullptr;
     int gen = 0;
+    NtfsFile *nt = nullptr;
     int virt = 0; // 1 the .cue, 2 the .bin of a disc played from the drive (discplay.h)
 };
 
@@ -159,6 +161,7 @@ struct DirH
     Share *share = nullptr;
     nfsdir *dir = nullptr;
     std::vector<std::string> names; // a folder above the shares: only their names
+    std::vector<uint8_t> types;     // an NTFS folder: the type of each name
     size_t next = 0;
     bool synthetic = false;
     struct dirent ent;
@@ -287,9 +290,14 @@ bool is_disc(const char *path)
     return path && !strncmp(path, DISCPLAY_DIR, 9) && (path[9] == '\0' || path[9] == '/');
 }
 
+bool is_ntfs(const char *path)
+{
+    return ntfsfs_is_path(path);
+}
+
 bool is_virt(const char *path)
 {
-    return is_nfs(path) || is_disc(path);
+    return is_nfs(path) || is_disc(path) || is_ntfs(path);
 }
 
 // The part after /discplay/ of a path, "" for the folder itself; false for anything else.
@@ -426,6 +434,11 @@ void free_cache(File *f)
 void free_file(File *f)
 {
     free_cache(f);
+    if (f->nt)
+    {
+        ntfsfs_close(f->nt);
+        f->nt = nullptr;
+    }
     if (f->fh && !f->share->dead)
     {
         std::lock_guard<std::mutex> g(f->share->lock);
@@ -498,10 +511,30 @@ File *open_disc(const char *path, int *error)
     return f;
 }
 
+File *open_ntfs(const char *path, int *error)
+{
+    uint64_t size = 0;
+    NtfsFile *nt = ntfsfs_open(path, &size, error);
+    if (!nt)
+        return nullptr;
+    File *f = new_file();
+    if (!f)
+    {
+        ntfsfs_close(nt);
+        *error = EMFILE;
+        return nullptr;
+    }
+    f->nt = nt;
+    f->size = size;
+    return f;
+}
+
 File *open_file(const char *path, int *error)
 {
     if (is_disc(path))
         return open_disc(path, error);
+    if (is_ntfs(path))
+        return open_ntfs(path, error);
     Where w;
     int e = resolve(path, w);
     if (!e && w.synthetic)
@@ -775,6 +808,16 @@ size_t block_bytes(File *f, uint64_t number, size_t offset, uint8_t *dst, size_t
 
 size_t read_at(File *f, uint64_t pos, void *dst, size_t n)
 {
+    if (f->nt)
+    {
+        const size_t read = pos < f->size ? ntfsfs_pread(f->nt, dst, static_cast<size_t>(std::min<uint64_t>(n, f->size - pos)), pos) : 0;
+        if (read < n && pos + read < f->size)
+        {
+            errno = EIO;
+            f->err = true;
+        }
+        return read;
+    }
     if (f->virt)
     {
         const size_t read = pos < f->size ? discplay_read(f->virt, pos, dst, n) : 0;
@@ -1556,6 +1599,8 @@ extern "C"
         int e;
         if (is_disc(path))
             e = disc_stat(path, st);
+        else if (is_ntfs(path))
+            e = ntfsfs_stat(path, st);
         else
         {
             Where w;
@@ -1612,10 +1657,12 @@ extern "C"
 
     DIR *__wrap_opendir(const char *path)
     {
-        if (!is_nfs(path))
+        const bool on_ntfs = is_ntfs(path);
+        if (!on_ntfs && !is_nfs(path))
             return __real_opendir(path);
         Where w;
-        int e = resolve(path, w);
+        std::vector<std::pair<std::string, bool>> listed;
+        int e = on_ntfs ? ntfsfs_list(path, listed) : resolve(path, w);
         if (e)
         {
             errno = e;
@@ -1638,7 +1685,16 @@ extern "C"
             errno = EMFILE;
             return nullptr;
         }
-        if (w.synthetic)
+        if (on_ntfs)
+        {
+            d->synthetic = true;
+            for (const auto &entry : listed)
+            {
+                d->names.push_back(entry.first);
+                d->types.push_back(entry.second ? DT_DIR : DT_REG);
+            }
+        }
+        else if (w.synthetic)
         {
             d->synthetic = true;
             d->names = {".", ".."};
@@ -1675,8 +1731,8 @@ extern "C"
         {
             if (d->next >= d->names.size())
                 return nullptr;
+            type = d->next < d->types.size() ? d->types[d->next] : DT_DIR;
             name = d->names[d->next++].c_str();
-            type = DT_DIR;
         }
         else
         {
@@ -1712,6 +1768,7 @@ extern "C"
         }
         std::lock_guard<std::mutex> g(g_mutex);
         d->names.clear();
+        d->types.clear();
         d->used = false;
         return 0;
     }

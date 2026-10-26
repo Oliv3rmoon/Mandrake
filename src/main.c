@@ -6,6 +6,7 @@
  * live in src/ui (shelf, settings, in-game menu and cheats).
  * Emulation is SwanStation, linked statically and driven through libretro.
  */
+#include "ntfs/ntfsfs.h"
 #include "drives.h"
 #include "app.h"
 
@@ -453,8 +454,9 @@ void app_rescan(void)
     static const char *const names[] = {"SwanStationPS5", "PSXS5"};
     static char drive_roots[DRIVE_COUNT * 2 * 2][SwanStationPS5_PATH_MAX];
     static char usb_roots[DRIVE_COUNT][SwanStationPS5_PATH_MAX];
-    static char nfs_roots[NFS_MAX_SHARES][NFS_PATH_MAX];
-    const char *roots[3 + DRIVE_COUNT * 2 * 2 + DRIVE_COUNT + NFS_MAX_SHARES];
+    static char nfs_roots[NFS_MAX_SHARES + NTFSFS_MAX_VOLUMES * 2][NFS_PATH_MAX];
+    static char ntfs_points[NTFSFS_MAX_VOLUMES][NTFSFS_PATH_MAX];
+    const char *roots[3 + DRIVE_COUNT * 2 * 2 + DRIVE_COUNT + NFS_MAX_SHARES + NTFSFS_MAX_VOLUMES * 2];
     int root_count = 0;
     roots[root_count++] = app.paths.games;
     roots[root_count++] = "/data/PSXS5/games";
@@ -487,7 +489,20 @@ void app_rescan(void)
         nfs_mount_begin(8000);
     const int nfs_first = root_count;
     const int nfs_count = nfs_rescan_from_mount || app.game ? nfs_mount_points(nfs_roots, NFS_MAX_SHARES) : 0;
-    for (int n = 0; n < nfs_count; ++n)
+    int shared_count = nfs_count;
+    if (app.global.ntfs_enabled)
+    {
+        if (!app.game)
+            ntfsfs_scan();
+        const int volumes = ntfsfs_mount_points(ntfs_points, NTFSFS_MAX_VOLUMES);
+        for (int n = 0; n < volumes; ++n)
+        {
+            if (app.global.usb_folder[0])
+                snprintf(nfs_roots[shared_count++], NFS_PATH_MAX, "%s/%s", ntfs_points[n], app.global.usb_folder);
+            snprintf(nfs_roots[shared_count++], NFS_PATH_MAX, "%s/SwanStationPS5/games", ntfs_points[n]);
+        }
+    }
+    for (int n = 0; n < shared_count; ++n)
         roots[root_count++] = nfs_roots[n];
     char index[SwanStationPS5_PATH_MAX];
     path_join(index, sizeof(index), app.paths.root, "library.txt");
@@ -499,7 +514,7 @@ void app_rescan(void)
         /* Can't list folders: the sync tool's index is the library. */
         if (!library_load_index(&app.library, index))
             app.library.count = 0;
-        library_scan_append(&app.library, roots + nfs_first, nfs_count); /* the shares are listed by the app itself */
+        library_scan_append(&app.library, roots + nfs_first, shared_count); /* the shares are listed by the app itself */
     }
     else
     {
@@ -3044,6 +3059,12 @@ int main(int argc, char **argv)
         {
             app_stop_game();
             app_toast("NFS communication was lost.");
+            app_rescan();
+        }
+        if (ntfsfs_connection_lost() && app.game)
+        {
+            app_stop_game();
+            app_toast("The NTFS disk was disconnected.");
             app_rescan();
         }
         if (nfs_mount_finished() && !app.game)

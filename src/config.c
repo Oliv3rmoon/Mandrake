@@ -53,6 +53,7 @@ void config_defaults(Settings *s)
     s->case_lighting = true;
     s->disc_ask = true;
     s->install_to_ext = false;
+    s->ntfs_enabled = true;
     s->negcon = false;
     s->touch_mouse = false;
     s->racing_triggers = false;
@@ -264,6 +265,8 @@ static bool config_apply(Settings *s, const char *path)
             s->disc_animation = as_bool(value);
         else if (strcmp(key, "disc_ask") == 0)
             s->disc_ask = as_bool(value);
+        else if (strcmp(key, "ntfs_enabled") == 0)
+            s->ntfs_enabled = as_bool(value);
         else if (strcmp(key, "install_to_ext") == 0)
             s->install_to_ext = as_bool(value);
         else if (strcmp(key, "jewel_cases") == 0)
@@ -456,6 +459,7 @@ bool config_save(const Settings *s, const char *path)
     fprintf(f, "widescreen=%d\nmultitap=%d\nrewind=%d\nquick_resume=%d\ncrt=%d\nborder=%d\nremote=%d\nupdate_check=%d\n",
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
             s->update_check);
+    fprintf(f, "ntfs_enabled=%d\n", s->ntfs_enabled);
     fprintf(f, "renderer=%d\nusb_folder=%s\nnfs_timeout=%d\nnfs_shares=%s\n", s->renderer, s->usb_folder, s->nfs_timeout, s->nfs_shares);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,
