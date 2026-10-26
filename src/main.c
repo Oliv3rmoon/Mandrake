@@ -1925,6 +1925,10 @@ static void crop_ratio_text(char *out, size_t size, float r)
 
 static const char *menu_combo_hint(void)
 {
+    if (app.global.menu_hold == 0)
+        return app.global.menu_combo == 1   ? "Press {L3} + {R3} to open the game menu."
+               : app.global.menu_combo == 2 ? "Press {Options} + {Touchpad} to open the game menu."
+                                            : "Press {Touchpad} + {R3} to open the game menu.";
     return app.global.menu_combo == 1   ? "Hold {L3} + {R3} to open the game menu."
            : app.global.menu_combo == 2 ? "Hold {Options} + {Touchpad} to open the game menu."
                                         : "Hold {Touchpad} + {R3} to open the game menu.";
