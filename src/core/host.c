@@ -126,7 +126,6 @@ static bool disk_available;
 static bool loaded;
 static size_t state_size; /* host_state_size(), measured once per game */
 static unsigned game_fixes; /* GDB_* fixes for the next game (gamedb.h) */
-static int applied_scale = 1;
 static GameInfo game_info;  /* the database's values for it (GDT_* in .set), empty when there are none */
 static int session_renderer; /* Settings > Graphics > Renderer as the game was loaded: it cannot change while playing */
 static int lid_open_frames;   /* frames left before the lid closes after a disc change */
@@ -285,7 +284,6 @@ static void apply_swanstation_options(const Settings *s)
     int level = s->internal_res >= 1 && s->internal_res <= 16 ? s->internal_res : 1;
     if (game_fixes & GDB_NO_UPSCALING)
         level = 1;
-    applied_scale = level;
     char scale[8], cd_speed[8];
     bool crop_borders = false;
     snprintf(scale, sizeof(scale), "%d", level);
@@ -1353,11 +1351,6 @@ void host_apply_devices(const Settings *settings)
 {
     if (loaded)
         apply_devices(settings);
-}
-
-int host_resolution_scale(void)
-{
-    return session_renderer == 1 ? 1 : applied_scale;
 }
 
 void host_apply_settings(const Settings *settings)

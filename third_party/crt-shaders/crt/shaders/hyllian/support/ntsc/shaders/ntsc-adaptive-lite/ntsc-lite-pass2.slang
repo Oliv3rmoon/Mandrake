@@ -265,5 +265,5 @@ void main()
    vec3 rgb = yiq2rgb(signal);
    FragColor = vec4(rgb, 1.0);
    if(global.linearize < 0.5) return;
-   else FragColor = pow(max(FragColor, vec4(0.0)), vec4(2.2));
+   else FragColor = pow(FragColor, vec4(2.2));
 }  

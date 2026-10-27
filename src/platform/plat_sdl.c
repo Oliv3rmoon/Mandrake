@@ -7,7 +7,6 @@
  */
 #include "platform.h"
 #include "../i18n.h"
-#include "../core/host.h"
 
 #include "xbr.h"
 
@@ -1600,21 +1599,8 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
     /* Scanlines the game actually has: interlaced (480) and 2x-internal frames
      * show at the same size as 240-line ones. */
     int lines = game_src_h;
-    const int scale = host_resolution_scale();
-    if (scale > 1 && lines % scale == 0 && lines / scale >= 192)
-        lines /= scale;
     while (lines > 288)
         lines /= 2;
-    {
-        static int last_h, last_scale, last_lines;
-        if (last_h != game_src_h || last_scale != scale || last_lines != lines)
-        {
-            last_h = game_src_h;
-            last_scale = scale;
-            last_lines = lines;
-            SwanStationPS5_log("video: frame %dx%d, render scale %d, native lines %d", game_src_w, game_src_h, scale, lines);
-        }
-    }
     /* Crop black edges: the share of the picture's height cut at the top and
      * at the bottom (8 or 16 of the PS1's 240 lines) */
     const float crop =
