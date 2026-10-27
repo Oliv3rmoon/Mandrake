@@ -35,6 +35,12 @@ enum
     GDB_NO_TRUE_COLOR = 1u << 21,
     GDB_SW_READBACKS = 1u << 22,   /* needs the software renderer for VRAM readbacks */
     GDB_ROUND_TEXCOORDS = 1u << 23, /* rounds upscaled texture coordinates */
+    GDB_NO_PGXP_2D = 1u << 24,      /* PGXP is turned off on 2D polygons */
+    GDB_NO_PGXP_COLOR = 1u << 25,   /* PGXP colour correction breaks it */
+    GDB_NO_SEEK_SPEEDUP = 1u << 26, /* breaks with CD-ROM seek speedup */
+    GDB_NO_BORDERS_CROP = 1u << 27, /* cuts off picture when all borders are cropped */
+    GDB_FULL_TRUE_COLOR = 1u << 28, /* needs True Color without reducing flat colours */
+    GDB_NORM_DEPTH = 1u << 29,      /* PGXP depth needs the transform scale removed */
 };
 enum
 {
@@ -46,11 +52,15 @@ enum
     GDT_DMA_HALT = 1u << 4,
     GDT_PGXP_TOLERANCE = 1u << 5,
     GDT_PGXP_PROJ = 1u << 6,
+    GDT_LINE_MODE = 1u << 9,      /* gpuLineDetectMode: 1 quads, 2 basic triangles, 3 aggressive triangles */
+    GDT_CROP_MODE = 1u << 8,      /* displayCropMode: 0 none, 1 overscan, 2 all borders */
     GDT_FILTER_UPLOADS = 1u << 7, /* gpuFilterFramebufferUploads: filters VRAM writes of at least this size */
 };
 #define GDB_FIXES (GDB_NO_WIDESCREEN | GDB_NO_PGXP | GDB_PGXP_CPU | GDB_NO_UPSCALING | GDB_NO_TEXTURE_FILTER | \
                    GDB_NO_SPRITE_FILTER | GDB_DEINTERLACE | GDB_NO_MULTITAP | GDB_NO_CD_SPEEDUP | GDB_ICACHE | GDB_PGXP_VCACHE | \
-                   GDB_NO_PGXP_CULL | GDB_NO_TRUE_COLOR | GDB_SW_READBACKS | GDB_ROUND_TEXCOORDS)
+                   GDB_NO_PGXP_CULL | GDB_NO_TRUE_COLOR | GDB_SW_READBACKS | GDB_ROUND_TEXCOORDS | GDB_NO_PGXP_2D | \
+                   GDB_NO_PGXP_COLOR | GDB_NO_SEEK_SPEEDUP | GDB_NO_BORDERS_CROP | \
+                   GDB_FULL_TRUE_COLOR | GDB_NORM_DEPTH)
 
 typedef struct
 {
@@ -63,6 +73,7 @@ typedef struct
     float pgxp_tolerance;
     bool pgxp_proj;
     int filter_uploads_w, filter_uploads_h;
+    int crop_mode, line_mode;
 } GameInfo;
 
 /* The index the app keeps (the payload reads it too). */

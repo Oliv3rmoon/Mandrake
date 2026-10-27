@@ -28,7 +28,7 @@
 
 static SDL_atomic_t state; /* 0 idle, 1 downloading, 2 a new index is there */
 /* the index's first line: the version of its format */
-#define GAMEDB_HEADER "#v7"
+#define GAMEDB_HEADER "#v12"
 
 static char yaml_path[SwanStationPS5_PATH_MAX], index_path[SwanStationPS5_PATH_MAX];
 
@@ -66,6 +66,12 @@ static const struct
     {"DisableTrueColor", GDB_NO_TRUE_COLOR},
     {"ForceSoftwareRendererForReadbacks", GDB_SW_READBACKS},
     {"ForceRoundTextureCoordinates", GDB_ROUND_TEXCOORDS},
+    {"DisablePGXPOn2DPolygons", GDB_NO_PGXP_2D},
+    {"DisablePGXPColorCorrection", GDB_NO_PGXP_COLOR},
+    {"DisableCDROMSeekSpeedup", GDB_NO_SEEK_SPEEDUP},
+    {"DisableAllBordersCrop", GDB_NO_BORDERS_CROP},
+    {"ForceFullTrueColor", GDB_FULL_TRUE_COLOR},
+    {"NormalizePGXPDepth", GDB_NORM_DEPTH},
 };
 
 /* the database's own settings for a disc that are applied, and the short name each has in the index */
@@ -76,6 +82,8 @@ static const struct
     {"displayActiveStartOffset", "as"}, {"displayActiveEndOffset", "ae"}, {"displayLineStartOffset", "ls"},
     {"dmaMaxSliceTicks", "ds"},         {"dmaHaltTicks", "dh"},           {"gpuPGXPTolerance", "pt"},
     {"gpuPGXPPreserveProjFP", "pp"},    {"gpuFilterFramebufferUploads", "fu"},
+    {"displayCropMode", "cm"},
+    {"gpuLineDetectMode", "ld"},
 };
 
 typedef struct
@@ -392,6 +400,19 @@ static void load(void)
                     g->dma_halt = n, g->set |= GDT_DMA_HALT;
                 else if (!strncmp(tag, "pt", 2))
                     g->pgxp_tolerance = (float)atof(eq + 1), g->set |= GDT_PGXP_TOLERANCE;
+                else if (!strncmp(tag, "cm", 2))
+                {
+                    const char *v = eq + 1;
+                    g->crop_mode = !strcmp(v, "Borders") ? 2 : !strcmp(v, "Overscan") ? 1 : 0;
+                    g->set |= GDT_CROP_MODE;
+                }
+                else if (!strncmp(tag, "ld", 2))
+                {
+                    const char *v = eq + 1;
+                    g->line_mode = !strcmp(v, "AggressiveTriangles") ? 3 : !strcmp(v, "BasicTriangles") ? 2 : !strcmp(v, "Quads") ? 1 : 0;
+                    if (g->line_mode)
+                        g->set |= GDT_LINE_MODE;
+                }
                 else if (!strncmp(tag, "pp", 2))
                     g->pgxp_proj = n != 0, g->set |= GDT_PGXP_PROJ;
                 else if (!strncmp(tag, "fu", 2) &&

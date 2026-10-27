@@ -236,6 +236,16 @@ static void apply_game_fixes(void)
         set_option("swanstation_GPU_UseSoftwareRendererForReadbacks", "true");
     if (game_fixes & GDB_ROUND_TEXCOORDS)
         set_option("swanstation_GPU_ForceRoundTextureCoordinates", "true");
+    if (game_fixes & GDB_NO_PGXP_2D)
+        set_option("swanstation_GPU_PGXPDisableOn2DPolygons", "true");
+    if (game_fixes & GDB_NO_PGXP_COLOR)
+        set_option("swanstation_GPU_PGXPColorCorrection", "false");
+    if (game_fixes & GDB_FULL_TRUE_COLOR)
+        set_option("swanstation_GPU_TrueColorFull", "true");
+    if (game_fixes & GDB_NORM_DEPTH)
+        set_option("swanstation_GPU_PGXPNormalizeDepth", "true");
+    if (game_fixes & GDB_NO_SEEK_SPEEDUP)
+        set_option("swanstation_CDROM_SeekSpeedup", "1");
     const GameInfo *g = &game_info;
     if (g->set & GDT_ACTIVE_START)
         set_option_int("swanstation_Display_ActiveStartOffset", g->active_start);
@@ -253,6 +263,11 @@ static void apply_game_fixes(void)
         snprintf(text, sizeof(text), "%.2f", g->pgxp_tolerance);
         set_option("swanstation_GPU_PGXPTolerance", text);
     }
+    if (g->set & GDT_LINE_MODE)
+        set_option("swanstation_GPU_LineDetectMode",
+                   g->line_mode == 3 ? "AggressiveTriangles" : g->line_mode == 2 ? "BasicTriangles" : "Quads");
+    if (g->set & GDT_CROP_MODE)
+        set_option("swanstation_Display_CropMode", g->crop_mode == 2 ? "Borders" : g->crop_mode == 1 ? "Overscan" : "None");
     if (g->set & GDT_PGXP_PROJ)
         set_option("swanstation_GPU_PGXPPreserveProjFP", g->pgxp_proj ? "true" : "false");
     if (g->set & GDT_FILTER_UPLOADS)
@@ -270,6 +285,7 @@ static void apply_swanstation_options(const Settings *s)
     if (game_fixes & GDB_NO_UPSCALING)
         level = 1;
     char scale[8], cd_speed[8];
+    bool crop_borders = false;
     snprintf(scale, sizeof(scale), "%d", level);
     int cd = s->cd_speed >= 1 && s->cd_speed <= 10 && !(game_fixes & GDB_NO_CD_SPEEDUP) ? s->cd_speed : 1;
     snprintf(cd_speed, sizeof(cd_speed), "%d", cd);
@@ -294,9 +310,15 @@ static void apply_swanstation_options(const Settings *s)
             value = "true";
         }
         set_option(SS_OPTS[i].key, value);
+        if (!strcmp(SS_OPTS[i].key, "swanstation_Display_CropMode"))
+            crop_borders = !strcmp(value, "Borders");
     }
     set_option("swanstation_CPU_FastmemMode", "LUT");
     apply_game_fixes();
+    if (!s->game_fixes)
+        set_option("swanstation_Main_ApplyGameSettings", "false");
+    if ((game_fixes & GDB_NO_BORDERS_CROP) && crop_borders && !(game_info.set & GDT_CROP_MODE))
+        set_option("swanstation_Display_CropMode", "Overscan");
     if (s->manual_crop)
         set_option("swanstation_Display_CropMode", "None");
     /* controls: Settings > Controls decides these, not the core's own rows */

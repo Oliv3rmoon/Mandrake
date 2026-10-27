@@ -455,7 +455,10 @@ static bool is_sprite_filter_option(int i)
 static bool is_db_only_option(int i)
 {
     return strncmp(SS_OPTS[i].key, "swanstation_GPU_FilterFramebufferUploads", 40) == 0 ||
-           strcmp(SS_OPTS[i].key, "swanstation_GPU_ForceRoundTextureCoordinates") == 0;
+           strcmp(SS_OPTS[i].key, "swanstation_GPU_ForceRoundTextureCoordinates") == 0 ||
+           strcmp(SS_OPTS[i].key, "swanstation_GPU_LineDetectMode") == 0 ||
+           strcmp(SS_OPTS[i].key, "swanstation_GPU_TrueColorFull") == 0 ||
+           strcmp(SS_OPTS[i].key, "swanstation_GPU_PGXPNormalizeDepth") == 0;
 }
 
 static int ac_opt(void);

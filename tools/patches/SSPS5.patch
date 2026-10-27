@@ -141974,7 +141974,7 @@ index 0a0959f0..ee094cea 100644
    uint32_t m_command_total_words = 0;
    TickCount m_pending_command_ticks = 0;
 diff --git a/src/core/gpu_hw.cpp b/src/core/gpu_hw.cpp
-index 99582d73..b23f6ac0 100644
+index 99582d73..40c1f157 100644
 --- a/src/core/gpu_hw.cpp
 +++ b/src/core/gpu_hw.cpp
 @@ -20,10 +20,19 @@ ALWAYS_INLINE static constexpr std::tuple<T, T> MinMax(T v1, T v2)
@@ -142006,17 +142006,18 @@ index 99582d73..b23f6ac0 100644
    m_using_uv_limits = ShouldUseUVLimits();
    m_chroma_smoothing = g_settings.gpu_24bit_chroma_smoothing;
    m_downsample_mode = GetDownsampleMode(m_resolution_scale);
-@@ -78,6 +88,9 @@ bool GPU_HW::Initialize(HostDisplay* host_display)
+@@ -78,6 +88,10 @@ bool GPU_HW::Initialize(HostDisplay* host_display)
    {
      m_texture_filtering = GPUTextureFilter::Nearest;
    }
 +  if (!m_supports_dual_source_blend && TextureFilterRequiresDualSourceBlend(m_stf))
 +    m_stf = GPUTextureFilter::Nearest;
 +  m_asm = (m_stf != m_texture_filtering) || (m_resolution_scale > 1 && g_settings.gpu_frt);
++  m_ldm = (m_resolution_scale > 1) ? g_settings.gpu_ldm : 0;
    if (!m_supports_adaptive_downsampling && g_settings.gpu_resolution_scale > 1 &&
        g_settings.gpu_downsample_mode == GPUDownsampleMode::Adaptive)
    {
-@@ -212,7 +225,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
+@@ -212,7 +226,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
    // three settings the Vulkan backend currently dimensions over.
    // The set may extend to other 2-value spec consts in the future
    // without changing this API.
@@ -142025,7 +142026,7 @@ index 99582d73..b23f6ac0 100644
    const bool true_color_diff       = (m_true_color != g_settings.gpu_true_color);
    const bool scaled_dithering_diff = (m_scaled_dithering != g_settings.gpu_scaled_dithering);
    const bool dim_diff              = filter_diff || true_color_diff || scaled_dithering_diff;
-@@ -266,7 +279,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
+@@ -266,7 +280,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
    if (shader_source_changed)
    {
      *shader_source_changed =
@@ -142034,7 +142035,7 @@ index 99582d73..b23f6ac0 100644
        (m_multisamples != multisamples) ||
        (m_per_sample_shading != per_sample_shading) ||
        (m_chroma_smoothing != g_settings.gpu_24bit_chroma_smoothing) ||
-@@ -302,7 +315,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
+@@ -302,7 +316,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
    {
      const bool chroma_diff = (m_chroma_smoothing != g_settings.gpu_24bit_chroma_smoothing);
      const bool other_source_diff =
@@ -142043,7 +142044,7 @@ index 99582d73..b23f6ac0 100644
        (m_multisamples != multisamples) ||
        (m_per_sample_shading != per_sample_shading) ||
        (m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer()) ||
-@@ -317,6 +330,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
+@@ -317,6 +331,7 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
    m_true_color = g_settings.gpu_true_color;
    m_scaled_dithering = g_settings.gpu_scaled_dithering;
    m_texture_filtering = g_settings.gpu_texture_filter;
@@ -142051,19 +142052,20 @@ index 99582d73..b23f6ac0 100644
    m_using_uv_limits = use_uv_limits;
    m_chroma_smoothing = g_settings.gpu_24bit_chroma_smoothing;
    m_downsample_mode = downsample_mode;
-@@ -339,6 +353,11 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
+@@ -339,6 +354,12 @@ void GPU_HW::UpdateHWSettings(bool* framebuffer_changed, bool* shaders_changed,
  
    if (!m_supports_dual_source_blend && TextureFilterRequiresDualSourceBlend(m_texture_filtering))
      m_texture_filtering = GPUTextureFilter::Nearest;
 +  if (!m_supports_dual_source_blend && TextureFilterRequiresDualSourceBlend(m_stf))
 +    m_stf = GPUTextureFilter::Nearest;
 +  m_asm = (m_stf != m_texture_filtering) || (m_resolution_scale > 1 && g_settings.gpu_frt);
++  m_ldm = (m_resolution_scale > 1) ? g_settings.gpu_ldm : 0;
 +  if (!m_asm)
 +    m_batch.sp = false;
  
    if (m_pgxp_depth_buffer != g_settings.UsingPGXPDepthBuffer())
    {
-@@ -530,6 +549,39 @@ void GPU_HW::SetBatchDepthBuffer(bool enabled)
+@@ -530,6 +551,163 @@ void GPU_HW::SetBatchDepthBuffer(bool enabled)
    m_batch.use_depth_buffer = enabled;
  }
  
@@ -142100,19 +142102,143 @@ index 99582d73..b23f6ac0 100644
 +  return (dudy == 0.0f && dvdx == 0.0f);
 +}
 +
++void GPU_HW::HLQ(BatchVertex* vertices) const
++{
++  const float max_y = std::max(std::max(vertices[0].y, vertices[1].y), std::max(vertices[2].y, vertices[3].y));
++  const float min_y = std::min(std::min(vertices[0].y, vertices[1].y), std::min(vertices[2].y, vertices[3].y));
++  if ((max_y - min_y) == 1.0f)
++  {
++    vertices[1].v = vertices[0].v;
++    vertices[2].v = vertices[0].v;
++    vertices[3].v = vertices[0].v;
++  }
++}
++
++bool GPU_HW::ELT(BatchVertex* vertices)
++{
++  BatchVertex *vshort, *vlong;
++  bool vertical, horizontal;
++
++  if (m_ldm == 2)
++  {
++    BatchVertex* vcorner;
++    if (vertices[0].u == vertices[1].u && vertices[0].v == vertices[1].v)
++    {
++      vcorner = &vertices[0];
++      vshort = &vertices[1];
++      vlong = &vertices[2];
++    }
++    else if (vertices[1].u == vertices[2].u && vertices[1].v == vertices[2].v)
++    {
++      vcorner = &vertices[1];
++      vshort = &vertices[2];
++      vlong = &vertices[0];
++    }
++    else if (vertices[2].u == vertices[0].u && vertices[2].v == vertices[0].v)
++    {
++      vcorner = &vertices[2];
++      vshort = &vertices[0];
++      vlong = &vertices[1];
++    }
++    else
++    {
++      return false;
++    }
++
++    vertical = ((vcorner->y == vshort->y) && (std::abs(vcorner->x - vshort->x) == 1.0f));
++    horizontal = ((vcorner->x == vshort->x) && (std::abs(vcorner->y - vshort->y) == 1.0f));
++    if (vertical)
++    {
++      if (vshort->x == vlong->x)
++        std::swap(vshort, vcorner);
++      else if (vcorner->x != vlong->x)
++        return false;
++    }
++    else if (horizontal)
++    {
++      if (vshort->y == vlong->y)
++        std::swap(vshort, vcorner);
++      else if (vcorner->y != vlong->y)
++        return false;
++    }
++    else
++    {
++      return false;
++    }
++  }
++  else
++  {
++    BatchVertex *va, *vb, *vc;
++    if (vertices[0].x == vertices[1].x)
++    {
++      va = &vertices[0];
++      vb = &vertices[1];
++      vc = &vertices[2];
++    }
++    else if (vertices[1].x == vertices[2].x)
++    {
++      va = &vertices[1];
++      vb = &vertices[2];
++      vc = &vertices[0];
++    }
++    else if (vertices[2].x == vertices[0].x)
++    {
++      va = &vertices[2];
++      vb = &vertices[0];
++      vc = &vertices[1];
++    }
++    else
++    {
++      return false;
++    }
++
++    vertical = (std::abs(va->x - vc->x) == 1.0f);
++    horizontal = (std::abs(va->y - vb->y) == 1.0f);
++    if (!vertical && !horizontal)
++      return false;
++
++    const BatchVertex* vcorner;
++    if (va->y == vc->y)
++      vcorner = va;
++    else if (vb->y == vc->y)
++      vcorner = vb;
++    else
++      return false;
++
++    BatchVertex* vother = ((vcorner == va) ? vb : va);
++    vshort = horizontal ? vother : vc;
++    vlong = vertical ? vother : vc;
++
++    vshort->u = vcorner->u;
++    vshort->v = vcorner->v;
++  }
++
++  BatchVertex* last = &(vertices[3] = *vlong);
++  last->x = vertical ? vshort->x : vlong->x;
++  last->y = horizontal ? vshort->y : vlong->y;
++
++  AddVertex(vertices[0]);
++  AddVertex(vertices[1]);
++  AddVertex(vertices[2]);
++  AddVertex(*vshort);
++  AddVertex(*vlong);
++  AddVertex(vertices[3]);
++  return true;
++}
++
  void GPU_HW::CheckForDepthClear(const BatchVertex* vertices, uint32_t num_vertices)
  {
    float average_z;
-@@ -679,6 +731,8 @@ void GPU_HW::LoadVertices()
+@@ -679,6 +857,8 @@ void GPU_HW::LoadVertices()
    const GPURenderCommand rc{m_render_command.bits};
    const uint32_t texpage = static_cast<uint32_t>(m_draw_mode.mode_reg.bits) | (static_cast<uint32_t>(m_draw_mode.palette_reg) << 16);
    const float depth = GetCurrentNormalizedVertexDepth();
-+  const bool tc = m_true_color && !rc.IsTexturingEnabled() && !rc.shading_enable &&
++  const bool tc = m_true_color && !g_settings.gpu_tcf && !rc.IsTexturingEnabled() && !rc.shading_enable &&
 +                              !(rc.IsDitheringEnabled() && m_GPUSTAT.dither_enable);
  
    switch (rc.primitive)
    {
-@@ -694,9 +748,12 @@ void GPU_HW::LoadVertices()
+@@ -694,9 +874,12 @@ void GPU_HW::LoadVertices()
        std::array<BatchVertex, 4> vertices;
        std::array<std::array<int32_t, 2>, 4> native_vertex_positions;
        bool valid_w = g_settings.gpu_pgxp_texture_correction;
@@ -142126,7 +142252,7 @@ index 99582d73..b23f6ac0 100644
          const uint64_t maddr_and_pos = m_fifo.Pop();
          const GPUVertexPosition vp{static_cast<uint32_t>(maddr_and_pos)};
          const uint16_t texcoord = textured ? static_cast<uint16_t>(FifoPop()) : 0;
-@@ -710,23 +767,35 @@ void GPU_HW::LoadVertices()
+@@ -710,23 +893,35 @@ void GPU_HW::LoadVertices()
  
          if (pgxp)
          {
@@ -142166,10 +142292,16 @@ index 99582d73..b23f6ac0 100644
            if (m_batch.use_depth_buffer != use_depth)
              SetBatchDepthBuffer(use_depth);
            if (use_depth)
-@@ -737,12 +806,51 @@ void GPU_HW::LoadVertices()
-       if (rc.quad_polygon && m_resolution_scale > 1)
-         HandleFlippedQuadTextureCoordinates(vertices.data());
+@@ -735,7 +930,19 @@ void GPU_HW::LoadVertices()
+       }
  
+       if (rc.quad_polygon && m_resolution_scale > 1)
++      {
++        if (m_ldm == 1 && !i3)
++          HLQ(vertices.data());
+         HandleFlippedQuadTextureCoordinates(vertices.data());
++      }
++
 +      if (m_asm)
 +      {
 +        if (pgxp && all_precise && !(rc.quad_polygon && m_resolution_scale > 1 && !i3))
@@ -142177,10 +142309,10 @@ index 99582d73..b23f6ac0 100644
 +        else
 +          SSP(PIS(vertices.data()));
 +      }
-+
+ 
        if (m_using_uv_limits && textured)
          ComputePolygonUVLimits(vertices.data(), num_vertices);
- 
+@@ -743,6 +950,37 @@ void GPU_HW::LoadVertices()
        if (!IsDrawingAreaIsValid())
          return;
  
@@ -142218,7 +142350,7 @@ index 99582d73..b23f6ac0 100644
        // Cull polygons which are too large.
        const auto [min_x_12, max_x_12] = MinMax(native_vertex_positions[1][0], native_vertex_positions[2][0]);
        const auto [min_y_12, max_y_12] = MinMax(native_vertex_positions[1][1], native_vertex_positions[2][1]);
-@@ -762,7 +870,7 @@ void GPU_HW::LoadVertices()
+@@ -762,14 +1000,17 @@ void GPU_HW::LoadVertices()
          const uint32_t clip_bottom =
            static_cast<uint32_t>(std::clamp<int32_t>(max_y, m_drawing_area.top, m_drawing_area.bottom)) + 1u;
  
@@ -142227,7 +142359,19 @@ index 99582d73..b23f6ac0 100644
          AddDrawTriangleTicks(native_vertex_positions[0][0], native_vertex_positions[0][1],
                               native_vertex_positions[1][0], native_vertex_positions[1][1],
                               native_vertex_positions[2][0], native_vertex_positions[2][1], rc.shading_enable,
-@@ -793,7 +901,7 @@ void GPU_HW::LoadVertices()
+                              rc.texture_enable, rc.transparency_enable);
+ 
+-        std::memcpy(m_batch_current_vertex_ptr, vertices.data(), sizeof(BatchVertex) * 3);
+-        m_batch_current_vertex_ptr += 3;
++        if (rc.quad_polygon || m_ldm < 2 || i3 || !ELT(vertices.data()))
++        {
++          std::memcpy(m_batch_current_vertex_ptr, vertices.data(), sizeof(BatchVertex) * 3);
++          m_batch_current_vertex_ptr += 3;
++        }
+       }
+ 
+       // quads
+@@ -793,7 +1034,7 @@ void GPU_HW::LoadVertices()
            const uint32_t clip_bottom =
              static_cast<uint32_t>(std::clamp<int32_t>(max_y_123, m_drawing_area.top, m_drawing_area.bottom)) + 1u;
  
@@ -142236,7 +142380,7 @@ index 99582d73..b23f6ac0 100644
            AddDrawTriangleTicks(native_vertex_positions[2][0], native_vertex_positions[2][1],
                                 native_vertex_positions[1][0], native_vertex_positions[1][1],
                                 native_vertex_positions[3][0], native_vertex_positions[3][1], rc.shading_enable,
-@@ -816,7 +924,7 @@ void GPU_HW::LoadVertices()
+@@ -816,7 +1057,7 @@ void GPU_HW::LoadVertices()
            vert->x = native_vertex_positions[i][0];
            vert->y = native_vertex_positions[i][1];
            vert->texcoord = native_texcoords[i];
@@ -142245,7 +142389,7 @@ index 99582d73..b23f6ac0 100644
          }
  
          m_sw_renderer->PushCommand(cmd);
-@@ -827,6 +935,7 @@ void GPU_HW::LoadVertices()
+@@ -827,6 +1068,7 @@ void GPU_HW::LoadVertices()
      case GPUPrimitive::Rectangle:
      {
        const uint32_t color = rc.color_for_first_vertex;
@@ -142253,7 +142397,7 @@ index 99582d73..b23f6ac0 100644
        const GPUVertexPosition vp{FifoPop()};
        const int32_t pos_x = TruncateGPUVertexPosition(m_drawing_offset.x + vp.x);
        const int32_t pos_y = TruncateGPUVertexPosition(m_drawing_offset.y + vp.y);
-@@ -865,10 +974,12 @@ void GPU_HW::LoadVertices()
+@@ -865,10 +1107,12 @@ void GPU_HW::LoadVertices()
        if (!IsDrawingAreaIsValid())
          return;
  
@@ -142267,7 +142411,7 @@ index 99582d73..b23f6ac0 100644
        // Split the rectangle into multiple quads if it's greater than 256x256, as the texture page should repeat.
        uint16_t tex_top = orig_tex_top;
        for (int32_t y_offset = 0; y_offset < rectangle_height;)
-@@ -887,13 +998,13 @@ void GPU_HW::LoadVertices()
+@@ -887,13 +1131,13 @@ void GPU_HW::LoadVertices()
            const uint16_t tex_right = tex_left + static_cast<uint16_t>(quad_width);
            const uint32_t uv_limits = BatchVertex::PackUVLimits(tex_left, tex_right - 1, tex_top, tex_bottom - 1);
  
@@ -142287,7 +142431,7 @@ index 99582d73..b23f6ac0 100644
  
            x_offset += quad_width;
            tex_left = 0;
-@@ -910,7 +1021,7 @@ void GPU_HW::LoadVertices()
+@@ -910,7 +1154,7 @@ void GPU_HW::LoadVertices()
        const uint32_t clip_bottom =
          static_cast<uint32_t>(std::clamp<int32_t>(pos_y + rectangle_height, m_drawing_area.top, m_drawing_area.bottom)) + 1u;
  
@@ -142296,7 +142440,7 @@ index 99582d73..b23f6ac0 100644
        AddDrawRectangleTicks(clip_right - clip_left, clip_bottom - clip_top, rc.texture_enable, rc.transparency_enable);
  
        if (m_sw_renderer)
-@@ -969,12 +1080,12 @@ void GPU_HW::LoadVertices()
+@@ -969,12 +1213,12 @@ void GPU_HW::LoadVertices()
          const uint32_t clip_bottom =
            static_cast<uint32_t>(std::clamp<int32_t>(max_y, m_drawing_area.top, m_drawing_area.bottom)) + 1u;
  
@@ -142312,7 +142456,7 @@ index 99582d73..b23f6ac0 100644
  
          if (m_sw_renderer)
          {
-@@ -1034,12 +1145,12 @@ void GPU_HW::LoadVertices()
+@@ -1034,12 +1278,12 @@ void GPU_HW::LoadVertices()
              const uint32_t clip_bottom =
                static_cast<uint32_t>(std::clamp<int32_t>(max_y, m_drawing_area.top, m_drawing_area.bottom)) + 1u;
  
@@ -142328,7 +142472,7 @@ index 99582d73..b23f6ac0 100644
            }
  
            start_x = end_x;
-@@ -1153,6 +1264,7 @@ GPU_HW::VRAMCopyUBOData GPU_HW::GetVRAMCopyUBOData(uint32_t src_x, uint32_t src_
+@@ -1153,6 +1397,7 @@ GPU_HW::VRAMCopyUBOData GPU_HW::GetVRAMCopyUBOData(uint32_t src_x, uint32_t src_
  void GPU_HW::IncludeVRAMDirtyRectangle(const Common::Rectangle<uint32_t>& rect)
  {
    m_vram_dirty_rect.Include(rect);
@@ -142336,7 +142480,16 @@ index 99582d73..b23f6ac0 100644
  
    // the vram area can include the texture page, but the game can leave it as-is. in this case, set it as dirty so the
    // shadow texture is updated
-@@ -1497,6 +1609,14 @@ void GPU_HW::FlushRender()
+@@ -1170,7 +1415,7 @@ void GPU_HW::EnsureVertexBufferSpaceForCurrentCommand()
+   switch (m_render_command.primitive)
+   {
+     case GPUPrimitive::Polygon:
+-      required_vertices = m_render_command.quad_polygon ? 6 : 3;
++      required_vertices = (m_render_command.quad_polygon || m_ldm >= 2) ? 6 : 3;
+       break;
+     case GPUPrimitive::Rectangle:
+       required_vertices = MAX_VERTICES_FOR_RECTANGLE;
+@@ -1497,6 +1742,14 @@ void GPU_HW::FlushRender()
      m_batch_ubo_data.u_render_mode = new_render_mode;
    }
  
@@ -142352,7 +142505,7 @@ index 99582d73..b23f6ac0 100644
    {
      UploadUniformBuffer(&m_batch_ubo_data, sizeof(m_batch_ubo_data));
 diff --git a/src/core/gpu_hw.h b/src/core/gpu_hw.h
-index 3741e75c..019075ba 100644
+index 3741e75c..1be4ea4e 100644
 --- a/src/core/gpu_hw.h
 +++ b/src/core/gpu_hw.h
 @@ -99,6 +99,7 @@ protected:
@@ -142390,26 +142543,29 @@ index 3741e75c..019075ba 100644
        return true;
      if (transparency_mode == GPUTransparencyMode::Disabled || render_mode == BatchRenderMode::OnlyOpaque)
        return false;
-@@ -489,6 +493,9 @@ protected:
+@@ -489,6 +493,11 @@ protected:
  
    /// Sets the depth test flag for PGXP depth buffering.
    void SetBatchDepthBuffer(bool enabled);
 +  void SSP(bool enabled);
 +  bool PIS(const BatchVertex* vertices) const;
++  void HLQ(BatchVertex* vertices) const;
++  bool ELT(BatchVertex* vertices);
 +  ALWAYS_INLINE GPUTextureFilter BF() const { return m_batch.sp ? m_stf : m_texture_filtering; }
    void CheckForDepthClear(const BatchVertex* vertices, uint32_t num_vertices);
  
    /// UBO data for adaptive smoothing.
-@@ -538,6 +545,8 @@ protected:
+@@ -538,6 +547,9 @@ protected:
    };
  
    GPUTextureFilter m_texture_filtering = GPUTextureFilter::Nearest;
 +  GPUTextureFilter m_stf = GPUTextureFilter::Nearest;
 +  bool m_asm = false;
++  uint8_t m_ldm = 0;
    GPUDownsampleMode m_downsample_mode = GPUDownsampleMode::Disabled;
    bool m_using_uv_limits = false;
    bool m_pgxp_depth_buffer = false;
-@@ -558,6 +567,8 @@ protected:
+@@ -558,6 +570,8 @@ protected:
    // Bounding box of VRAM area that the GPU has drawn into.
    Common::Rectangle<uint32_t> m_vram_dirty_rect;
  
@@ -142649,6 +142805,37 @@ index 5e2b93f0..13dee2b2 100644
    std::array<VkPipeline, 2> m_vram_copy_pipelines{};
  
    VkPipeline m_vram_readback_pipeline = VK_NULL_HANDLE;
+diff --git a/src/core/gte.cpp b/src/core/gte.cpp
+index d33a0430..a4e7e753 100644
+--- a/src/core/gte.cpp
++++ b/src/core/gte.cpp
+@@ -10,6 +10,7 @@
+ #include "timing_event.h"
+ #include <algorithm>
+ #include <array>
++#include <cmath>
+ #include <cstring>
+ #include <numeric>
+ namespace GTE {
+@@ -763,7 +764,17 @@ static void RTPS(const int16_t V[3], uint8_t shift, bool lm, bool last)
+ 
+     precise_x = std::clamp<float>(precise_x, -1024.0f, 1023.0f);
+     precise_y = std::clamp<float>(precise_y, -1024.0f, 1023.0f);
+-    PGXP::GTE_PushSXYZ2f(precise_x, precise_y, precise_z, REGS.dr32[14]);
++    float precise_depth = precise_z;
++    if (g_settings.gpu_npd)
++    {
++      const float rz = std::sqrt(static_cast<float>(static_cast<int32_t>(REGS.RT[2][0]) * REGS.RT[2][0] +
++                                                    static_cast<int32_t>(REGS.RT[2][1]) * REGS.RT[2][1] +
++                                                    static_cast<int32_t>(REGS.RT[2][2]) * REGS.RT[2][2])) /
++                 4096.0f;
++      if (rz > 0.0f)
++        precise_depth /= rz;
++    }
++    PGXP::GTE_PushSXYZ2f(precise_x, precise_y, precise_depth, REGS.dr32[14]);
+   }
+ 
+   if (last)
 diff --git a/src/core/gte_types.h b/src/core/gte_types.h
 index 92107c5d..2549267d 100644
 --- a/src/core/gte_types.h
@@ -142662,7 +142849,7 @@ index 92107c5d..2549267d 100644
  union FLAGS
  {
 diff --git a/src/core/host_interface.cpp b/src/core/host_interface.cpp
-index 1d6f503c..8b0c3640 100644
+index 1d6f503c..929e2a14 100644
 --- a/src/core/host_interface.cpp
 +++ b/src/core/host_interface.cpp
 @@ -129,7 +129,11 @@ std::optional<std::vector<uint8_t>> HostInterface::GetBIOSImage(ConsoleRegion re
@@ -142677,12 +142864,13 @@ index 1d6f503c..8b0c3640 100644
    return image;
  }
  
-@@ -279,6 +283,8 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
+@@ -279,6 +283,9 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
          g_settings.gpu_true_color != old_settings.gpu_true_color ||
          g_settings.gpu_scaled_dithering != old_settings.gpu_scaled_dithering ||
          g_settings.gpu_texture_filter != old_settings.gpu_texture_filter ||
 +        g_settings.gpu_stf != old_settings.gpu_stf ||
 +        g_settings.gpu_frt != old_settings.gpu_frt ||
++        g_settings.gpu_ldm != old_settings.gpu_ldm ||
          g_settings.gpu_disable_interlacing != old_settings.gpu_disable_interlacing ||
          g_settings.gpu_force_ntsc_timings != old_settings.gpu_force_ntsc_timings ||
          g_settings.gpu_24bit_chroma_smoothing != old_settings.gpu_24bit_chroma_smoothing ||
@@ -143907,10 +144095,10 @@ index 1c1eb1ff..0166de3c 100644
  
  void CPU_MFHI(uint32_t instr, uint32_t hiVal)
 diff --git a/src/core/settings.cpp b/src/core/settings.cpp
-index f676325b..e397eaa2 100644
+index f676325b..9ca50997 100644
 --- a/src/core/settings.cpp
 +++ b/src/core/settings.cpp
-@@ -97,6 +97,14 @@ void Settings::Load(LibretroSettingsInterface& si)
+@@ -97,6 +97,20 @@ void Settings::Load(LibretroSettingsInterface& si)
      ParseTextureFilterName(
        si.GetStringValue("GPU", "TextureFilter", GetTextureFilterName(DEFAULT_GPU_TEXTURE_FILTER)).c_str())
        .value_or(DEFAULT_GPU_TEXTURE_FILTER);
@@ -143920,12 +144108,18 @@ index f676325b..e397eaa2 100644
 +      .value_or(DEFAULT_GPU_TEXTURE_FILTER);
 +  gpu_ffu = si.GetBoolValue("GPU", "FilterFramebufferUploads", false);
 +  gpu_frt = si.GetBoolValue("GPU", "ForceRoundTextureCoordinates", false);
++  gpu_tcf = si.GetBoolValue("GPU", "TrueColorFull", false);
++  gpu_npd = si.GetBoolValue("GPU", "PGXPNormalizeDepth", false);
++  {
++    const std::string ldm = si.GetStringValue("GPU", "LineDetectMode", "Disabled");
++    gpu_ldm = (ldm == "Quads") ? 1 : (ldm == "BasicTriangles") ? 2 : (ldm == "AggressiveTriangles") ? 3 : 0;
++  }
 +  gpu_ffuw = static_cast<uint32_t>(std::clamp(si.GetIntValue("GPU", "FilterFramebufferUploadsMinimumWidth", 1), 1, 1024));
 +  gpu_ffuh = static_cast<uint32_t>(std::clamp(si.GetIntValue("GPU", "FilterFramebufferUploadsMinimumHeight", 1), 1, 512));
    gpu_downsample_mode =
      ParseDownsampleModeName(
        si.GetStringValue("GPU", "DownsampleMode", GetDownsampleModeName(DEFAULT_GPU_DOWNSAMPLE_MODE)).c_str())
-@@ -117,6 +125,8 @@ void Settings::Load(LibretroSettingsInterface& si)
+@@ -117,6 +131,8 @@ void Settings::Load(LibretroSettingsInterface& si)
    gpu_pgxp_cpu = si.GetBoolValue("GPU", "PGXPCPU", false);
    gpu_pgxp_preserve_proj_fp = si.GetBoolValue("GPU", "PGXPPreserveProjFP", false);
    gpu_pgxp_tolerance = si.GetFloatValue("GPU", "PGXPTolerance", -1.0f);
@@ -143934,7 +144128,7 @@ index f676325b..e397eaa2 100644
    gpu_pgxp_depth_buffer = si.GetBoolValue("GPU", "PGXPDepthBuffer", false);
    SetPGXPDepthClearThreshold(si.GetFloatValue("GPU", "PGXPDepthClearThreshold", DEFAULT_GPU_PGXP_DEPTH_THRESHOLD));
  
-@@ -146,6 +156,8 @@ void Settings::Load(LibretroSettingsInterface& si)
+@@ -146,6 +162,8 @@ void Settings::Load(LibretroSettingsInterface& si)
    cdrom_mute_cd_audio = si.GetBoolValue("CDROM", "MuteCDAudio", false);
    cdrom_read_speedup = si.GetIntValue("CDROM", "ReadSpeedup", 1);
    cdrom_seek_speedup = si.GetIntValue("CDROM", "SeekSpeedup", 1);
@@ -143943,7 +144137,7 @@ index f676325b..e397eaa2 100644
  
    use_old_mdec_routines = si.GetBoolValue("Hacks", "OldMDECRoutines", true);
  
-@@ -315,7 +327,8 @@ const char* Settings::GetRendererName(GPURenderer renderer)
+@@ -315,7 +333,8 @@ const char* Settings::GetRendererName(GPURenderer renderer)
  }
  
  static constexpr auto s_texture_filter_names =
@@ -143954,22 +144148,25 @@ index f676325b..e397eaa2 100644
  std::optional<GPUTextureFilter> Settings::ParseTextureFilterName(const char* str)
  {
 diff --git a/src/core/settings.h b/src/core/settings.h
-index 2781a894..679bff51 100644
+index 2781a894..d7373bdc 100644
 --- a/src/core/settings.h
 +++ b/src/core/settings.h
-@@ -41,6 +41,11 @@ struct Settings
+@@ -41,6 +41,14 @@ struct Settings
    bool gpu_true_color = false;
    bool gpu_scaled_dithering = false;
    GPUTextureFilter gpu_texture_filter = GPUTextureFilter::Nearest;
 +  GPUTextureFilter gpu_stf = GPUTextureFilter::Nearest;
 +  bool gpu_ffu = false;
 +  bool gpu_frt = false;
++  uint8_t gpu_ldm = 0;
++  bool gpu_tcf = false;
++  bool gpu_npd = false;
 +  uint32_t gpu_ffuw = 1;
 +  uint32_t gpu_ffuh = 1;
    GPUDownsampleMode gpu_downsample_mode = GPUDownsampleMode::Disabled;
    GPUShaderPrecompileMode gpu_shader_precompile_mode = GPUShaderPrecompileMode::Lazy;
    bool gpu_disable_interlacing = true;
-@@ -54,6 +59,8 @@ struct Settings
+@@ -54,6 +62,8 @@ struct Settings
    bool gpu_pgxp_cpu = false;
    bool gpu_pgxp_preserve_proj_fp = false;
    bool gpu_pgxp_depth_buffer = false;
@@ -143978,7 +144175,7 @@ index 2781a894..679bff51 100644
    DisplayCropMode display_crop_mode = DisplayCropMode::None;
    DisplayAspectRatio display_aspect_ratio = DisplayAspectRatio::Auto;
    uint16_t display_aspect_ratio_custom_numerator = 0;
-@@ -66,7 +73,7 @@ struct Settings
+@@ -66,7 +76,7 @@ struct Settings
    bool gpu_24bit_chroma_smoothing = false;
    bool display_show_osd_messages = true;
    float gpu_pgxp_tolerance = -1.0f;
@@ -143987,7 +144184,7 @@ index 2781a894..679bff51 100644
  
    uint8_t cdrom_readahead_sectors = DEFAULT_CDROM_READAHEAD_SECTORS;
    bool cdrom_region_check = false;
-@@ -122,7 +129,7 @@ struct Settings
+@@ -122,7 +132,7 @@ struct Settings
  
    ALWAYS_INLINE bool UsingPGXPDepthBuffer() const { return gpu_pgxp_enable && gpu_pgxp_depth_buffer; }
    ALWAYS_INLINE bool UsingPGXPCPUMode() const { return gpu_pgxp_enable && gpu_pgxp_cpu; }
@@ -144028,7 +144225,7 @@ index c3eca738..5db2afe9 100644
  };
  
 diff --git a/src/libretro/libretro_core_options.h b/src/libretro/libretro_core_options.h
-index b96b983c..1a8333bc 100644
+index b96b983c..7f14fde2 100644
 --- a/src/libretro/libretro_core_options.h
 +++ b/src/libretro/libretro_core_options.h
 @@ -223,6 +223,18 @@ struct retro_core_option_v2_definition option_defs_us[] = {
@@ -144050,7 +144247,7 @@ index b96b983c..1a8333bc 100644
    {"swanstation_CDROM_ReadSpeedup",
     "CD-ROM Read Speedup",
     NULL,
-@@ -466,9 +478,96 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+@@ -466,9 +478,134 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       {"JINC2BinAlpha", "JINC2 (No Edge Blending)"},
       {"xBR", "xBR"},
       {"xBRBinAlpha", "xBR (No Edge Blending)"},
@@ -144091,6 +144288,44 @@ index b96b983c..1a8333bc 100644
 +   "Round Upscaled Texture Coordinates",
 +   NULL,
 +   "Rounds texture coordinates instead of flooring when upscaling. Set by the game database.",
++   NULL,
++   "enhancement",
++   {
++     {"true", "Enabled"},
++     {"false", "Disabled"},
++     {NULL, NULL},
++   },
++   "false"},
++  {"swanstation_GPU_LineDetectMode",
++   "Line Detection",
++   NULL,
++   "Draws the lines that games build out of polygons at the upscaled resolution. Set by the game database.",
++   NULL,
++   "enhancement",
++   {
++     {"Disabled", "Disabled"},
++     {"Quads", "Quads"},
++     {"BasicTriangles", "Basic Triangles"},
++     {"AggressiveTriangles", "Aggressive Triangles"},
++     {NULL, NULL},
++   },
++   "Disabled"},
++  {"swanstation_GPU_TrueColorFull",
++   "True Color (Full)",
++   NULL,
++   "Keeps the exact 24-bit colour of flat polygons instead of reducing it to the console's precision. Set by the game database.",
++   NULL,
++   "enhancement",
++   {
++     {"true", "Enabled"},
++     {"false", "Disabled"},
++     {NULL, NULL},
++   },
++   "false"},
++  {"swanstation_GPU_PGXPNormalizeDepth",
++   "PGXP Normalize Depth Scale",
++   NULL,
++   "Removes the scale of each object's transform from the PGXP depth values. Set by the game database.",
 +   NULL,
 +   "enhancement",
 +   {
@@ -144147,7 +144382,7 @@ index b96b983c..1a8333bc 100644
    {"swanstation_GPU_WidescreenHack",
     "Widescreen Hack",
     NULL,
-@@ -535,6 +634,32 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+@@ -535,6 +672,32 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       {NULL, NULL},
     },
     "false"},
@@ -144180,6 +144415,19 @@ index b96b983c..1a8333bc 100644
    {"swanstation_GPU_PGXPDepthBuffer",
     "PGXP Depth Buffer",
     NULL,
+diff --git a/src/libretro/libretro_game_settings.cpp b/src/libretro/libretro_game_settings.cpp
+index 3a2301f1..b5ef43cd 100644
+--- a/src/libretro/libretro_game_settings.cpp
++++ b/src/libretro/libretro_game_settings.cpp
+@@ -151,7 +151,7 @@ void Entry::ApplySettings(bool display_osd_messages) const
+     g_settings.gpu_true_color = false;
+   }
+ 
+-  if (HasTrait(Trait::DisableUpscaling))
++  if (HasTrait(Trait::DisableUpscaling) && g_settings.gpu_ldm == 0)
+   {
+     if (g_settings.gpu_resolution_scale > 1)
+     {
 diff --git a/src/libretro/libretro_host_interface.cpp b/src/libretro/libretro_host_interface.cpp
 index 6f97a844..56eaef31 100644
 --- a/src/libretro/libretro_host_interface.cpp
