@@ -55,7 +55,7 @@ if (result == elevation::Status::ok)
 }
 ```
 
-`elevation::path()` reports `existing`, `resident`, `helper`, or `none` for
+`elevation::path()` reports `existing`, `helper`, or `none` for
 diagnostics.
 
 The runtime sequence is:
@@ -66,18 +66,14 @@ The runtime sequence is:
    write there, but listing a folder or `lstat` is refused (`EPERM`), the app
    still runs as uid 1, and libcurl can't start. That is not elevation, so the
    request goes on to Lapy: Lapy runs only when it is needed.
-2. Publish the cooperative resident request through
-   `/download0/elevate_proc` and wait 1.5 seconds.
-3. If a resident service claimed the marker, never launch a second helper for
-   that title launch.
-4. Otherwise cancel the marker, observe one final grace interval, stream
-   `/app0/lapy.elf` to the local ELF loader on TCP port 9021 and complete
-   upstream's request/prepare/prepared/response exchange on that connection.
-5. Return `Status::ok` only after creating, writing, reading, comparing and
+2. Stream `/app0/lapy.elf` straight to the local ELF loader on TCP port 9021
+   and complete upstream's request/prepare/prepared/response exchange on that
+   connection. No resident service is waited for.
+3. Wait for `/data` to list once the helper has answered.
+4. Return `Status::ok` only after creating, writing, reading, comparing and
    removing a PID-specific probe under `/data`, and listing `/data`.
 
-The jailbreak environment must provide the local ELF loader on port 9021 when
-a resident Lapy service is not already running. `downloadDataSize` must be
+The jailbreak environment must provide the local ELF loader on port 9021. `downloadDataSize` must be
 positive in `sce_sys/param.json`. A missing loader, rejection, timeout or
 failed `/data` proof never authorizes privileged work.
 
@@ -85,14 +81,11 @@ failed `/data` proof never authorizes privileged work.
 
 `tools/build-lapy-helper.py` pins:
 
-- mpereiraesaa's Lapy commit
-  [`54a095c0f19161825e845daa760a03b446e654fa`](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/commit/54a095c0f19161825e845daa760a03b446e654fa),
-  proposed upstream in [PR #48](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon/pull/48);
-- official PS5 Payload SDK v0.40, used only for the helper because v0.41
-  changed the credential-attribute API; and
+- blackbearreloaded's Lapy commit `57fcc19b7f57e46c823d6f2a6c6233ebf3288079`;
+- official PS5 Payload SDK v0.45, used for the helper; and
 - the pinned `ps5log/1` header used by upstream's build.
 
-The normal boilerplate application build continues to use Payload SDK v0.42.
+The normal boilerplate application build uses Payload SDK v0.42.
 The two toolchains are deliberately separate.
 
 ## Validation and firmware caveats
