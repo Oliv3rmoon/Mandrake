@@ -55,7 +55,7 @@ if (result == elevation::Status::ok)
 }
 ```
 
-`elevation::path()` reports `existing`, `helper`, or `none` for
+`elevation::path()` reports `existing`, `resident`, `helper`, or `none` for
 diagnostics.
 
 The runtime sequence is:
@@ -66,16 +66,27 @@ The runtime sequence is:
    write there, but listing a folder or `lstat` is refused (`EPERM`), the app
    still runs as uid 1, and libcurl can't start. That is not elevation, so the
    request goes on to Lapy: Lapy runs only when it is needed.
-2. Stream `/app0/lapy.elf` straight to the local ELF loader on TCP port 9021
-   and complete upstream's request/prepare/prepared/response exchange on that
-   connection. No resident service is waited for.
-3. Wait for `/data` to list once the helper has answered.
-4. Return `Status::ok` only after creating, writing, reading, comparing and
+2. Publish the cooperative resident request through
+   `/download0/elevate_proc` and wait 1.5 seconds.
+3. If a resident service claimed the marker, never launch a second helper for
+   that title launch.
+4. Otherwise cancel the marker, observe one final grace interval, stream
+   `/app0/lapy.elf` to the local ELF loader on TCP port 9021 and complete
+   upstream's request/prepare/prepared/response exchange on that connection.
+5. Return `Status::ok` only after creating, writing, reading, comparing and
    removing a PID-specific probe under `/data`, and listing `/data`.
 
-The jailbreak environment must provide the local ELF loader on port 9021. `downloadDataSize` must be
+The jailbreak environment must provide the local ELF loader on port 9021 when
+a resident Lapy service is not already running. `downloadDataSize` must be
 positive in `sce_sys/param.json`. A missing loader, rejection, timeout or
 failed `/data` proof never authorizes privileged work.
+
+SwanStationPS5 does not use that client as is. Its own copy,
+`src/platform/elevation/elevation.cpp`, drops the resident phase (steps 2 and
+3): it streams `lapy.elf` to port 9021 right after the `/data` probe and then waits for
+`/data` to list, with no resident service to wait for. Its `elevation::path()`
+reports `existing`, `helper` or `none`. `make test-elevation` still exercises
+the example client, not that copy.
 
 ## Pinned upstream inputs
 
@@ -115,7 +126,9 @@ launch/elevate/close cycles. All ten runs:
   app-crash, coredump, nonsleeping-lock, trap or panic marker in the captured
   kernel logs.
 
-That is strong functional evidence for those two tested environments, not a
+That qualification was made before the pin moved to the commit and Payload SDK
+below, and has not been repeated for them. It is strong functional evidence for
+those two tested environments, not a
 universal or long-term kernel-stability guarantee. Other firmware, jailbreak
 and elfldr combinations remain experimental and need the same qualification.
 Never fall back to a raw-pointer helper when Lapy rejects a target.
@@ -124,9 +137,11 @@ Never fall back to a raw-pointer helper when Lapy rejects a target.
 
 Lapy was created by
 [ArkSama / Team PHU](https://github.com/ArkSama/PS5-Lapy-JB-Daemon). The
-cooperative exact-title helper used here is maintained in
-[mpereiraesaa's fork](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon).
-Credit belongs to both projects and their contributors.
+cooperative exact-title helper started in
+[mpereiraesaa's fork](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon), and
+the pinned build is fetched from
+[blackbearreloaded's fork](https://github.com/blackbearreloaded/PS5-Lapy-JB-Daemon).
+Credit belongs to all these projects and their contributors.
 
 Lapy is MIT licensed; its published shared protocol header is
 LGPL-2.1-or-later. The pinned `ps5log` build input is GPL-3.0-or-later. Their
