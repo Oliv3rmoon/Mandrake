@@ -43,6 +43,7 @@ void host_reset(void);
 void host_apply_settings(const Settings *settings); /* takes effect without reloading */
 
 double host_fps(void);
+int host_resolution_scale(void); /* the factor the core renders at (1 with the software renderer) */
 int host_sample_rate(void);
 float host_aspect(void);
 /* Latest frame; returns NULL when the core has not produced one yet. */

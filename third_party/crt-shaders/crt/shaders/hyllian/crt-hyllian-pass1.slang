@@ -241,7 +241,7 @@ vec3 mask_weights(vec2 coord, float phosphor_layout){
    else if(phosphor_layout == 1.){
       // classic aperture for RGB panels; good for 1080p, too small for 4K+
       // aka aperture_1_2_bgr
-      weights  = aperture_classic;
+      weights  = mix(magenta, green, floor(mod(coord.x * 0.5, 2.0)));
       return weights;
    }
 
