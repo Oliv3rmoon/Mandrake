@@ -21,7 +21,7 @@ None of this is sent anywhere by the app. You can delete it at any time with an 
 | To | When | What is sent | Why |
 | --- | --- | --- | --- |
 | retroachievements.org and media.retroachievements.org | Only if you signed in | Your user name and token, the hash of the disc you load, your unlocks and play session, and the User-Agent `SwanStationPS5/<version> (PS5) rcheevos/<version>` | Achievements, leaderboards, points and your avatar |
-| api.github.com | If "Check for updates" is on | A request for the latest releases of `darkxex/SwanStationPS5` | The update check; installing an update downloads the release from GitHub |
+| api.github.com and github.com | If "Check for updates" is on | A request for the latest release of `Oliv3rmoon/Nightshade-Station`, then its `SHA256SUMS` | The update check; installing an update downloads that release's `PPSA98510.zip` from GitHub and checks it against `SHA256SUMS` |
 | raw.githubusercontent.com | When a cover, bezel, cheat file or the game database is needed | The file name for the game (title or disc ID) | Covers (`xlenore/psx-covers`, `libretro-thumbnails`), bezels (`thebezelproject`), cheats (`libretro-database`, `duckstation/chtdb`) and the game database (`stenzek/duckstation`) |
 
 These servers receive the usual network metadata (your IP address, and the User-Agent above) and are governed by their own privacy policies. Nothing else is sent, and the app talks to no server run by the developer.
@@ -36,4 +36,4 @@ The app collects no personal data and has no social features.
 
 ## Contact
 
-Open an issue at <https://github.com/darkxex/SwanStationPS5/issues>.
+Open an issue at <https://github.com/Oliv3rmoon/Nightshade-Station/issues>.

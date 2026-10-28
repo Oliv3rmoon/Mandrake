@@ -1,12 +1,14 @@
 /*
  * SwanStationPS5 - updates from the project's GitHub releases.
+ * Nightshade Station: from Oliv3rmoon/Nightshade-Station's releases (update_release.h).
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * Checks api.github.com for the latest release; installing downloads its
- * SwanStationPS5-vX.Y.Z.zip and writes the PPSA98510 folder inside it over the
- * installed app. Each file goes to <name>.new and is renamed into place:
- * a running eboot.bin can't be overwritten, but it can be replaced by name,
- * and the new one runs from the next start.
+ * Checks api.github.com for the repository's latest release (not a draft or a pre-release);
+ * update_release.c decides whether it is offered: a newer X.Y.Z tag carrying PPSA98510.zip and
+ * SHA256SUMS, both this repository's own files. Installing downloads the ZIP, checks it against
+ * the SHA-256 that SHA256SUMS gives it, and writes the PPSA98510 folder inside it over the
+ * installed app. Each file goes to <name>.new and is renamed into place: a running eboot.bin
+ * can't be overwritten, but it can be replaced by name, and the new one runs from the next start.
  */
 #include "update.h"
 
@@ -14,6 +16,7 @@
 #include "app.h"
 #include "i18n.h"
 #include "net.h"
+#include "update_release.h"
 
 #define MINIZ_NO_ZLIB_COMPATIBLE_NAMES
 #include "../third_party/miniz/miniz.h"
@@ -28,7 +31,7 @@
 #define APP_DIR_DEFAULT "/data/homebrew/PPSA98510"
 
 static SDL_atomic_t state;
-static char version[32], zip_url[512], message[256];
+static char version[32], zip_url[256], zip_sha256[65], message[256];
 
 int update_state(void)
 {
@@ -45,37 +48,6 @@ const char *update_message(void)
     return message;
 }
 
-/* "1.10.0" > "1.9.2" */
-static bool newer(const char *a, const char *b)
-{
-    int x[3] = {0}, y[3] = {0};
-    sscanf(a, "%d.%d.%d", &x[0], &x[1], &x[2]);
-    sscanf(b, "%d.%d.%d", &y[0], &y[1], &y[2]);
-    for (int i = 0; i < 3; ++i)
-        if (x[i] != y[i])
-            return x[i] > y[i];
-    return false;
-}
-
-/* the value of "key": "..." after `from` in a JSON text */
-static bool json_string(const char *from, const char *key, char *out, size_t size)
-{
-    char pattern[64];
-    snprintf(pattern, sizeof(pattern), "\"%s\"", key);
-    const char *p = strstr(from, pattern);
-    if (!p)
-        return false;
-    p = strchr(p + strlen(pattern), '"');
-    if (!p)
-        return false;
-    const char *end = strchr(++p, '"');
-    if (!end || (size_t)(end - p) >= size)
-        return false;
-    memcpy(out, p, (size_t)(end - p));
-    out[end - p] = '\0';
-    return true;
-}
-
 static void fail(const char *why)
 {
     str_copy(message, sizeof(message), why);
@@ -88,11 +60,8 @@ static int check_thread(void *unused)
     (void)unused;
     char *body = NULL;
     size_t len = 0;
-    /* every recent release, not /releases/latest: from 2.1.1 on, new releases
-     * aren't marked Latest, so that 2.0.0 (whose updater left the app unable to
-     * start) never offers them */
-    int status = net_request("https://api.github.com/repos/" UPDATE_REPO "/releases?per_page=15", NULL, NULL,
-                             SwanStationPS5_NAME "/" SwanStationPS5_VERSION, &body, &len);
+    /* releases/latest: the newest release that is neither a draft nor a pre-release */
+    int status = net_request(UPDATE_LATEST_URL, NULL, NULL, SwanStationPS5_NAME "/" SwanStationPS5_VERSION, &body, &len);
     if (status == 404)
     {
         free(body);
@@ -105,45 +74,42 @@ static int check_thread(void *unused)
         fail(tr("Couldn't reach GitHub"));
         return 0;
     }
-    /* the newest release (not a draft or a pre-release) that has a .zip */
-    version[0] = '\0';
-    zip_url[0] = '\0';
-    for (const char *rel = strstr(body, "\"tag_name\""); rel;)
-    {
-        const char *next = strstr(rel + 10, "\"tag_name\"");
-        size_t span = next ? (size_t)(next - rel) : strlen(rel);
-        char *one = malloc(span + 1);
-        if (!one)
-            break;
-        memcpy(one, rel, span);
-        one[span] = '\0';
-        char tag[32] = "", url[512] = "", found[512] = "";
-        json_string(one, "tag_name", tag, sizeof(tag));
-        bool skip = strstr(one, "\"draft\":true") || strstr(one, "\"prerelease\":true");
-        for (const char *p = one; !skip && (p = strstr(p, "\"browser_download_url\""));)
-        {
-            if (json_string(p, "browser_download_url", url, sizeof(url)) && strlen(url) > 4 &&
-                !strcmp(url + strlen(url) - 4, ".zip"))
-            {
-                str_copy(found, sizeof(found), url);
-                break;
-            }
-            p += 22;
-        }
-        free(one);
-        const char *tv = tag[0] == 'v' ? tag + 1 : tag;
-        if (!skip && tv[0] && found[0] && (!version[0] || newer(tv, version)))
-        {
-            str_copy(version, sizeof(version), tv);
-            str_copy(zip_url, sizeof(zip_url), found);
-        }
-        rel = next;
-    }
+    Release release;
+    ReleaseVerdict verdict = release_evaluate(body, len, SwanStationPS5_VERSION, &release);
     free(body);
-    const char *v = version;
-    bool available = v[0] && newer(v, SwanStationPS5_VERSION) && zip_url[0];
-    SwanStationPS5_log("update: latest %s, this %s%s", v[0] ? v : "?", SwanStationPS5_VERSION, available ? ", available" : "");
-    SDL_AtomicSet(&state, available ? UPDATE_AVAILABLE : UPDATE_NONE);
+    version[0] = zip_url[0] = zip_sha256[0] = '\0';
+    SwanStationPS5_log("update: " UPDATE_REPO " latest %s, this %s: %s", release.version[0] ? release.version : "?",
+                       SwanStationPS5_VERSION, release_verdict_text(verdict));
+    if (verdict != RELEASE_OFFER)
+    {
+        SDL_AtomicSet(&state, UPDATE_NONE);
+        return 0;
+    }
+    /* SHA256SUMS: the SHA-256 the download must have */
+    status = net_request(release.sums_url, NULL, NULL, SwanStationPS5_NAME "/" SwanStationPS5_VERSION, &body, &len);
+    if (status != 200 || !body)
+    {
+        free(body);
+        fail(tr("Couldn't reach GitHub"));
+        return 0;
+    }
+    char sha[65];
+    int listed = release_sums_lookup(body, len, UPDATE_ZIP, sha);
+    free(body);
+    if (listed != 1 || (release.zip_digest[0] && strcmp(release.zip_digest, sha) != 0))
+    {
+        SwanStationPS5_log("update: %s's " UPDATE_SUMS " %s; not offered", release.version,
+                           listed == 0 ? "doesn't list " UPDATE_ZIP
+                           : listed < 0 ? "has a malformed or repeated line for " UPDATE_ZIP
+                                        : "disagrees with GitHub's digest of " UPDATE_ZIP);
+        SDL_AtomicSet(&state, UPDATE_NONE);
+        return 0;
+    }
+    str_copy(version, sizeof(version), release.version);
+    str_copy(zip_url, sizeof(zip_url), release.zip_url);
+    str_copy(zip_sha256, sizeof(zip_sha256), sha);
+    SwanStationPS5_log("update: %s available, " UPDATE_ZIP " sha256 %s", version, zip_sha256);
+    SDL_AtomicSet(&state, UPDATE_AVAILABLE);
     return 0;
 }
 
@@ -242,6 +208,15 @@ static int install_thread(void *unused)
         fail(tr("The download failed"));
         return 0;
     }
+    /* nothing is unpacked unless the ZIP is the one SHA256SUMS names */
+    char got[65] = "";
+    if (!release_file_sha256(zip, got) || strcmp(got, zip_sha256) != 0)
+    {
+        SwanStationPS5_log("update: " UPDATE_ZIP " sha256 %s, " UPDATE_SUMS " says %s", got, zip_sha256);
+        remove(zip);
+        fail(tr("The download doesn't match its SHA256SUMS"));
+        return 0;
+    }
     mz_zip_archive archive;
     memset(&archive, 0, sizeof(archive));
     if (!mz_zip_reader_init_file(&archive, zip, 0))
@@ -257,7 +232,7 @@ static int install_thread(void *unused)
         mz_zip_archive_file_stat st;
         if (!mz_zip_reader_file_stat(&archive, i, &st) || st.m_is_directory)
             continue;
-        /* SwanStationPS5-v1.2.0/PPSA98510/<path> -> <where the app is stored>/<path> */
+        /* PPSA98510/<path> -> <where the app is stored>/<path> */
         const char *inside = strstr(st.m_filename, "PPSA98510/");
         if (!inside || strstr(inside, ".."))
             continue;

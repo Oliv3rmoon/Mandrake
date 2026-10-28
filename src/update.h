@@ -1,5 +1,6 @@
 /*
  * SwanStationPS5 - updates from the project's GitHub releases.
+ * Nightshade Station: Oliv3rmoon/Nightshade-Station's (UPDATE_REPO, update_release.h).
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #ifndef SwanStationPS5_UPDATE_H
@@ -14,11 +15,9 @@ enum UpdateState
     UPDATE_NONE,      /* this is the newest version */
     UPDATE_AVAILABLE, /* update_version() is newer */
     UPDATE_INSTALLING,
-    UPDATE_INSTALLED, /* restart SwanStationPS5 to use it */
+    UPDATE_INSTALLED, /* restart the app to use it */
     UPDATE_FAILED,    /* update_message() says why */
 };
-
-#define UPDATE_REPO "darkxex/SwanStationPS5"
 
 void update_check(void);   /* in the background */
 void update_install(void); /* in the background; needs UPDATE_AVAILABLE */
