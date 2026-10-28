@@ -1235,7 +1235,8 @@ static void apply_preset(int preset)
 static void draw_controller(float cx, float cy, int highlight)
 {
     /* a DualSense, simplified: body, grips, touchpad, sticks */
-    const uint32_t body = TH_PILL, edge = theme.light ? TH_DIVIDER : 0xff2f3a80u;
+    const uint32_t body = TH_PILL,
+                   edge = theme.light ? TH_DIVIDER : theme_current() == THEME_NIGHTSHADE ? 0xff2b2b31u : 0xff2f3a80u;
     draw_rrect(cx - 360, cy - 130, 720, 250, 120, edge);
     draw_rrect(cx - 354, cy - 124, 708, 238, 116, body);
     draw_circle(cx - 250, cy + 140, 92, edge);

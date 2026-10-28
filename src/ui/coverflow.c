@@ -407,6 +407,15 @@ static void make_backdrop(uint8_t *grey, int W, int H, int style, bool light)
                 v *= 1.0f - dx * dx * 0.25f;
                 break;
             }
+            case BACKDROP_GLOW:
+            {
+                /* Nightshade: near black, a low glow rising from below the covers, right of the middle, and a
+                 * fainter one behind them; the theme's red colours it */
+                const float u = (float)x / (W - 1), gx = (u - 0.60f) / 0.55f, gy = (t - 1.04f) / 0.32f;
+                const float bx = (u - 0.5f) / 0.75f, by = (t - 0.46f) / 0.34f;
+                v = 0.035f + 0.34f * expf(-(gx * gx + gy * gy)) + 0.05f * expf(-(bx * bx + by * by));
+                break;
+            }
             case BACKDROP_LAMP:
             {
                 /* a warm pool of light from a lamp above the shelf */
@@ -620,9 +629,10 @@ static void draw_cover(PlatTexture *tex, const Game *g, float cx, float cy, floa
     float w = h * aspect * squeeze, x = cx - w * 0.5f, y = cy - h * 0.5f;
     if (selected)
     {
-        /* Classic, Neon Arcade and Grayrat: no shadow, glow or border around the selected cover (the other themes keep theirs) */
+        /* Classic, Neon Arcade, Grayrat and Nightshade: no shadow, glow or border around the selected cover (the other
+         * themes keep theirs) */
         int id = theme_current();
-        if (id != THEME_CLASSIC && id != THEME_NEON && id != THEME_GRAYRAT)
+        if (id != THEME_CLASSIC && id != THEME_NEON && id != THEME_GRAYRAT && id != THEME_NIGHTSHADE)
         {
             draw_rrect(x - 10, y + 14, w + 20, h + 6, 18, 0x60000000u); /* shadow */
             if (theme.backdrop == BACKDROP_GRID) /* a neon glow */

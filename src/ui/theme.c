@@ -1,6 +1,6 @@
 /*
- * SwanStationPS5 - the themes: Classic, Neon Arcade, Memory Card (light and dark), Record Shelf and
- * Grayrat. Settings > Library > Theme.
+ * SwanStationPS5 - the themes: Classic, Neon Arcade, Memory Card (light and dark), Record Shelf,
+ * Grayrat and Nightshade (Nightshade Station's, the default). Settings > Library > Theme.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "theme.h"
@@ -13,7 +13,7 @@ Theme theme;
 static int current = -1;
 
 const char *const THEME_NAMES[THEME_COUNT] = {"Classic", "Neon Arcade", "Memory Card", "Memory Card Dark",
-                                              "Record Shelf", "Grayrat"};
+                                              "Record Shelf", "Grayrat", "Nightshade"};
 
 static const Theme THEMES[THEME_COUNT] = {
     [THEME_CLASSIC] = {
@@ -61,12 +61,23 @@ static const Theme THEMES[THEME_COUNT] = {
         /* a fixed grey, not the cover's colour: the brightest band (0.56, in the middle of the screen) comes out at 138 */
         .divider = 0xff3a3d47u, .cover_outline = 0xff7fa6ecu, .backdrop_tint = 0xfff6f7f7u, .backdrop = BACKDROP_FLOOR,
         .font_regular = "fonts/ChakraPetch-500.ttf", .font_bold = "fonts/ChakraPetch-700.ttf"},
+    /* Nightshade's own palette, its "nightly" theme (Oliv3rmoon/Nightshade, headless/prosperoeden/pe/ui/theme.cpp):
+     * near-black pages and panels, one red accent (#e5484d) for the focus, the switches and the selected cover, cool
+     * white text, an amber that is never the accent for warnings, and a near-black sky with a low red glow. Classic's
+     * cover flow and font. */
+    [THEME_NIGHTSHADE] = {
+        .bg = 0xff09090bu, .bg_deep = 0xff050506u, .card = 0xff141417u, .card_soft = 0xe0141417u,
+        .row_selected = 0xff26161au, .focus = 0xffe5484du, .pill = 0xff1c1c20u, .switch_on = 0xffe5484du,
+        .switch_off = 0xff2b2b31u, .text = 0xffededf0u, .text_dim = 0xff8f8f98u, .text_soft = 0xffcacad0u,
+        .hint = 0xff8f8f98u, .gold = 0xfff0a35eu, .danger = 0xffff7a7au, .good = 0xff6fe3aeu,
+        .divider = 0xff27272du, .cover_outline = 0xffe5484du, .backdrop_tint = 0xffe5484du, .backdrop = BACKDROP_GLOW,
+        .font_regular = "fonts/Inter-400.ttf", .font_bold = "fonts/Inter-600.ttf"},
 };
 
 void theme_apply(int id)
 {
     if (id < 0 || id >= THEME_COUNT)
-        id = THEME_CLASSIC;
+        id = THEME_NIGHTSHADE;
     const char *old_regular = current >= 0 ? theme.font_regular : NULL;
     const char *old_bold = current >= 0 ? theme.font_bold : NULL;
     theme = THEMES[id];

@@ -412,6 +412,7 @@ static const Entry ENTRIES[] = {
     {{"Memory Card Dark", "Carte mémoire sombre", "Cartão de memória escuro", "Tarjeta de memoria oscura", "メモリーカード (ダーク)"}},
     {{"Record Shelf", "Étagère à disques", "Prateleira de discos", "Estante de discos", "レコード棚"}},
     {{"Grayrat", "Grayrat", "Grayrat", "Grayrat", "Grayrat"}},
+    {{"Nightshade", "Nightshade", "Nightshade", "Nightshade", "Nightshade"}},
     {{"Classic theme: Dark keeps the screen deep navy; Cover colour tints it with the selected game.",
       "Thème Classique : Sombre garde un bleu nuit ; Couleur de la jaquette teinte l'écran selon le jeu.",
       "Tema Clássico: Escuro mantém o azul-noite; Cor da capa tinge o ecrã com o jogo escolhido.",
