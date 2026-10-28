@@ -162,6 +162,12 @@ The BlackBear icon, selection artwork, and default selection track
 (C) 2026 BlackBearReloaded, and distributed under GPL-3.0-or-later. The track
 is titled `Night Drive`.
 
+In Nightshade Station, Oliv3rmoon's release of SwanStationPS5, the icon and the home-screen
+pictures (`sce_sys/icon0.png`, `pic0.dds` and `pic1.dds` with their source PNGs,
+`background-source.png` and `launch-background-source.png`) take the place of SwanStationPS5's.
+They are drawn by `tools/render-home-art.py`, after Nightshade's (Oliv3rmoon/Nightshade),
+Copyright (C) 2026 Oliv3rmoon, and distributed under GPL-3.0-or-later.
+
 No proprietary runtime module, encryption key, or game file is included.
 
 ## SwanStationPS5 additions

@@ -22,7 +22,8 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 SIZE = (3840, 2160)
-PAIRS = [("sce_sys/launch-background-source.png", "sce_sys/pic0.dds"),
+# Nightshade Station: the home screen's picture has its own source again (tools/render-home-art.py draws both).
+PAIRS = [("sce_sys/background-source.png", "sce_sys/pic0.dds"),
          ("sce_sys/launch-background-source.png", "sce_sys/pic1.dds")]
 WEIGHTS = np.array([0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64], np.float32) / 64.0
 CHUNK = 32768  # blocks per step, to keep memory small
