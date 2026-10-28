@@ -20,6 +20,11 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".deps/lapy"
 LAPY_COMMIT = "57fcc19b7f57e46c823d6f2a6c6233ebf3288079"
+LAPY_REPOSITORIES = (
+    "https://github.com/blackbearreloaded/PS5-Lapy-JB-Daemon.git",
+    "https://github.com/ArkSama/PS5-Lapy-JB-Daemon.git",
+    "https://github.com/Phononenom/PS5-Lapy-JB-Daemon-bbr.git",
+)
 LAPY = CACHE / f"PS5-Lapy-JB-Daemon-{LAPY_COMMIT[:7]}"
 SDK = CACHE / "ps5-payload-sdk-v0.45"
 SDK_URL = "https://github.com/ps5-payload-dev/sdk/releases/download/v0.45/ps5-payload-sdk.zip"
@@ -68,11 +73,17 @@ def fetch_lapy():
     staging = Path(tempfile.mkdtemp(prefix="lapy-git-", dir=CACHE))
     try:
         subprocess.run(["git", "init", "-q"], cwd=staging, check=True)
-        subprocess.run(["git", "remote", "add", "origin",
-                        "https://github.com/blackbearreloaded/PS5-Lapy-JB-Daemon.git"],
-                       cwd=staging, check=True)
-        subprocess.run(["git", "fetch", "-q", "--depth", "1", "origin", LAPY_COMMIT],
-                       cwd=staging, check=True)
+        # The daemon's own repository is gone; the pinned commit is fetched by its hash, so a
+        # mirror that still has it gives the same code.
+        for url in LAPY_REPOSITORIES:
+            subprocess.run(["git", "remote", "remove", "origin"], cwd=staging,
+                           stderr=subprocess.DEVNULL)
+            subprocess.run(["git", "remote", "add", "origin", url], cwd=staging, check=True)
+            if subprocess.run(["git", "fetch", "-q", "--depth", "1", "origin", LAPY_COMMIT],
+                              cwd=staging, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}).returncode == 0:
+                break
+        else:
+            raise RuntimeError(f"no repository has Lapy commit {LAPY_COMMIT}")
         subprocess.run(["git", "-c", "advice.detachedHead=false", "checkout", "-q", "--detach",
                         "FETCH_HEAD"], cwd=staging, check=True)
         staging.rename(LAPY)
