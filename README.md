@@ -1,18 +1,98 @@
-
-
 <p align="center">
-  <img src="sce_sys/launch-background-source.png" alt="SwanStationPS5" width="100%">
+  <img src="sce_sys/icon0.png" width="128" alt="Nightshade Station icon">
 </p>
 
-
+<h1 align="center">Nightshade Station</h1>
 
 <p align="center">
-  <img alt="Platform: jailbroken PS5" src="https://img.shields.io/badge/platform-jailbroken%20PS5-3d55c8">
-  <img alt="SwanStation" src="https://img.shields.io/badge/emulation-SwanStation-5a6fe0">
-  <img alt="Vulkan" src="https://img.shields.io/badge/GPU-Vulkan%20up%20to%2016x-c83d5a">
-  <img alt="RetroAchievements" src="https://img.shields.io/badge/RetroAchievements-supported-f0b429">
-  <img alt="Licence: GPL-3.0-or-later" src="https://img.shields.io/badge/licence-GPL--3.0--or--later-2b2f7a">
+  <strong>PS1 emulation for PS5 homebrew, by Oliv3rmoon: everything in SwanStationPS5, in Nightshade's black and red, updated from its own releases.</strong>
 </p>
+
+<p align="center">
+  <a href="https://github.com/Oliv3rmoon/Nightshade-Station/releases/latest"><img src="https://img.shields.io/github/v/release/Oliv3rmoon/Nightshade-Station?style=for-the-badge&label=download&color=e5484d&labelColor=0d0d0f" alt="Download the latest release"></a>
+  <a href="https://discord.gg/pSqgRU3YP9"><img src="https://img.shields.io/badge/discord-nightly-0d0d0f?style=for-the-badge&logo=discord&logoColor=e5484d" alt="Discord: nightly"></a>
+  <a href="https://buymeacoffee.com/oliv3rmoon"><img src="https://img.shields.io/badge/buy%20me%20a%20coffee-0d0d0f?style=for-the-badge&logo=buymeacoffee&logoColor=e5484d" alt="Buy me a coffee"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-0d0d0f?style=for-the-badge&labelColor=0d0d0f&color=e5484d" alt="GPL-3.0-or-later"></a>
+</p>
+
+Nightshade Station is Oliv3rmoon's release of SwanStationPS5 by darkxex, built on SwanStation. It is
+[SwanStationPS5](https://github.com/darkxex/SwanStationPS5) 1.5.9, the PS1 emulator that installs as
+an app on the PS5 home screen and runs every game on [SwanStation](https://github.com/libretro/swanstation)
+(DuckStation's libretro core) through Vulkan, with the look of [Nightshade](https://github.com/Oliv3rmoon/Nightshade)
+and updates from this repository. The current release is **1.6.0**; what changed is in the
+[changelog](docs/CHANGELOG.md).
+
+## What you get
+
+- **Everything in SwanStationPS5.** The cover-flow shelf with 3D jewel cases, up to 16x resolution
+  with PGXP, RetroAchievements, cheats, save states and quick resume, the shaders and frame
+  generation, games on drives, NFS shares and NTFS disks, your own discs from a USB CD drive and the
+  phone page, in five languages. Nothing is taken out.
+- **Nightshade's look.** A Nightshade theme, the default: black and red, clean and dark, with
+  near-black panels, one red accent and a near-black sky with a low red glow. The nightshade flower
+  is on the icon and the home-screen pictures. Classic, Neon Arcade, Memory Card, Memory Card Dark,
+  Record Shelf and Grayrat are still in **Settings > Library > Theme**.
+- **Updates from its own releases.** It asks
+  [Oliv3rmoon/Nightshade-Station](https://github.com/Oliv3rmoon/Nightshade-Station/releases) for a
+  newer release and installs it, after checking `PPSA98510.zip` against the release's `SHA256SUMS`.
+  It never offers SwanStationPS5's own releases, which would put the old name and look back.
+- **No BIOS, no games.** Like SwanStationPS5, it ships neither: use dumps of your own console and discs.
+
+## Install
+
+1. Close SwanStationPS5 (or Nightshade Station).
+2. Download `PPSA98510.zip` from the [latest release](https://github.com/Oliv3rmoon/Nightshade-Station/releases/latest)
+   and unzip it.
+3. Copy its `PPSA98510` folder over your current one (usually `/data/homebrew/PPSA98510`), replacing
+   the files, with permissions `777` as [Getting started](#getting-started) below describes.
+   Nightshade's **Settings > Apps** can install it for you instead.
+
+It keeps SwanStationPS5's title ID, so it replaces SwanStationPS5, and your memory cards, saves,
+save states, covers and settings stay as they are (they live in `/data/SwanStationPS5`). The home
+screen calls it **Nightshade Station**. At its first start it asks, as after every update, whether to
+start from the factory settings: **✕** does, and opens in the Nightshade theme; **○** keeps your
+settings, theme included (pick **Nightshade** in Settings > Library > Theme). Its releases carry the
+folder ZIP, not SwanStationPS5's `.exfat` image. To go back, copy an
+[official release](https://github.com/darkxex/SwanStationPS5/releases) over it the same way.
+
+## Updates
+
+When it starts (and from **Settings > About > Check for updates**) Nightshade Station asks GitHub
+for the newest release of [Oliv3rmoon/Nightshade-Station](https://github.com/Oliv3rmoon/Nightshade-Station/releases)
+that is not a pre-release. When its tag is a newer version and it carries `PPSA98510.zip` and
+`SHA256SUMS`, both this repository's own files, the update is offered and installed into the folder
+the app runs from; the ZIP is checked against `SHA256SUMS` before anything is replaced, and the new
+version runs from the next start. Your data in `/data/SwanStationPS5` is not touched.
+SwanStationPS5's own updater reads darkxex's releases, so this first Nightshade Station is copied by
+hand (or installed by Nightshade's Settings > Apps); from it on, the updates come by themselves. A
+release built by this repository's workflow can be checked with
+`gh attestation verify PPSA98510.zip -R Oliv3rmoon/Nightshade-Station`.
+
+## Requests, bugs and support
+
+- **Ask for a fix or a feature:** [open an issue](https://github.com/Oliv3rmoon/Nightshade-Station/issues/new/choose),
+  or ask in **[nightly on Discord](https://discord.gg/pSqgRU3YP9)**.
+- **Bugs in my releases:** open an issue here with `/data/SwanStationPS5/logs/SwanStationPS5.log`,
+  copied right after the problem. Never attach games, BIOS files or keys.
+- **If my work helps you,** you can [buy me a coffee](https://buymeacoffee.com/oliv3rmoon).
+
+## Thanks
+
+- **[SwanStationPS5](https://github.com/darkxex/SwanStationPS5)**, by **darkxex** (AngelXex), who
+  made it and keeps it going, with its contributors and testers ([its Discord](https://discord.gg/MseFnnfYzt)).
+  Nightshade Station is his app with a new name, a new look and a new update source; the credit for
+  it is his.
+- **[PSXS5](https://github.com/SynoPiia/PSXS5)**, by **SynoPiia**, where SwanStationPS5 started.
+- **The [SwanStation](https://github.com/libretro/swanstation) and [DuckStation](https://github.com/stenzek/duckstation)
+  contributors**, for the emulator it runs, and everyone in the official [Credits](#credits) below.
+- **[Nightshade](https://github.com/Oliv3rmoon/Nightshade)**, whose palette and art code this release reuses.
+
+Nightshade Station is an unofficial release. SwanStationPS5 is made by darkxex and its contributors;
+neither they nor Sony endorse Nightshade Station. It is free software under the GNU General Public
+License, version 3 or later, as SwanStationPS5 is ([LICENSE](LICENSE)). To build it, follow
+[Building from source](#building-from-source) with this repository
+(`git clone --recurse-submodules https://github.com/Oliv3rmoon/Nightshade-Station.git`). Everything
+below is the official SwanStationPS5 README, without its badges.
 
 ---
 
