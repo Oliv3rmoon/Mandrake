@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in SwanStationPS5 doesn't work as it should
+description: Something in Nightshade Station doesn't work as it should
 labels: [bug]
 body:
   - type: markdown
@@ -21,7 +21,7 @@ body:
     id: steps
     attributes:
       label: How to make it happen
-      description: The steps from starting SwanStationPS5. Does it happen every time?
+      description: The steps from starting Nightshade Station. Does it happen every time?
       placeholder: |
         1. Start Toy Story 2
         2. Walk up to Mr. Potato Head and press X
@@ -44,7 +44,7 @@ body:
         - A game looks wrong (graphics)
         - A game sounds wrong
         - A game crashes, freezes or won't start
-        - SwanStationPS5 crashes or closes
+        - Nightshade Station crashes or closes
         - The PS5 crashes or freezes
         - Storage / "can't open /data/SwanStationPS5"
         - Controls or button mapping
@@ -58,7 +58,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SwanStationPS5 version
+      label: Nightshade Station version
       description: Settings → About → Version
       placeholder: 1.2.0
     validations:
@@ -86,7 +86,7 @@ body:
       label: Log
       description: |
         Attach `/data/SwanStationPS5/logs/SwanStationPS5.log`. Copy it with FTP **right after** the problem,
-        before starting SwanStationPS5 again (each start replaces it). After a crash it ends with a
+        before starting Nightshade Station again (each start replaces it). After a crash it ends with a
         `crash:` section; that's the most useful part.
       placeholder: Drag the SwanStationPS5.log file here.
     validations:

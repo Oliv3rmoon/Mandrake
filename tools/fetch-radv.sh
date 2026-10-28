@@ -4,6 +4,10 @@
 #   .deps/native/radv-release/                 the driver archive and Vulkan headers
 #   .deps/native/ps5-payload-sdk/target/...    + the SDK fork's platform layer
 # Needs gh (GH_TOKEN in CI) because the repository may be private.
+# Nightshade Station: the release is looked for in this repository first and then in darkxex/SwanStationPS5
+# (RADV_RELEASE_REPOSITORY), whose deps-radv-* pre-release is the same build, so Oliv3rmoon/Nightshade-Station
+# builds without a copy of its own. A copy made here must stay a pre-release: the app's update check reads
+# releases/latest.
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 set -euo pipefail
@@ -21,7 +25,17 @@ fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 echo "==> [vulkan] downloading $tag"
-gh release download "$tag" -R "${GITHUB_REPOSITORY:-SynoPiia/SwanStationPS5}" -p '*.tar.zst' -D "$work"
+fetched=
+for repo in ${GITHUB_REPOSITORY:+"$GITHUB_REPOSITORY"} "${RADV_RELEASE_REPOSITORY:-darkxex/SwanStationPS5}"; do
+    rm -f "$work"/*.tar.zst
+    if gh release download "$tag" -R "$repo" -p '*.tar.zst' -D "$work" 2>/dev/null; then
+        fetched=$repo
+        break
+    fi
+    echo "==> [vulkan] no $tag in $repo"
+done
+[[ -n $fetched ]] || { echo "error: no $tag release with the RADV archives was found" >&2; exit 1; }
+echo "==> [vulkan] $tag from $fetched"
 
 rm -rf "$native/radv-release"
 tar --zstd -xf "$work/radv-release.tar.zst" -C "$native"
