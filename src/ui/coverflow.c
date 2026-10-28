@@ -970,7 +970,7 @@ static void storage_screen(uint32_t pressed)
     float w = 1200, h = 300, x = CENTER_X - w * 0.5f, y = 330;
     draw_rrect(x, y, w, h, TH_RADIUS, TH_CARD_SOFT);
     icon_draw(ICON_ALERT_TRIANGLE, CENTER_X - 32, y + 40, 64, TH_GOLD);
-    text_draw(CENTER_X, y + 124, 36, FONT_BOLD, TH_TEXT, ALIGN_CENTER, tr("SwanStationPS5 can't open /data/SwanStationPS5"));
+    text_draw(CENTER_X, y + 124, 36, FONT_BOLD, TH_TEXT, ALIGN_CENTER, tr("Nightshade Station can't open /data/SwanStationPS5"));
     text_draw_fit(CENTER_X, y + 190, 24, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, w - 80,
                   app.storage_error);
     static const int glyphs[] = {GLYPH_SQUARE};
@@ -1900,7 +1900,7 @@ void shelf_screen(uint32_t pressed)
         if (!circle)
         {
             if (armed && hold > 0.0f && hold < QUIT_HOLD) /* a tap, not a hold */
-                app_toast("Hold to exit SwanStationPS5...");
+                app_toast("Hold to exit Nightshade Station...");
             hold = 0.0f, armed = false;
         }
         else if (hold == 0.0f && !armed)
@@ -2183,7 +2183,7 @@ void shelf_screen(uint32_t pressed)
         {
             /* games copied another way can't be found without listing /data */
             text_draw(CENTER_X, y + 262, 22, FONT_REGULAR, TH_GOLD, ALIGN_CENTER,
-                      tr("Nothing unlocked /data (LegacyJB, etaHEN...), so SwanStationPS5 can't look into the games folder."));
+                      tr("Nothing unlocked /data (LegacyJB, etaHEN...), so Nightshade Station can't look into the games folder."));
             text_draw(CENTER_X, y + 294, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER,
                       tr("On your PC:  python tools/SwanStationPS5_sync.py index --host <PS5 IP>"));
         }
@@ -2307,7 +2307,7 @@ void shelf_screen(uint32_t pressed)
     if (S.quit_hold > 0.5f)
     {
         /* O held for a while: a bar fills up to the close */
-        const char *msg = tr("Keep holding to close SwanStationPS5...");
+        const char *msg = tr("Keep holding to close Nightshade Station...");
         float w = text_width(26, FONT_REGULAR, msg) + 96, h = 84;
         float x = (plat_width() - w) * 0.5f, y = plat_height() - 300;
         draw_rrect(x, y, w, h, TH_RADIUS_SMALL, 0xf0000000u | (TH_PILL & 0xffffffu));

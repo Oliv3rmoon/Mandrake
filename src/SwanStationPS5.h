@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 #define SwanStationPS5_NAME "SwanStationPS5"           /* identifiers: the User-Agent of network requests, the Vulkan application name */
-#define SwanStationPS5_TITLE "SwanStationPS5" /* what is shown on screen */
+#define SwanStationPS5_TITLE "Nightshade Station" /* what is shown on screen */
 #define SwanStationPS5_TITLE_ID "PPSA98510"
 #define SwanStationPS5_VERSION "1.5.9"
 #define SwanStationPS5_PATH_MAX 512

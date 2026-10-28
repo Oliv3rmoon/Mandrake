@@ -238,7 +238,7 @@ static const Row CONTROLS[] = {
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(lightbar), LIGHTBARS, 4, 0},
     {NULL, "Players", "Up to 4 with a multitap, for games that support it: each PS5 controller is a player.",
      K_CHOICE, APPLY_NEXT_GAME, SP_NONE, false, BOOL_FIELD(multitap), PLAYERS, 2, 0},
-    {NULL, "Player order", "Choose which controller is player 1, 2, 3 and 4: press {Cross} on each in turn. Kept until SwanStationPS5 closes.",
+    {NULL, "Player order", "Choose which controller is player 1, 2, 3 and 4: press {Cross} on each in turn. Kept until Nightshade Station closes.",
      K_ACTION, APPLY_NOW, SP_PLAYERS, true, NO_FIELD, NULL, 0, 0},
     {"Sticks", "Dead zone", "Ignores small movements near the centre: raise it if a worn stick drifts on its own.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(stick_deadzone), DEADZONES, 5, 0},
@@ -285,7 +285,7 @@ static const Row ACHIEVEMENTS[] = {
 };
 
 static const Row LIBRARY[] = {
-    {"Shelf", "Theme", "The look of SwanStationPS5: colours, fonts and the shelf's background.", K_CHOICE, APPLY_NOW, SP_THEME,
+    {"Shelf", "Theme", "The look of Nightshade Station: colours, fonts and the shelf's background.", K_CHOICE, APPLY_NOW, SP_THEME,
      true, INT_FIELD(theme), THEME_NAMES, THEME_COUNT, 0},
     /* the pre-rendered 3D box covers are no longer used: the covers are always flat
     {NULL, "Cover art", "Flat front covers, or 3D boxes.", K_CHOICE, APPLY_NOW, SP_NONE, true,
@@ -314,7 +314,7 @@ static const Row LIBRARY[] = {
 };
 
 static const Row SYSTEM[] = {
-    {"SwanStationPS5", "Start BIOS", "Starts the console's BIOS with no disc, to manage memory cards. While Memory Card 1 Type (Restart) is set to Libretro, the saves will not show: that card belongs to each game, and with no game there is none.",
+    {"Nightshade Station", "Start BIOS", "Starts the console's BIOS with no disc, to manage memory cards. While Memory Card 1 Type (Restart) is set to Libretro, the saves will not show: that card belongs to each game, and with no game there is none.",
      K_ACTION, APPLY_NOW, SP_BIOS_START, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Ask when a disc is put in", "A disc put in the USB CD drive opens its question by itself: play it from the disc or copy it, or start its game if it is installed already. Off: its game is only shown on the shelf, and the question comes when {Cross} is pressed on it.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(disc_ask), OFF_ON, 2, 0},
@@ -322,9 +322,9 @@ static const Row SYSTEM[] = {
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(install_to_ext), OFF_ON, 2, 0},
     {NULL, "Games folder on drives", "A folder name to look for games in on drives. It is looked for on /mnt/ext0/, /mnt/ext1/ and /mnt/usb0/ to /mnt/usb7/ at once, as the number changes with the drives plugged in: psx searches /mnt/usb0/psx, /mnt/usb1/psx and so on. Leave it empty to turn it off.",
      K_ACTION, APPLY_NOW, SP_USBFOLDER, true, NO_FIELD, NULL, 0, 0},
-    {NULL, "NFS shares", "Games on an NFS server of your network, as nfs:// addresses separated by ';'. Example: nfs://192.168.1.85/psx. The shelf lists them like a drive's; only SwanStationPS5 sees them. The server has to export the folder to the console. Rescan library connects the ones that did not.",
+    {NULL, "NFS shares", "Games on an NFS server of your network, as nfs:// addresses separated by ';'. Example: nfs://192.168.1.85/psx. The shelf lists them like a drive's; only Nightshade Station sees them. The server has to export the folder to the console. Rescan library connects the ones that did not.",
      K_ACTION, APPLY_NOW, SP_NFSHARES, true, NO_FIELD, NULL, 0, 0},
-    {NULL, "NTFS disks", "Games on a USB disk formatted as NTFS, read straight from the disk and never copied. The shelf lists the Games folder on drives (and SwanStationPS5/games) of each disk; only SwanStationPS5 sees them. Rescan library looks for disks plugged in after the start. A disk Windows left in Fast Startup may not show its latest changes.", K_TOGGLE,
+    {NULL, "NTFS disks", "Games on a USB disk formatted as NTFS, read straight from the disk and never copied. The shelf lists the Games folder on drives (and SwanStationPS5/games) of each disk; only Nightshade Station sees them. Rescan library looks for disks plugged in after the start. A disk Windows left in Fast Startup may not show its latest changes.", K_TOGGLE,
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(ntfs_enabled), OFF_ON, 2, 0},
     {NULL, "NFS timeout", "How long a read from an NFS server may take before the connection is given up and the game is left. While it waits, the game stays paused and tries to reconnect. Raise it if the server or the network is slow.",
      K_CHOICE, APPLY_NOW, SP_NONE, true, INT_FIELD(nfs_timeout), NFS_TIMEOUTS, 5, 0},
@@ -342,24 +342,28 @@ static const Row SYSTEM[] = {
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(rewind), OFF_ON, 2, 0},
     {NULL, "Run-ahead", "Answers your buttons 1 to 10 frames sooner, for fighting games and platformers. It runs extra frames: at high internal resolutions some games may slow down. It is not used while Double frames is on.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(run_ahead), RUN_AHEADS, 11, 0},
-    {NULL, "Auto-save", "Saves the game by itself every few minutes into three auto-save slots (the oldest is replaced). Load one from the SwanStationPS5 menu > Auto-saves.",
+    {NULL, "Auto-save", "Saves the game by itself every few minutes into three auto-save slots (the oldest is replaced). Load one from the Nightshade Station menu > Auto-saves.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(autosave), AUTOSAVES, 4, 0},
     {"People", "Who's playing", "Profiles: each person keeps their own memory cards, save states, settings, play time, favourites and RetroAchievements sign-in. Games and covers are shared.",
      K_ACTION, APPLY_NOW, SP_WHO, true, NO_FIELD, NULL, 0, 0},
     {"Phone", "Settings from your phone", "Change settings from a phone on the same network: scan the code.",
      K_TOGGLE, APPLY_NOW, SP_REMOTE, true, BOOL_FIELD(remote), OFF_ON, 2, 0},
-    {"Console", "Language", "The language of SwanStationPS5's menus.", K_CHOICE, APPLY_NOW, SP_LANGUAGE, true,
+    {"Console", "Language", "The language of Nightshade Station's menus.", K_CHOICE, APPLY_NOW, SP_LANGUAGE, true,
      INT_FIELD(language), NULL, LANG_COUNT, 0},
-    {NULL, "Unlock /data with etaHEN", "SwanStationPS5 asks etaHEN for access to your games. Turn off if closing SwanStationPS5 crashes the console.",
+    {NULL, "Unlock /data with etaHEN", "Nightshade Station asks etaHEN for access to your games. Turn off if closing Nightshade Station crashes the console.",
      K_TOGGLE, APPLY_NEXT_LAUNCH, SP_UNLOCK, true, NO_FIELD, OFF_ON, 2, 0},
-    {NULL, "Allow SwanStationPS5 in PS5SX2 Helper", "PS5SX2 Helper only unlocks the apps listed in /data/whitelist.txt. This adds SwanStationPS5; reload the helper (or restart the console) afterwards.",
+    {NULL, "Allow Nightshade Station in PS5SX2 Helper", "PS5SX2 Helper only unlocks the apps listed in /data/whitelist.txt. This adds Nightshade Station; reload the helper (or restart the console) afterwards.",
      K_ACTION, APPLY_NOW, SP_WHITELIST, true, NO_FIELD, NULL, 0, 0},
 };
 
+/* Nightshade Station: whose release this is, under the project's QR code on About */
+static const char *const RELEASE_CREDIT =
+    "Nightshade Station is Oliv3rmoon's release of SwanStationPS5 by darkxex, built on SwanStation.";
+
 static const Row ABOUT[] = {
-    {"SwanStationPS5", "Version", "PlayStation X Super 5: PS1 emulation for jailbroken PS5, built on SwanStation.",
+    {"Nightshade Station", "Version", "PS1 emulation for jailbroken PS5, built on SwanStation.",
      K_INFO, APPLY_NOW, SP_VERSION, true, NO_FIELD, NULL, 0, 0},
-    {NULL, "BIOS", "SwanStationPS5 never includes a BIOS: use a dump of your own console, or the built-in one.",
+    {NULL, "BIOS", "Nightshade Station never includes a BIOS: use a dump of your own console, or the built-in one.",
      K_INFO, APPLY_NOW, SP_BIOS, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Games", "Games are your own backups, in /data/SwanStationPS5/games.", K_INFO, APPLY_NOW, SP_GAMES,
      true, NO_FIELD, NULL, 0, 0},
@@ -369,9 +373,9 @@ static const Row ABOUT[] = {
      true, NO_FIELD, NULL, 0, 0},
     {NULL, "Created by", "The person behind SwanStationPS5.", K_INFO, APPLY_NOW, SP_CREDITS, true, NO_FIELD, NULL, 0,
      0},
-    {"Updates", "Check for updates", "Looks for a newer SwanStationPS5 on GitHub and installs it.", K_ACTION, APPLY_NOW,
+    {"Updates", "Check for updates", "Looks for a newer Nightshade Station on GitHub and installs it.", K_ACTION, APPLY_NOW,
      SP_UPDATE, true, NO_FIELD, NULL, 0, 0},
-    {NULL, "Check when SwanStationPS5 starts", "Tells you on the shelf when a new version is out.", K_TOGGLE, APPLY_NOW,
+    {NULL, "Check when Nightshade Station starts", "Tells you on the shelf when a new version is out.", K_TOGGLE, APPLY_NOW,
      SP_NONE, true, BOOL_FIELD(update_check), OFF_ON, 2, 0},
 };
 
@@ -579,7 +583,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
                 if (!ss_opt_is_bios(i))
                     continue;
                 static const char *const bios_names[] = {"NTSC-J BIOS", "NTSC-U BIOS", "PAL BIOS"}; /* the table's order */
-                Row r = {placed == 0 ? "SwanStationPS5" : NULL,
+                Row r = {placed == 0 ? "Nightshade Station" : NULL,
                          bios_names[placed],
                          "Which BIOS the games of this region run: detect it automatically, the OpenBIOS built into the core, or a file of the BIOS folder. It applies when the next game starts.",
                          K_CHOICE,
@@ -595,7 +599,7 @@ static void add_swanstation_rows(Tab *tab, const Row *base, int base_count, cons
             }
             Row start = {NULL,
                          "BIOS to start",
-                         "The console whose BIOS Start BIOS boots: it runs the BIOS chosen above for that region. NTSC-U unless you change it here; it goes back to NTSC-U every time SwanStationPS5 opens.",
+                         "The console whose BIOS Start BIOS boots: it runs the BIOS chosen above for that region. NTSC-U unless you change it here; it goes back to NTSC-U every time Nightshade Station opens.",
                          K_CHOICE,
                          APPLY_NOW,
                          SP_NONE,
@@ -1117,7 +1121,7 @@ static const char *value_label(const Row *r, char *buf, size_t size)
         case UPDATE_NONE: return tr("Up to date");
         case UPDATE_AVAILABLE: snprintf(buf, size, tr("%s available: install"), update_version()); return buf;
         case UPDATE_INSTALLING: return tr("Installing...");
-        case UPDATE_INSTALLED: return tr("Installed: restart SwanStationPS5");
+        case UPDATE_INSTALLED: return tr("Installed: restart Nightshade Station");
         case UPDATE_FAILED: return update_message();
         default: return SwanStationPS5_VERSION;
         }
@@ -1692,7 +1696,7 @@ static void draw_help(const Row *r)
     const float w = 476, x = plat_width() - TH_MARGIN - w, top = 236;
     draw_rrect(x, top, w, 724, TH_RADIUS, TH_CARD);
     if (!r && tab()->rows == ABOUT)
-        r = &ABOUT[0]; /* nothing to select on About: describe SwanStationPS5 */
+        r = &ABOUT[0]; /* nothing to select on About: describe Nightshade Station */
     if (!r)
         return;
     icon_draw(tab()->icon, x + 32, top + 32, 40, TH_FOCUS);
@@ -1703,11 +1707,13 @@ static void draw_help(const Row *r)
         draw_filter_preview(x + 32, y, w - 64, app.settings.upscale_filter);
         y += (w - 64 - 16) * 0.5f + 56;
     }
-    /* the card ends above its notes: "Same for every game" (top + 646) and when it applies (top + 684) */
-    const float room = (r->global_only && S.game_scope && scope_game() ? top + 630 : top + 668) - y;
+    /* the card ends above its notes: "Same for every game" (top + 646) and when it applies (top + 684); on About,
+     * above the project's QR code */
+    const bool about = tab()->rows == ABOUT;
+    const float room = (about ? top + 226 : r->global_only && S.game_scope && scope_game() ? top + 630 : top + 668) - y;
     y += draw_wrapped_fit(x + 32, y, w - 64, 24, TH_TEXT_SOFT, tr(row_help(r)), room) + 20;
     static const char *const notes[] = {"Applies right away", "From the next game you start",
-                                        "After SwanStationPS5 restarts"};
+                                        "After Nightshade Station restarts"};
     if (r->special == SP_REMOTE)
     {
         const char *url = remote_address();
@@ -1722,16 +1728,18 @@ static void draw_help(const Row *r)
         else if (app.global.remote)
             text_draw(x + 32, top + 360, 22, FONT_REGULAR, TH_DANGER, ALIGN_LEFT, tr("No network connection"));
     }
-    else if (tab()->rows == ABOUT)
+    else if (about)
     {
-        /* About: the GitHub page, for a phone */
-        float qs = 240, qx = x + (w - qs) * 0.5f, qy = top + 300;
+        /* About: the GitHub page, for a phone, and whose release this is */
+        float qs = 240, qx = x + (w - qs) * 0.5f, qy = top + 250;
         draw_project_qr(qx, qy, qs);
         text_draw(x + w * 0.5f, qy + qs + 30, 22, FONT_BOLD, TH_TEXT, ALIGN_CENTER,
                   tr("Scan for the GitHub page"));
         text_draw(x + w * 0.5f, qy + qs + 60, 20, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER,
-                  "https://github.com/darkxex/SwanStationPS5");
-        text_draw(x + w * 0.5f, qy + qs + 88, 20, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, "https://x.com/AngelXex1");
+                  "https://github.com/Oliv3rmoon/Nightshade-Station");
+        text_draw(x + w * 0.5f, qy + qs + 88, 20, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, "https://discord.gg/pSqgRU3YP9");
+        draw_wrapped_fit(x + 32, qy + qs + 124, w - 64, 20, TH_TEXT_SOFT, tr(RELEASE_CREDIT), top + 712 - (qy + qs + 124));
+        return; /* its notes would fall on the credit */
     }
     if (r->kind != K_INFO && r->kind != K_ACTION)
     {
@@ -2083,7 +2091,7 @@ static void activate(const Row *r)
         fclose(f);
         if (present)
         {
-            app_toast("SwanStationPS5 is already in the whitelist");
+            app_toast("Nightshade Station is already in the whitelist");
             return;
         }
         f = fopen(list, "a");
