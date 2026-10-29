@@ -1,6 +1,6 @@
 /*
  * SwanStationPS5 - updates from the project's GitHub releases.
- * Nightshade Station: from Oliv3rmoon/Nightshade-Station's releases (update_release.h).
+ * Mandrake: from Oliv3rmoon/Mandrake's releases (update_release.h).
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Checks api.github.com for the repository's latest release (not a draft or a pre-release);
@@ -262,7 +262,7 @@ static int install_thread(void *unused)
         fail(tr("Couldn't write the new files (is /data unlocked?)"));
         return 0;
     }
-    snprintf(message, sizeof(message), tr("Nightshade Station %s is installed: restart Nightshade Station to use it"), version);
+    snprintf(message, sizeof(message), tr("Mandrake %s is installed: restart Mandrake to use it"), version);
     SwanStationPS5_log("update: installed %s (%d files)", version, files);
     SDL_AtomicSet(&state, UPDATE_INSTALLED);
     return 0;

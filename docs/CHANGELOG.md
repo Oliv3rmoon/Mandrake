@@ -1,8 +1,30 @@
 # Changelog
 
-What changed in each release of Nightshade Station, newest first. A release's notes on GitHub are in
-`docs/releases/<version>.md`. What changed in SwanStationPS5 before Nightshade Station is in
+What changed in each release of Mandrake, newest first. Mandrake was called Nightshade Station
+until 1.6.0, and the entries for those releases keep the name they had. A release's notes on GitHub
+are in `docs/releases/<version>.md`. What changed in SwanStationPS5 before Nightshade Station is in
 [its releases](https://github.com/darkxex/SwanStationPS5/releases).
+
+## Mandrake 1.6.1: renamed from Nightshade Station
+
+Renamed to Mandrake; same app, same title ID, your settings stay. Mandrake, a Nightshade app, is the
+mandrake, a relative of the nightshade. Its version, 1.6.1 (contentVersion 01.006.001), is the next
+patch after 1.6.0. What changed:
+
+- **The name.** The PS5 home screen, the shelf's header, the About page, the update texts, the
+  notifications and every message, tip and help say Mandrake, in all five languages, and so does
+  the phone page. The About page's QR code opens Oliv3rmoon/Mandrake.
+- **Updates.** The app now asks [Oliv3rmoon/Mandrake](https://github.com/Oliv3rmoon/Mandrake/releases)
+  for a newer release. The release's files are named as before: `PPSA98510.zip`,
+  `SwanStationPS5-DiscDaemon.elf` and `SHA256SUMS`. Nightshade Station 1.6.0 takes release files only
+  from its own old address, which GitHub now answers with Mandrake's, so it does not offer this
+  release itself: copy it by hand or install it from Nightshade's Settings > Apps; from it on, the
+  updates come by themselves.
+- **What stays.** The title ID (PPSA98510) and the data folder (`/data/SwanStationPS5`), so it
+  installs over Nightshade Station and keeps your memory cards, saves, save states, covers and
+  settings. As after every update, the first start asks whether to start from the factory
+  settings: **○** keeps yours, theme included. The disc daemon keeps its file name. The Nightshade
+  theme, the art and the credit to SwanStationPS5 and its authors are as they were.
 
 ## Nightshade Station 1.6.0: the first Nightshade Station, based on SwanStationPS5 1.5.9
 

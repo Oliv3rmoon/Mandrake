@@ -137,10 +137,10 @@ def main():
     print(f"    sha256 {digest}")
     if args.ip:
         deploy(args.ip, args.port)
-    # Nightshade Station: a release is published by the Build workflow from a version tag, with SHA256SUMS
+    # Mandrake: a release is published by the Build workflow from a version tag, with SHA256SUMS
     # (.github/workflows/build.yml); a ZIP made here is for testing.
-    print(f"    publish: push a signed tag {version} to Oliv3rmoon/Nightshade-Station; the Build workflow "
-          f"publishes {out.name}, the disc daemon and SHA256SUMS as \"Nightshade Station {version}\"")
+    print(f"    publish: push a signed tag {version} to Oliv3rmoon/Mandrake; the Build workflow "
+          f"publishes {out.name}, the disc daemon and SHA256SUMS as \"Mandrake {version}\"")
     # How to send the disc daemon: only printed, never sent for you (the loader runs whatever it is given).
     daemon_elf = ROOT / "dist" / "SwanStationPS5-DiscDaemon.elf"
     if daemon_elf.is_file():

@@ -1,6 +1,6 @@
 /*
  * SwanStationPS5 - updates from the project's GitHub releases.
- * Nightshade Station: Oliv3rmoon/Nightshade-Station's (UPDATE_REPO, update_release.h).
+ * Mandrake: Oliv3rmoon/Mandrake's (UPDATE_REPO, update_release.h).
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #ifndef SwanStationPS5_UPDATE_H

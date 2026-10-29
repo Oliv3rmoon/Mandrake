@@ -1,6 +1,6 @@
 /*
  * SwanStationPS5 - the themes: Classic, Neon Arcade, Memory Card (light and dark), Record Shelf,
- * Grayrat and Nightshade (Nightshade Station's, the default). Settings > Library > Theme.
+ * Grayrat and Nightshade (Mandrake's, the default). Settings > Library > Theme.
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "theme.h"

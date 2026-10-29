@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-# Nightshade Station - Draw the home-screen pictures: the icon, the background and the launch picture.
+# Mandrake - Draw the home-screen pictures: the icon, the background and the launch picture.
 # SPDX-FileCopyrightText: Copyright 2026 Oliv3rmoon
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Draw Nightshade Station's home-screen pictures in Nightshade's style.
+"""Draw Mandrake's home-screen pictures in Nightshade's style.
 
 usage: python3 tools/render-home-art.py              (needs Pillow and NumPy)
        python3 tools/render-home-art.py --preview DIR  (small copies in DIR; nothing else changes)
 
-Nightshade's tools/render-home-art.py (Oliv3rmoon/Nightshade), as Nightshade TV draws it, with a
+Nightshade's tools/render-home-art.py (Oliv3rmoon/Nightshade), as Physalis draws it, with a
 PlayStation disc in place of the television: the same nightshade flower (five red petals round a
 pale cone), black berries and dark leaves, on near black with a red glow and faint stars, in
 Nightshade's palette (its "nightly" theme).
@@ -23,7 +23,7 @@ Writes, in sce_sys/:
   pic0.dds, pic1.dds            those two as BC7 (one 3840x2160 BC7_UNORM DX10 texture, no
                                 mipmaps, as tools/validate-assets.sh asks)
 Everything is procedural; the same seeds give the same files every time. tools/make_art.py
-still draws SwanStationPS5's original art; this replaces it for Nightshade Station.
+still draws SwanStationPS5's original art; this replaces it for Mandrake.
 """
 import io
 import math
@@ -220,7 +220,7 @@ def berries(image, x, y, r):
         berry(image, x + dx * r, y + dy * r, r * s)
 
 
-# ---- Nightshade Station's own: the disc and its light -----------------------------------------
+# ---- Mandrake's own: the disc and its light -----------------------------------------
 
 
 def disc(image, cx, cy, radius, light_angle=-2.35):

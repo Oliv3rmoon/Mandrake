@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SwanStationPS5 - the project page as a QR code for Settings > About (Nightshade Station's repository).
+# SwanStationPS5 - the project page as a QR code for Settings > About (Mandrake's repository).
 # SPDX-License-Identifier: GPL-3.0-or-later
 """python -m pip install segno pillow; python tools/make_qr.py -> assets/qr-github.png
 One pixel per module with a 2-module white margin: SwanStationPS5 scales it up crisply."""
@@ -8,7 +8,7 @@ from pathlib import Path
 import segno
 from PIL import Image
 
-URL = "https://github.com/Oliv3rmoon/Nightshade-Station"
+URL = "https://github.com/Oliv3rmoon/Mandrake"
 ROOT = Path(__file__).resolve().parent.parent
 
 matrix = segno.make(URL, error="m").matrix

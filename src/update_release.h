@@ -1,10 +1,10 @@
 /*
- * Nightshade Station - which GitHub release the in-app update offers, and the checks it passes.
+ * Mandrake - which GitHub release the in-app update offers, and the checks it passes.
  * SPDX-FileCopyrightText: Copyright 2026 Oliv3rmoon
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * update.c asks https://api.github.com/repos/<UPDATE_REPO>/releases/latest, the newest release
- * of Oliv3rmoon/Nightshade-Station that is neither a draft nor a pre-release, and hands the
+ * of Oliv3rmoon/Mandrake that is neither a draft nor a pre-release, and hands the
  * answer to release_evaluate(). A release is offered only when:
  *   1. its tag is a version, X.Y.Z (or vX.Y.Z), newer than the running one;
  *   2. it carries both UPDATE_ZIP ("PPSA98510.zip") and UPDATE_SUMS ("SHA256SUMS"), uploaded,
@@ -17,14 +17,14 @@
  * Plain C11 with no SDL or network, so the host test builds it alone
  * (tests/update_release_check.c, run by tests/test_update_release.py).
  */
-#ifndef NIGHTSHADE_STATION_UPDATE_RELEASE_H
-#define NIGHTSHADE_STATION_UPDATE_RELEASE_H
+#ifndef MANDRAKE_UPDATE_RELEASE_H
+#define MANDRAKE_UPDATE_RELEASE_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-#define UPDATE_REPO "Oliv3rmoon/Nightshade-Station"
+#define UPDATE_REPO "Oliv3rmoon/Mandrake"
 #define UPDATE_ZIP "PPSA98510.zip"
 #define UPDATE_SUMS "SHA256SUMS"
 #define UPDATE_LATEST_URL "https://api.github.com/repos/" UPDATE_REPO "/releases/latest"
@@ -45,7 +45,7 @@ typedef enum
 typedef struct
 {
     char version[16];    /* "1.6.0" (the tag without a "v") */
-    char zip_url[256];   /* https://github.com/Oliv3rmoon/Nightshade-Station/releases/download/<tag>/PPSA98510.zip */
+    char zip_url[256];   /* https://github.com/Oliv3rmoon/Mandrake/releases/download/<tag>/PPSA98510.zip */
     char sums_url[256];  /* the same for SHA256SUMS */
     char zip_digest[65]; /* the ZIP's SHA-256 as GitHub reports it (lowercase hex), or "" */
     uint64_t zip_size;

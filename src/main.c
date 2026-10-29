@@ -647,7 +647,7 @@ static void question_draw(void)
     draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_PILL_A(0xf8), question_t));
     icon_draw(ICON_REFRESH, x + (w - 64) * 0.5f, y + pad, 64, argb_alpha(TH_FOCUS, question_t));
     text_draw_fit(x + w * 0.5f, y + pad + 64 + 18, 38, FONT_BOLD, argb_alpha(TH_TEXT, question_t), ALIGN_CENTER, w - 2 * pad,
-                  tr("Nightshade Station was updated to the latest version!"));
+                  tr("Mandrake was updated to the latest version!"));
     /* the question, word-wrapped and centred */
     char line[256];
     float yy = y + pad + 64 + 18 + 38 + 26;
@@ -2676,7 +2676,7 @@ int main(int argc, char **argv)
             exit_after_game = true;
     }
     /* First thing: proves the loader accepted the title and main() runs. (Turned off: the notice showed on screen.)
-    plat_notify("Nightshade Station " SwanStationPS5_VERSION " starting...");
+    plat_notify("Mandrake " SwanStationPS5_VERSION " starting...");
     */
     char root[SwanStationPS5_PATH_MAX];
     plat_default_root(root, sizeof(root));
@@ -2726,13 +2726,13 @@ int main(int argc, char **argv)
     if (!plat_init())
     {
         char msg[300];
-        snprintf(msg, sizeof(msg), "Nightshade Station: %s", plat_init_error());
+        snprintf(msg, sizeof(msg), "Mandrake: %s", plat_init_error());
         plat_notify(msg);
         for (;;)
             plat_sleep_us(1000000);
     }
     if (!text_init())
-        plat_notify("Nightshade Station: interface font missing from assets/fonts");
+        plat_notify("Mandrake: interface font missing from assets/fonts");
 
     /* Sandboxed or not, files in /data open and save; only listing differs. */
     const char *dirs[] = {app.paths.root,   app.paths.games,  app.paths.bios,
@@ -2886,7 +2886,7 @@ int main(int argc, char **argv)
     }
     SwanStationPS5_log("build: %s %s", __DATE__, __TIME__);
     /* (Turned off: the notice showed on screen.)
-    plat_notify("Nightshade Station ready");
+    plat_notify("Mandrake ready");
     */
 
     bool quit = false;
