@@ -1005,12 +1005,28 @@ static int view_core(void)
     return -1;
 }
 
+/* SwanStation's Force NTSC Timings (PAL games at 60 Hz), which Beetle PSX is given too (host.c) */
+static int ntsc_timings_opt(void)
+{
+    static int idx = -2;
+    if (idx == -2)
+    {
+        idx = -1;
+        for (int i = 0; i < SS_OPT_COUNT; ++i)
+            if (strcmp(SS_OPTS[i].key, "swanstation_GPU_ForceNTSCTimings") == 0)
+                idx = i;
+    }
+    return idx;
+}
+
 static int row_only(const Row *r)
 {
-    /* SwanStation's own core options are all its alone, but for the ANALOG button's combination, which Beetle PSX is
-     * given too (host.c) */
-    if (ac_opt() >= 0 && r->offset == (int)(offsetof(Settings, ss_opt) + (size_t)ac_opt() * sizeof(int)))
-        return ONLY_ANY;
+    /* SwanStation's own core options are all its alone, but for the ANALOG button's combination and Force NTSC
+     * Timings, which Beetle PSX is given too (host.c) */
+    const int shared[] = {ac_opt(), ntsc_timings_opt()};
+    for (int k = 0; k < 2; ++k)
+        if (shared[k] >= 0 && r->offset == (int)(offsetof(Settings, ss_opt) + (size_t)shared[k] * sizeof(int)))
+            return ONLY_ANY;
     return is_swanstation_row(r) ? ONLY_SWAN : r->only;
 }
 

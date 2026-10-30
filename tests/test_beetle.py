@@ -122,6 +122,18 @@ class BeetleTest(unittest.TestCase):
         self.assertIn("the picture is 640x480", output)
         self.assertIn("its white square is 64x64", output)
 
+    def test_pal_games_at_60_hz(self):
+        # SwanStation's Force NTSC Timings is given to Beetle PSX too: a PAL disc at 60 Hz, at once
+        with tempfile.TemporaryDirectory() as empty, tempfile.TemporaryDirectory() as saves:
+            result = run([str(HEADLESS), str(Path(self.work.name) / "mandrake-test-pal.cue"), empty, saves, "pal"],
+                         timeout=600)
+        print()
+        print(result.stdout.strip())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr[-3000:])
+        self.assertIn("ok   a PAL disc runs at 50.000 Hz", result.stdout)
+        self.assertIn("ok   Force NTSC Timings on: the PAL disc runs at 59.940 Hz, at once", result.stdout)
+        self.assertIn("ok   and off again: 50.000 Hz", result.stdout)
+
     def test_with_your_own_bios(self):
         given = os.environ.get("MANDRAKE_PS1_BIOS", "")
         if not given:

@@ -271,14 +271,15 @@ def raw_sector(lba, data, submode):
     return bytes(sector)
 
 
-def disc():
+def disc(boot=b"SLUS_999.99"):
     exe = ps_exe(program())
     # The boot file is named like a game's, with a serial no game has: a PS1 drive (and Beetle PSX, like it) reads
-    # nothing from a disc it takes for unlicensed, and Beetle tells a licensed one by that name's region (SLUS: NTSC-U)
-    cnf = b"BOOT = cdrom:\\SLUS_999.99;1\r\nTCB = 4\r\nEVENT = 10\r\nSTACK = 801FFFF0\r\n"
+    # nothing from a disc it takes for unlicensed, and Beetle tells a licensed one by that name's region (SLUS: NTSC-U,
+    # SLES: PAL)
+    cnf = b"BOOT = cdrom:\\" + boot + b";1\r\nTCB = 4\r\nEVENT = 10\r\nSTACK = 801FFFF0\r\n"
     root_lba, cnf_lba, exe_lba = 22, 23, 24
     total = 600  # sectors: a small disc, room after the files
-    files = [(b"SLUS_999.99;1", exe_lba, exe), (b"SYSTEM.CNF;1", cnf_lba, cnf)]
+    files = [(boot + b";1", exe_lba, exe), (b"SYSTEM.CNF;1", cnf_lba, cnf)]
 
     root = dir_record(b"\x00", root_lba, 2048, True) + dir_record(b"\x01", root_lba, 2048, True)
     for name, lba, data in files:
@@ -333,10 +334,11 @@ def main():
         raise SystemExit("usage: tools/make-test-disc.py <folder>")
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
-    (out / "mandrake-test.bin").write_bytes(disc())
-    (out / "mandrake-test.cue").write_text(
-        'FILE "mandrake-test.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n')
-    print(out / "mandrake-test.cue")
+    # the NTSC-U disc, and the same program on a European one (the PAL checks: its 50 Hz, PAL games at 60 Hz)
+    for name, boot in (("mandrake-test", b"SLUS_999.99"), ("mandrake-test-pal", b"SLES_999.99")):
+        (out / f"{name}.bin").write_bytes(disc(boot))
+        (out / f"{name}.cue").write_text(f'FILE "{name}.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n')
+        print(out / f"{name}.cue")
 
 
 if __name__ == "__main__":

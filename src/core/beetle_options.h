@@ -32,6 +32,7 @@ typedef struct
     bool multitap;          /* 4 players through a multitap in port 1 */
     bool analog_from_start; /* the DualShock starts in analog mode (games known to want it) */
     int analog_combo;       /* the ANALOG button's combination, as SwanStation's Analog Mode Combo numbers it (0..10) */
+    bool pal_60;            /* PAL games at the NTSC consoles' 60 Hz (SwanStation's Force NTSC Timings, shared) */
 } BeetleChoice;
 
 /* The combination analog_combo gives Beetle PSX, as SwanStation's numbering: Beetle PSX has all but the first

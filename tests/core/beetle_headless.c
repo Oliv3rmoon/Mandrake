@@ -847,6 +847,39 @@ static void analog_check(void)
           "(%d messages read)", analog_messages);
 }
 
+static bool start(const char *disc, const BeetleChoice *choice);
+
+/* A PAL disc (the test program on a European disc, which the core takes for PAL content by its serial): 50 Hz, and
+ * 60 Hz while SwanStation's Force NTSC Timings, which Beetle PSX follows (beetle_psx_pal_video_timing_override), is on,
+ * at once both ways. Only the timing is looked at: the program itself sets an NTSC screen. */
+static int pal_check(const char *disc, const BeetleChoice *choice)
+{
+    if (!start(disc, choice))
+    {
+        printf("FAIL: the core did not load %s\n", disc);
+        return 1;
+    }
+    for (int f = 0; f < 120; ++f)
+        retro_run();
+    const double pal = av.timing.fps;
+    check(pal > 49.0 && pal < 51.0, "a PAL disc runs at %.3f Hz", pal);
+    BeetleChoice sixty = *choice;
+    sixty.pal_60 = true;
+    beetle_options_apply(&sixty, set_option);
+    for (int f = 0; f < 10; ++f)
+        retro_run();
+    const double ntsc = av.timing.fps;
+    check(ntsc > 59.0 && ntsc < 61.0, "Force NTSC Timings on: the PAL disc runs at %.3f Hz, at once", ntsc);
+    beetle_options_apply(choice, set_option);
+    for (int f = 0; f < 10; ++f)
+        retro_run();
+    check(av.timing.fps > 49.0 && av.timing.fps < 51.0, "and off again: %.3f Hz", av.timing.fps);
+    retro_unload_game();
+    retro_deinit();
+    printf(failures ? "FAIL\n" : "PASS\n");
+    return failures ? 1 : 0;
+}
+
 static bool start(const char *disc, const BeetleChoice *choice)
 {
     retro_set_environment(environment);
@@ -872,7 +905,8 @@ int main(int argc, char **argv)
 {
     if (argc < 4)
     {
-        fprintf(stderr, "usage: %s <disc .cue> <system folder> <save folder> [frames] [2x]\n", argv[0]);
+        fprintf(stderr, "usage: %s <disc .cue> <system folder> <save folder> [frames] [2x]\n"
+                        "       %s <PAL disc .cue> <system folder> <save folder> pal\n", argv[0], argv[0]);
         return 2;
     }
     const char *disc = argv[1];
@@ -890,7 +924,9 @@ int main(int argc, char **argv)
            retro_api_version());
 
     /* the app's defaults (Settings > Graphics > Beetle PSX: native, dithering on, widescreen hack off) */
-    BeetleChoice choice = {scale - 1, true, false, 0, 1, true, false, false, 2};
+    BeetleChoice choice = {scale - 1, true, false, 0, 1, true, false, false, 2, false};
+    if (argc > 4 && !strcmp(argv[4], "pal"))
+        return pal_check(disc, &choice);
     if (!start(disc, &choice))
     {
         printf("FAIL: the core did not load %s\n", disc);

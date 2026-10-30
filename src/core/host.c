@@ -297,9 +297,12 @@ static void apply_beetle_options(const Settings *s)
     c.multitap = s->multitap && !(game_fixes & GDB_NO_MULTITAP);
     c.analog_from_start = s->analog && (game_fixes & GDB_ANALOG);
     c.analog_combo = 2; /* Settings > Controls > Analog Mode Combo, shared with SwanStation */
+    c.pal_60 = false;   /* Settings > Graphics > Force NTSC Timings: PAL games at 60 Hz, shared too */
     for (int i = 0; i < SS_OPT_COUNT; ++i)
         if (!strcmp(SS_OPTS[i].key, "swanstation_Controller_AnalogCombo"))
             c.analog_combo = s->ss_opt[i];
+        else if (!strcmp(SS_OPTS[i].key, "swanstation_GPU_ForceNTSCTimings"))
+            c.pal_60 = !strcmp(ss_opt_value(i, s->ss_opt[i]), "true");
     beetle_options_apply(&c, set_option);
 }
 

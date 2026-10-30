@@ -34,6 +34,8 @@ const BeetleOption BEETLE_OPTIONS[] = {
     {"beetle_psx_gun_cursor", {"off", NULL}},
     /* its messages: the DualShock's mode among them, which the light bar and Left stick as D-pad follow (host.c) */
     {"beetle_psx_display_osd", {"enabled", NULL}},
+    /* PAL games at 60 Hz: SwanStation's Force NTSC Timings, which both cores follow */
+    {"beetle_psx_pal_video_timing_override", {"disabled", "enabled", NULL}},
 };
 
 const int BEETLE_OPTION_COUNT = (int)(sizeof(BEETLE_OPTIONS) / sizeof(BEETLE_OPTIONS[0]));
@@ -72,6 +74,7 @@ void beetle_options_apply(const BeetleChoice *c, void (*set)(const char *key, co
     set("beetle_psx_enable_multitap_port1", c->multitap ? "enabled" : "disabled");
     set("beetle_psx_gun_cursor", "off");
     set("beetle_psx_display_osd", "enabled");
+    set("beetle_psx_pal_video_timing_override", c->pal_60 ? "enabled" : "disabled");
 }
 
 int beetle_analog_message(const char *message, int *port)
