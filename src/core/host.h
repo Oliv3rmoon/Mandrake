@@ -34,6 +34,7 @@ void host_set_initial_disc(int index);
 /* Other controllers for the next host_load: 0 pads, 1 NeGcon in every port, 2 a mouse in port 1. */
 void host_set_special(int device);
 bool host_analog_mode(int port); /* the controller in this port is in analog mode (the core said so) */
+bool host_dualshock_in(int port); /* the game has a DualShock in this port (not a NeGcon, a mouse or a light gun) */
 void host_apply_devices(const Settings *settings); /* the controller types, while a game runs */
 /* Known fixes for the next host_load (GDB_* from gamedb.h): settings the game breaks with. */
 void host_set_fixes(unsigned flags, const GameInfo *info);

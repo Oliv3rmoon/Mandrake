@@ -45,7 +45,7 @@ bool cpu_frame_prepare(const void *pixels, int w, int h, size_t pitch_bytes, int
 
 /* Is this picture, pixel for pixel, the one given last time? It is remembered when it is not. bytes_per_pixel: 2 or 4. */
 bool cpu_frame_repeats(const void *pixels, unsigned w, unsigned h, size_t pitch_bytes, unsigned bytes_per_pixel);
-/* Forget the last picture (a game was loaded or a state restored): the next one is new whatever it shows. */
+/* Forget the last picture (a game was loaded): the next one is new whatever it shows. */
 void cpu_frame_forget(void);
 
 #endif

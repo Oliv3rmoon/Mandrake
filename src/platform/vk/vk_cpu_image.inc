@@ -30,6 +30,12 @@ static struct
 
 static void cpu_image_free(bool staging_too)
 {
+    if (C.image && V.game_image == C.image)
+    {
+        /* nothing may sample it any more: no game image until a picture or a core's image comes */
+        V.game_image = VK_NULL_HANDLE;
+        V.game_view = VK_NULL_HANDLE;
+    }
     if (C.view)
         vkDestroyImageView(V.device, C.view, NULL);
     if (C.image)
@@ -155,6 +161,19 @@ static void cpu_upload(VkCommandBuffer cb, int f)
     {
         if (!C.warned++)
             SwanStationPS5_log("vulkan: no memory to upload the %ux%u picture", C.w, C.h);
+        if (!C.written)
+        {
+            /* never had a picture: black, in the layout the frame will read it in, rather than undefined */
+            static const VkClearColorValue black = {{0.0f, 0.0f, 0.0f, 1.0f}};
+            const VkImageSubresourceRange all = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            barrier(cb, C.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0,
+                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+            vkCmdClearColorImage(cb, C.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &all);
+            barrier(cb, C.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+            C.written = true;
+        }
         return;
     }
     barrier(cb, C.image, C.written ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,

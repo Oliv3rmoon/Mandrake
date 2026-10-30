@@ -1569,6 +1569,10 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
     /* Scanlines the game actually has: interlaced (480) and 2x-internal frames
      * show at the same size as 240-line ones. */
     int lines = game_src_h;
+#if defined(__PROSPERO__)
+    if (game_gpu && cpu_on_gpu && cpu_shown.scale > 1)
+        lines = cpu_shown.h / cpu_shown.scale; /* the picture before its prescaler (3x is not a power of two) */
+#endif
     while (lines > 288)
         lines /= 2;
     /* Crop black edges: the share of the picture's height cut at the top and

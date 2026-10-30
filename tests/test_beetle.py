@@ -88,6 +88,7 @@ class BeetleTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as empty:
             output = self.boot(empty)
         self.check_gpu_path(output, "320x240")
+        self.assertIn("ok   16-bit pictures (RGB565, 0RGB1555) become 32-bit with each colour's full range (0 wrong)", output)
         # Beetle PSX upscale filter: xBR doubles a native picture before the upload
         self.assertIn("ok   Beetle PSX upscale filter, xBR: 320x240 becomes 640x480, its white square 64x64", output)
         if os.environ.get("MANDRAKE_REQUIRE_VULKAN"):

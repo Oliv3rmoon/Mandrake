@@ -483,11 +483,21 @@ bool host_analog_mode(int port)
     return port >= 0 && port < 4 && analog_on[port];
 }
 
+
 static int special_device; /* 0 pads, 1 NeGcon in every port, 2 a mouse in port 1 */
 
 void host_set_special(int device)
 {
     special_device = device;
+}
+
+static bool devices_analog; /* the Controller setting the devices were last chosen with */
+
+bool host_dualshock_in(int port)
+{
+    /* a DualShock unless a NeGcon is in every port, the mouse in port 1 or a light gun in port 1 (apply_devices_for) */
+    return loaded && devices_analog && port >= 0 && port < 4 && special_device != 1 &&
+           !(port == 0 && (special_device == 2 || gun_device));
 }
 
 void host_set_fixes(unsigned flags, const GameInfo *info)
@@ -864,6 +874,17 @@ static void RETRO_CALLCONV video_cb(const void *data, unsigned width, unsigned h
         ++frames_repeated;
         return;
     }
+    if (data != RETRO_HW_FRAME_BUFFER_VALID && speculative)
+    {
+        /* run-ahead's look ahead: shown, but not one of the game's frames to count, nor the picture the next real
+         * frame is compared with (with the same buttons it is that very frame) */
+        frame_data = data;
+        frame_w = width;
+        frame_h = height;
+        frame_pitch = pitch;
+        frame_fresh = true;
+        return;
+    }
     if (data != RETRO_HW_FRAME_BUFFER_VALID)
     {
         /* a picture drawn on the CPU. Beetle PSX gives every frame, also the ones that show the last picture again: the
@@ -1188,7 +1209,6 @@ int host_core(void)
 
 static void apply_devices(const Settings *settings);
 static void apply_devices_for(bool analog);
-static bool devices_analog;   /* the Controller setting the devices were last chosen with */
 
 bool host_load(const char *game_path, const char *serial, const Paths *paths, const Settings *settings,
                char *error, size_t error_size)

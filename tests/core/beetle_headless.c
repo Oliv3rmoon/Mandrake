@@ -775,6 +775,26 @@ static void picture_path_check(void)
     free(held_plain);
 }
 
+/* The 16-bit pictures a core may give (RGB565, 0RGB1555: SwanStation's CPU renderer) in 32 bits, every colour to its
+ * full range, one picture of four pixels with its row padded */
+static void format_check(void)
+{
+    const uint16_t rgb565[6] = {0xF800, 0x07E0, 0x001F, 0xFFFF, 0xBEEF, 0xBEEF};
+    const uint16_t rgb1555[6] = {0x7C00, 0x03E0, 0x001F, 0x4210, 0xBEEF, 0xBEEF};
+    const uint32_t want565[4] = {0xFF0000, 0x00FF00, 0x0000FF, 0xFFFFFF};
+    const uint32_t want1555[4] = {0xFF0000, 0x00FF00, 0x0000FF, 0x848484};
+    CpuFrame f;
+    int wrong = 0;
+    bool ok = cpu_frame_prepare(rgb565, 4, 1, sizeof(rgb565), RETRO_PIXEL_FORMAT_RGB565, 1, UPSCALE_SHARP, &f);
+    for (int i = 0; ok && i < 4; ++i)
+        wrong += (f.pixels[i] & 0xffffffu) != want565[i];
+    ok = ok && cpu_frame_prepare(rgb1555, 4, 1, sizeof(rgb1555), RETRO_PIXEL_FORMAT_0RGB1555, 1, UPSCALE_SHARP, &f);
+    for (int i = 0; ok && i < 4; ++i)
+        wrong += (f.pixels[i] & 0xffffffu) != want1555[i];
+    check(ok && f.w == 4 && f.h == 1 && wrong == 0,
+          "16-bit pictures (RGB565, 0RGB1555) become 32-bit with each colour's full range (%d wrong)", wrong);
+}
+
 /* src/rewind.c, as play.c uses it: the app's state size, with its room to spare */
 static size_t rewind_state_size(void)
 {
@@ -994,6 +1014,7 @@ int main(int argc, char **argv)
 
     /* what the app adds: the picture's way to the GPU, the repeated pictures, rewind, the ANALOG button's mode */
     picture_path_check();
+    format_check();
     check(repeat_mismatches == 0 && repeats_app == repeats_hash,
           "%u of %u pictures repeat the one before: the app finds the same ones (%u differ)", repeats_app,
           frames_drawn, repeat_mismatches);

@@ -2455,7 +2455,8 @@ static void game_screen(PadState *pads)
          * mode (host_analog_mode, from its messages). */
         bool map = app.settings.stick_dpad == STICK_DPAD_ALWAYS ||
                    (app.settings.stick_dpad == STICK_DPAD_AUTO &&
-                    (!app.settings.analog || (host_core() == CORE_BEETLE && !host_analog_mode(i))));
+                    (!app.settings.analog ||
+                     (host_core() == CORE_BEETLE && host_dualshock_in(i) && !host_analog_mode(i))));
         if (map)
         {
             const int16_t dead = 16000;
