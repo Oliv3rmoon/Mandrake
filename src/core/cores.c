@@ -47,9 +47,10 @@ CORE_DECLARE(swanstation_)
 CORE_DECLARE(beetle_)
 
 const CoreInfo CORES[CORE_COUNT] = {
-    [CORE_SWANSTATION] = {"swanstation", "SwanStation", "GPL-3.0", "", true, true, CORE_FUNCTIONS(swanstation_)},
-    /* its saves and states in a folder of their own; it needs a disc to start (no BIOS-only boot) */
-    [CORE_BEETLE] = {"beetle", "Beetle PSX", "GPL-2.0-or-later", "beetle", false, false, CORE_FUNCTIONS(beetle_)},
+    [CORE_SWANSTATION] = {"swanstation", "SwanStation", "GPL-3.0", "", true, true, true, CORE_FUNCTIONS(swanstation_)},
+    /* its saves and states in a folder of their own; it needs a disc to start (no BIOS-only boot); it hands over every
+     * frame's picture, repeated or not (beetle_psx_frame_duping off) */
+    [CORE_BEETLE] = {"beetle", "Beetle PSX", "GPL-2.0-or-later", "beetle", false, false, false, CORE_FUNCTIONS(beetle_)},
 };
 
 const CoreInfo *core_by_id(const char *id)

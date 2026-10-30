@@ -23,6 +23,7 @@
 #include "libretro_vulkan.h"
 #endif
 #include "../platform/ps5_crash.h"
+#include "../platform/cpu_frame.h"
 
 void app_toast(const char *message); /* main.c: a short notice on screen */
 
@@ -826,8 +827,16 @@ static bool RETRO_CALLCONV environment(unsigned cmd, void *data)
         return true;
 #endif
     case RETRO_ENVIRONMENT_SET_MESSAGE_EXT:
-        SwanStationPS5_log("core message: %s", ((const struct retro_message_ext *)data)->msg);
+    {
+        const char *msg = ((const struct retro_message_ext *)data)->msg;
+        SwanStationPS5_log("core message: %s", msg);
+        /* Beetle PSX says the DualShock's mode the same way SwanStation does, in its own words, whenever it changes
+         * (the ANALOG combination, the game, a state loaded): the light bar and Left stick as D-pad follow it */
+        int port, mode = msg && core == BEETLE ? beetle_analog_message(msg, &port) : -1;
+        if (mode >= 0 && port >= 1 && port <= 4)
+            analog_on[port - 1] = mode == 1;
         return true;
+    }
     case RETRO_ENVIRONMENT_GET_MESSAGE_INTERFACE_VERSION:
         *(unsigned *)data = 1;
         return true;
@@ -844,10 +853,29 @@ static void RETRO_CALLCONV video_cb(const void *data, unsigned width, unsigned h
         /* duplicate frame: keep showing the previous one. SwanStation says so when the picture it shows is the one of
          * the last frame (a 30 fps game on a 60 fps core): frame interpolation takes only the game's own frames. */
 #if defined(SwanStationPS5_VULKAN)
-        vkp_frame_repeated();
+        if (hw_running)
+            vkp_frame_repeated(); /* its image was counted by set_image */
+        else
+            vkp_count_frame(true);
 #endif
         ++frames_repeated;
         return;
+    }
+    if (data != RETRO_HW_FRAME_BUFFER_VALID)
+    {
+        /* a picture drawn on the CPU. Beetle PSX gives every frame, also the ones that show the last picture again: the
+         * same pixels are a repeat, as SwanStation would have said, so that frame generation and Show FPS count the
+         * game's own frames */
+        const unsigned bytes = pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2;
+        const bool repeated = !core->tells_repeats && cpu_frame_repeats(data, width, height, pitch, bytes);
+#if defined(SwanStationPS5_VULKAN)
+        vkp_count_frame(repeated);
+#endif
+        if (repeated)
+        {
+            ++frames_repeated;
+            return;
+        }
     }
     ++frames_new;
     if (data == RETRO_HW_FRAME_BUFFER_VALID)
@@ -1183,6 +1211,7 @@ bool host_load(const char *game_path, const char *serial, const Paths *paths, co
     rumble_scale = settings->vibration * 0.25f;
     rumble_feel = settings->rumble_feel;
     memset(analog_on, 0, sizeof(analog_on)); /* a DualShock starts in digital mode */
+    cpu_frame_forget(); /* the last game's pictures are not this one's */
     memset(rumble_strong, 0, sizeof(rumble_strong));
     memset(rumble_weak, 0, sizeof(rumble_weak));
     session_renderer = settings->renderer;
@@ -1229,6 +1258,11 @@ bool host_load(const char *game_path, const char *serial, const Paths *paths, co
     STEP("retro_get_system_av_info");
     core->get_system_av_info(&av_info);
     apply_devices(settings); /* again, in case loading changed them */
+    /* Beetle PSX starts a DualShock in analog mode without a word when the game database says the game wants it
+     * (beetle_psx_analog_toggle "enabled-analog"); SwanStation says it */
+    if (core == BEETLE && settings->analog && (game_fixes & GDB_ANALOG) && !special_device)
+        for (int port = 0; port < 4; ++port)
+            analog_on[port] = !(gun_device && port == 0);
     loaded = true;
     state_size = 0;
     card_load();
@@ -1254,6 +1288,7 @@ void host_unload(void)
     loaded = false;
     state_size = 0;
     frame_data = NULL;
+    plat_forget_game();
     for (int i = 0; i < SwanStationPS5_MAX_PADS; ++i)
         plat_rumble(i, 0, 0);
 }

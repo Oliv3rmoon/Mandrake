@@ -5,6 +5,7 @@
 #include "beetle_options.h"
 
 #include <stddef.h>
+#include <string.h>
 
 const BeetleOption BEETLE_OPTIONS[] = {
     /* the picture: the software renderer draws at 1x or 2x; dithering at the PS1's own size, or none */
@@ -31,6 +32,8 @@ const BeetleOption BEETLE_OPTIONS[] = {
       "l2+r2+l3", "l2+r2+r3", "l3+r3", NULL}},
     {"beetle_psx_enable_multitap_port1", {"disabled", "enabled", NULL}},
     {"beetle_psx_gun_cursor", {"off", NULL}},
+    /* its messages: the DualShock's mode among them, which the light bar and Left stick as D-pad follow (host.c) */
+    {"beetle_psx_display_osd", {"enabled", NULL}},
 };
 
 const int BEETLE_OPTION_COUNT = (int)(sizeof(BEETLE_OPTIONS) / sizeof(BEETLE_OPTIONS[0]));
@@ -68,4 +71,25 @@ void beetle_options_apply(const BeetleChoice *c, void (*set)(const char *key, co
     set("beetle_psx_analog_toggle_combo", COMBOS[beetle_analog_combo(c->analog_combo)]);
     set("beetle_psx_enable_multitap_port1", c->multitap ? "enabled" : "disabled");
     set("beetle_psx_gun_cursor", "off");
+    set("beetle_psx_display_osd", "enabled");
+}
+
+int beetle_analog_message(const char *message, int *port)
+{
+    /* "DualShock on port 1: Analog Mode" (mednafen/psx/frontio.c), "...: Digital Mode" */
+    static const char prefix[] = "DualShock on port ";
+    if (strncmp(message, prefix, sizeof(prefix) - 1) != 0)
+        return -1;
+    const char *p = message + sizeof(prefix) - 1;
+    int n = 0, digits = 0;
+    for (; *p >= '0' && *p <= '9' && digits < 2; ++p, ++digits)
+        n = n * 10 + (*p - '0');
+    if (!digits)
+        return -1;
+    *port = n;
+    if (!strcmp(p, ": Analog Mode"))
+        return 1;
+    if (!strcmp(p, ": Digital Mode"))
+        return 0;
+    return -1;
 }

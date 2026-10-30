@@ -18,8 +18,16 @@ void vkp_present(const uint32_t *pixels, size_t pitch_bytes);
 void vkp_close(void);
 /* "1920x1080 @ 59.94 Hz" once open */
 const char *vkp_describe(void);
-/* A core renders through Vulkan and has handed over a picture. */
+/* A core renders through Vulkan and has handed over a picture (or one drawn on the CPU was, vkp_set_game_pixels). */
 bool vkp_game_image_ready(void);
+/* The picture of a core that draws on the CPU (Beetle PSX), w x h XRGB8888 with its rows packed (cpu_frame.h): uploaded
+ * with the next frame into an image of the screen's, which stands in for a GPU core's image, so the shaders, FSR, CAS,
+ * generated frames and supersampling take it the same way. pixels must stay as they are until that frame is presented.
+ * False when no image could be made for it (it is then drawn as before, by the CPU). */
+bool vkp_set_game_pixels(const uint32_t *pixels, int w, int h);
+/* One frame of such a core, for frame generation's count of the game's frames: repeated when it shows the picture of
+ * the one before (SwanStation's frames are counted by vkp_set_game_image and vkp_frame_repeated). */
+void vkp_count_frame(bool repeated);
 /* Draw that picture in this rectangle of the canvas, under it, this frame. */
 /* crop: share of the picture's height hidden at the top and at the bottom */
 /* shader: the values of Settings > Display > Shader, 99 supersampling (averaged down); tex_*: the picture's size; lines: the PS1's */

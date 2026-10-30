@@ -67,6 +67,7 @@ void config_defaults(Settings *s)
     s->beetle_res = 0;          /* native: the software renderer's own size */
     s->beetle_dither = true;    /* as the PS1 draws */
     s->beetle_widescreen = false;
+    s->beetle_upscale = 0;      /* the picture as Beetle PSX draws it */
     for (int i = 0; i < SS_OPT_COUNT; ++i)
         s->ss_opt[i] = SS_OPTS[i].def;
 }
@@ -199,6 +200,8 @@ static bool config_apply(Settings *s, const char *path)
             s->beetle_dither = as_bool(value);
         else if (strcmp(key, "beetle_widescreen") == 0)
             s->beetle_widescreen = as_bool(value);
+        else if (strcmp(key, "beetle_upscale") == 0)
+            s->beetle_upscale = atoi(value) >= 0 && atoi(value) <= UPSCALE_FILTER_COUNT ? atoi(value) : 0;
         else if (strcmp(key, "pgxp") == 0)
             s->pgxp = as_bool(value);
         else if (strcmp(key, "theme") == 0)
@@ -480,8 +483,8 @@ bool config_save(const Settings *s, const char *path)
             s->update_check);
     fprintf(f, "ntfs_enabled=%d\n", s->ntfs_enabled);
     fprintf(f, "renderer=%d\nusb_folder=%s\nnfs_timeout=%d\nnfs_shares=%s\n", s->renderer, s->usb_folder, s->nfs_timeout, s->nfs_shares);
-    fprintf(f, "core=%s\nbeetle_res=%d\nbeetle_dither=%d\nbeetle_widescreen=%d\n", CORES[core_index(s->core)].id,
-            s->beetle_res, s->beetle_dither, s->beetle_widescreen);
+    fprintf(f, "core=%s\nbeetle_res=%d\nbeetle_dither=%d\nbeetle_widescreen=%d\nbeetle_upscale=%d\n",
+            CORES[core_index(s->core)].id, s->beetle_res, s->beetle_dither, s->beetle_widescreen, s->beetle_upscale);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,
             s->crop_edges);

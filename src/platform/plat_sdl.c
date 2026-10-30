@@ -9,6 +9,7 @@
 #include "../i18n.h"
 
 #include "xbr.h"
+#include "cpu_frame.h"
 
 #include <SDL2/SDL.h>
 #include <stdio.h>
@@ -1135,78 +1136,10 @@ void plat_begin_frame(uint32_t clear_argb)
     SDL_RenderClear(renderer);
 }
 
-/* ---- prescalers (XRGB8888). Scale2x/Scale3x are the AdvanceMAME edge rules:
- * they round off staircase edges without blurring flat areas. */
-
-static void prescale_sharp(const uint32_t *src, int w, int h, size_t pitch_px, uint32_t *dst, int k)
-{
-    int dw = w * k;
-    for (int y = 0; y < h; ++y)
-    {
-        uint32_t *row = dst + (size_t)y * k * dw;
-        const uint32_t *s = src + (size_t)y * pitch_px;
-        for (int x = 0; x < w; ++x)
-            for (int i = 0; i < k; ++i)
-                row[x * k + i] = s[x];
-        for (int r = 1; r < k; ++r)
-            memcpy(row + (size_t)r * dw, row, (size_t)dw * 4);
-    }
-}
-
-static void scale2x(const uint32_t *src, int w, int h, size_t pitch_px, uint32_t *dst)
-{
-    int dw = w * 2;
-    for (int y = 0; y < h; ++y)
-    {
-        const uint32_t *up = src + (size_t)(y > 0 ? y - 1 : y) * pitch_px;
-        const uint32_t *row = src + (size_t)y * pitch_px;
-        const uint32_t *dn = src + (size_t)(y < h - 1 ? y + 1 : y) * pitch_px;
-        uint32_t *o0 = dst + (size_t)y * 2 * dw, *o1 = o0 + dw;
-        for (int x = 0; x < w; ++x)
-        {
-            uint32_t B = up[x], D = row[x > 0 ? x - 1 : x], E = row[x];
-            uint32_t F = row[x < w - 1 ? x + 1 : x], H = dn[x];
-            bool edge = B != H && D != F;
-            o0[x * 2] = edge && D == B ? D : E;
-            o0[x * 2 + 1] = edge && B == F ? F : E;
-            o1[x * 2] = edge && D == H ? D : E;
-            o1[x * 2 + 1] = edge && H == F ? F : E;
-        }
-    }
-}
-
-static void scale3x(const uint32_t *src, int w, int h, size_t pitch_px, uint32_t *dst)
-{
-    int dw = w * 3;
-    for (int y = 0; y < h; ++y)
-    {
-        const uint32_t *up = src + (size_t)(y > 0 ? y - 1 : y) * pitch_px;
-        const uint32_t *row = src + (size_t)y * pitch_px;
-        const uint32_t *dn = src + (size_t)(y < h - 1 ? y + 1 : y) * pitch_px;
-        uint32_t *o0 = dst + (size_t)y * 3 * dw, *o1 = o0 + dw, *o2 = o1 + dw;
-        for (int x = 0; x < w; ++x)
-        {
-            int l = x > 0 ? x - 1 : x, r = x < w - 1 ? x + 1 : x;
-            uint32_t A = up[l], B = up[x], C = up[r], D = row[l], E = row[x], F = row[r];
-            uint32_t G = dn[l], H = dn[x], I = dn[r];
-            uint32_t *p0 = &o0[x * 3], *p1 = &o1[x * 3], *p2 = &o2[x * 3];
-            if (B != H && D != F)
-            {
-                p0[0] = D == B ? D : E;
-                p0[1] = (D == B && E != C) || (B == F && E != A) ? B : E;
-                p0[2] = B == F ? F : E;
-                p1[0] = (D == B && E != G) || (D == H && E != A) ? D : E;
-                p1[1] = E;
-                p1[2] = (B == F && E != I) || (H == F && E != C) ? F : E;
-                p2[0] = D == H ? D : E;
-                p2[1] = (D == H && E != I) || (H == F && E != G) ? H : E;
-                p2[2] = H == F ? F : E;
-            }
-            else
-                p0[0] = p0[1] = p0[2] = p1[0] = p1[1] = p1[2] = p2[0] = p2[1] = p2[2] = E;
-        }
-    }
-}
+/* ---- prescalers (XRGB8888): cpu_frame.c's, shared with the GPU path's pictures drawn on the CPU */
+#define prescale_sharp cpu_frame_sharp
+#define scale2x cpu_frame_scale2x
+#define scale3x cpu_frame_scale3x
 
 static uint32_t *scale_buf[2];
 static size_t scale_buf_size[2];
@@ -1463,9 +1396,25 @@ int plat_system_language(void)
     return LANG_EN;
 }
 
+#if defined(__PROSPERO__)
+static CpuFrame cpu_shown; /* the last picture drawn on the CPU that the GPU path shows (cpu_frame.c's memory) */
+static bool cpu_on_gpu;    /* the picture on screen is that one, not a core's own image */
+#endif
+
+void plat_forget_game(void)
+{
+#if defined(__PROSPERO__)
+    cpu_on_gpu = false;
+    cpu_shown.pixels = NULL;
+#endif
+}
+
 void plat_upload_game_gpu(int width, int height)
 {
     game_gpu = true;
+#if defined(__PROSPERO__)
+    cpu_on_gpu = false;
+#endif
     game_src_w = width;
     game_src_h = height;
 }
@@ -1475,6 +1424,23 @@ void plat_upload_game(const void *pixels, int width, int height, size_t pitch, i
 {
     if (!pixels || width <= 0 || height <= 0)
         return;
+#if defined(__PROSPERO__)
+    /* A picture drawn on the CPU (Beetle PSX, or SwanStation's CPU renderer) takes the GPU's path, as SwanStation's
+     * own image does: uploaded to the GPU with the next frame, then the shaders, FSR, CAS, generated frames and
+     * supersampling work on it. Only the prescaler (xBR, Scale2x...) stays on the CPU, before the upload, for 32-bit
+     * pictures as before. The colours are the GPU's (vkp_set_colour), as for SwanStation. */
+    if (use_vulkan &&
+        cpu_frame_prepare(pixels, width, height, pitch, pixel_format, pixel_format == 1 ? upscale : 1, filter, &cpu_shown) &&
+        vkp_set_game_pixels(cpu_shown.pixels, cpu_shown.w, cpu_shown.h))
+    {
+        game_gpu = true;
+        cpu_on_gpu = true;
+        game_src_w = cpu_shown.w; /* the picture the shaders read, as a GPU core's internal resolution */
+        game_src_h = cpu_shown.h;
+        return;
+    }
+    cpu_on_gpu = false;
+#endif
     game_gpu = false;
     game_src_w = width;
     game_src_h = height;
@@ -1590,6 +1556,10 @@ void plat_game_rect(int *x, int *y, int *w, int *h)
 void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
 {
 #if defined(__PROSPERO__)
+    /* the screen's objects were made again (another output mode) while no new picture came (the game menu): the last
+     * one goes up again */
+    if (game_gpu && cpu_on_gpu && !vkp_game_image_ready() && cpu_shown.pixels)
+        vkp_set_game_pixels(cpu_shown.pixels, cpu_shown.w, cpu_shown.h);
     if (!game_image && !game_texture && !(game_gpu && vkp_game_image_ready()))
         return;
 #else

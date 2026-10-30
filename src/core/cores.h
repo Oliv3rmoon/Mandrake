@@ -9,8 +9,9 @@
  * What differs between them, for the rest of the app:
  *   - their save states and memory cards are kept apart (core_states_dir, core_saves_dir): SwanStation's where they
  *     always were, Beetle PSX's in a folder of its own, so a state of one is never loaded into the other;
- *   - SwanStation renders on the GPU (Vulkan): the shaders, FSR, CAS, generated frames and supersampling work on its
- *     picture. Beetle PSX is built with its software renderer and hands the frontend a picture in memory;
+ *   - SwanStation renders on the GPU (Vulkan) and hands the screen its image. Beetle PSX is built with its software
+ *     renderer and hands the frontend a picture in memory, which the screen uploads into an image of its own
+ *     (vkp_set_game_pixels): the shaders, FSR, CAS, generated frames and supersampling work on both;
  *   - SwanStation's own core options (swanstation_options.h) are its alone; Beetle PSX's are in beetle_options.h.
  */
 #ifndef MANDRAKE_CORES_H
@@ -34,8 +35,10 @@ typedef struct
     const char *name;    /* "SwanStation": what the interface shows */
     const char *license; /* for the notices */
     const char *folder;  /* the folder of its save states and memory cards under states/ and saves/ ("" the top) */
-    bool gpu;            /* renders through Vulkan: its picture is the GPU's (shaders, FSR, generated frames...) */
+    bool gpu;            /* renders through Vulkan: its picture is a Vulkan image of its own */
     bool boots_bios;     /* starts the console's BIOS with no disc (Settings > System > Start BIOS) */
+    bool tells_repeats;  /* says when a frame shows the last one's picture (video_refresh with no data); else the host
+                            compares the pictures (cpu_frame_repeats) */
     /* the libretro API, as tools/build-<id>.sh renamed it */
     void (*set_environment)(retro_environment_t);
     void (*set_video_refresh)(retro_video_refresh_t);

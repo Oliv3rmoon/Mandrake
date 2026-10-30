@@ -176,6 +176,8 @@ typedef struct
     int beetle_res;       /* Beetle PSX's internal resolution: 0 native, 1 2x */
     bool beetle_dither;   /* Beetle PSX: the PS1's dithering in 16-bit colour (off: none) */
     bool beetle_widescreen; /* Beetle PSX: its widescreen hack (3D drawn for 16:9) */
+    int beetle_upscale;   /* Beetle PSX: its native-size picture prescaled 2x on the CPU before the GPU's path: 0 off, then
+                             1 + enum UpscaleFilter (sharp pixels, Scale2x, xBR) */
     int ss_opt[SS_OPT_COUNT]; /* SwanStation's own core options: the chosen value's index in SS_OPTS[i].values */
 } Settings;
 

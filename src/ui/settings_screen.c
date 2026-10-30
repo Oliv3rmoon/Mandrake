@@ -102,9 +102,10 @@ typedef struct
 enum Only
 {
     ONLY_ANY = 0,
-    ONLY_SWAN,     /* SwanStation's own: its core options, its renderer */
-    ONLY_SWAN_GPU, /* works on SwanStation's GPU picture: Beetle PSX's is drawn on the CPU */
-    ONLY_BEETLE,   /* Beetle PSX's options */
+    ONLY_SWAN,   /* SwanStation's own: its core options, its renderer */
+    ONLY_BEETLE, /* Beetle PSX's options */
+    /* (the picture's rows, shaders, FSR, CAS, generated frames and supersampling, are both emulators' since 1.8.0:
+     * Beetle PSX's picture takes the GPU's path too) */
 };
 
 /* "Your profile" is for a signed-in account; without one the row signs in. */
@@ -127,6 +128,7 @@ static const char *row_help(const Row *r)
 static const char *const OFF_ON[] = {"Off", "On"};
 static const char *const EMULATORS[] = {"SwanStation", "Beetle PSX"}; /* CORE_* of core/cores.h */
 static const char *const BEETLE_RESOLUTIONS[] = {"Native", "2x"};
+static const char *const BEETLE_FILTERS[] = {"Off", "Sharp pixels", "Smooth pixels (Scale2x)", "xBR (smoothest)"};
 static const char *const RENDERERS[] = {"GPU (Recommended)", "CPU"};
 static const char *const INTERNAL[] = {"Native", "2x", "3x (720p)", "4x", "5x (1080p)", "6x (1440p)", "7x", "8x", "9x (4K)", "10x", "11x", "12x", "13x", "14x", "15x", "16x"};
 static const char *const NFS_TIMEOUTS[] = {"5 s", "10 s", "15 s", "20 s", "30 s"};
@@ -189,19 +191,19 @@ static const Row DISPLAY[] = {
      SP_NONE, false, INT_FIELD(upscale), UPSCALE, 4, 1},
     */
     {"Picture", "Shader", "Gives the picture the look of a CRT TV, a handheld LCD or the analog NTSC signal. The most detailed ones are heavy.",
-     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(shader), SHADERS, 15, 0, SHADER_ORDER, ONLY_SWAN_GPU},
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(shader), SHADERS, 15, 0, SHADER_ORDER},
     {NULL, "AMD FidelityFX Super Resolution",
      "Scales the picture to your screen before the shader, following the edges of the image, and sharpens it (AMD FSR 1).",
-     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(fsr), OFF_ON, 2, 0, NULL, ONLY_SWAN_GPU},
+     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(fsr), OFF_ON, 2, 0},
     {NULL, "AMD FidelityFX CAS", "With the shader off: a light, contrast-aware sharpening (AMD FidelityFX CAS) that makes an upscaled picture crisper without halos.",
-     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(sharpen), SHARPENS, 3, 0, NULL, ONLY_SWAN_GPU},
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(sharpen), SHARPENS, 3, 0},
     {NULL, "Crop black edges", "Hides the black lines many games leave at the top and bottom, which an old TV hid. Pair with Stretch to fill the screen.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(crop_edges), CROPS, 3, 0},
     {NULL, "Manual crop", "Ignores the crop mode and draws the whole picture, whose area you set yourself. Open the preview with {Touchpad}: {Left}/{Right} stretch or narrow the picture keeping its aspect ratio, and {Up}/{Down} move it up or down. Turn it off and everything is as it was.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(manual_crop), OFF_ON, 2, 0},
     {NULL, "Generate frames",
      "Adds frames AMD FSR 3 makes between the game's own, so motion looks smoother. x2: one between each two, so 30 fps shows at 60 and, with Video output at 120 Hz, 60 fps shows at 120. x4: three between each two, only with Video output at 120 Hz: a 30 fps game shows at 120. With Video output at 60 Hz it only doubles. Each extra frame adds a little input lag. It works at once. Video output is changed above and applies the next time the app starts.",
-     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(framegen), FRAMEGENS, 3, 0, NULL, ONLY_SWAN_GPU},
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(framegen), FRAMEGENS, 3, 0},
     {NULL, "Load HD textures",
      "Loads HD texture packs. Over FTP, go to /data/SwanStationPS5/cache/ and create the folder textures if it doesn't exist, then create your game's folder inside it, for example \"SCUS-94900\" (Crash Bandicoot), and put the pack's PNG files there. Needs the GPU renderer. Takes effect with the next game.",
      K_TOGGLE, APPLY_NEXT_GAME, SP_HDTEX, false, NO_FIELD, OFF_ON, 2, 0, NULL, ONLY_SWAN},
@@ -238,13 +240,15 @@ static const Row GRAPHICS[] = {
     {NULL, "True colour", "Draws in 32-bit colour, without the dot pattern or colour banding. Pairs well with a high internal resolution.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(true_colour), OFF_ON, 2, 0, NULL, ONLY_SWAN},
     {"Smoothing", "Supersampling", "At 4x or more: the big picture is averaged down to your TV's pixels, for a clean, stable image without shimmering. With the shader off.",
-     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(supersampling), OFF_ON, 2, 0, NULL, ONLY_SWAN_GPU},
+     K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(supersampling), OFF_ON, 2, 0},
     {"Beetle PSX", "Beetle PSX resolution", "How big Beetle PSX draws the game: Native is the PS1's own picture, 2x draws it twice as wide and tall, so 3D is sharper. 2x asks much more of the CPU: if a game slows down, go back to Native.",
      K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(beetle_res), BEETLE_RESOLUTIONS, 2, 0, NULL, ONLY_BEETLE},
     {NULL, "Beetle PSX dithering", "The PS1's fine dot pattern, which smooths the colour bands of its 16-bit colour, as games were drawn to be seen on a TV. Off: no pattern, flat bands of colour.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(beetle_dither), OFF_ON, 2, 0, NULL, ONLY_BEETLE},
     {NULL, "Beetle PSX widescreen hack", "Draws 3D games for a 16:9 screen, showing more at the sides. 2D pictures and menus are stretched, and some games show glitches at the edges. Off by default.",
      K_TOGGLE, APPLY_NOW, SP_NONE, false, BOOL_FIELD(beetle_widescreen), OFF_ON, 2, 0, NULL, ONLY_BEETLE},
+    {NULL, "Beetle PSX upscale filter", "Enlarges Beetle PSX's picture twice on the CPU before it reaches the GPU, the shader and your screen: xBR rounds off stair-step edges, Smooth pixels (Scale2x) evens out jagged ones, Sharp pixels keeps them square under Smooth final scaling. At Native resolution only: a 2x picture needs none.",
+     K_CHOICE, APPLY_NOW, SP_NONE, false, INT_FIELD(beetle_upscale), BEETLE_FILTERS, 4, 0, NULL, ONLY_BEETLE},
 };
 
 static const Row CONTROLS[] = {
@@ -348,7 +352,7 @@ static const Row SYSTEM[] = {
      APPLY_NOW, SP_NONE, true, BOOL_FIELD(ntfs_enabled), OFF_ON, 2, 0},
     {NULL, "NFS timeout", "How long a read from an NFS server may take before the connection is given up and the game is left. While it waits, the game stays paused and tries to reconnect. Raise it if the server or the network is slow.",
      K_CHOICE, APPLY_NOW, SP_NONE, true, INT_FIELD(nfs_timeout), NFS_TIMEOUTS, 5, 0},
-    {"Emulation", "Emulator", "The PlayStation emulator that runs the game. SwanStation, the default, is fast and draws on the GPU: high resolutions, shaders, generated frames. Beetle PSX (Mednafen) draws on the CPU, at 1x or 2x, and is more exact: try it for a game SwanStation runs badly. Choose it for one game in This game ({L2} / {R2}). Each emulator keeps its own save states and memory cards: a game's saves stay with the emulator that made them.",
+    {"Emulation", "Emulator", "The PlayStation emulator that runs the game. SwanStation, the default, is fast and draws on the GPU, up to 16x. Beetle PSX (Mednafen) draws on the CPU, at 1x or 2x, and is more exact: try it for a game SwanStation runs badly. The shaders, FSR, generated frames and the other picture settings work with both. Choose it for one game in This game ({L2} / {R2}). Each emulator keeps its own save states and memory cards: a game's saves stay with the emulator that made them.",
      K_CHOICE, APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(core), EMULATORS, CORE_COUNT, 0},
     {NULL, "Region", "Auto follows the disc; force 50 or 60 Hz, or the Japanese console, if a game misbehaves.", K_CHOICE,
      APPLY_NEXT_GAME, SP_NONE, false, INT_FIELD(region), REGIONS, 3, 0},
@@ -1027,8 +1031,6 @@ static const char *core_lock_reason(const Row *r)
 {
     switch (row_only(r))
     {
-    case ONLY_SWAN_GPU:
-        return "This game runs on Beetle PSX, which draws its picture on the CPU: this works on SwanStation's GPU picture only. Switch the game to SwanStation in System > Emulator to use it.";
     case ONLY_SWAN:
         return "This game runs on Beetle PSX: this is SwanStation's own setting and does nothing for it. Beetle PSX's own are in Graphics > Beetle PSX.";
     case ONLY_BEETLE:
@@ -1777,6 +1779,11 @@ static void draw_help(const Row *r)
     if (r->offset == offsetof(Settings, upscale_filter))
     {
         draw_filter_preview(x + 32, y, w - 64, app.settings.upscale_filter);
+        y += (w - 64 - 16) * 0.5f + 56;
+    }
+    else if (r->offset == offsetof(Settings, beetle_upscale) && target(r)->beetle_upscale > 0)
+    {
+        draw_filter_preview(x + 32, y, w - 64, target(r)->beetle_upscale - 1);
         y += (w - 64 - 16) * 0.5f + 56;
     }
     /* the card ends above its notes: "Same for every game" (top + 646) and when it applies (top + 684); on About,

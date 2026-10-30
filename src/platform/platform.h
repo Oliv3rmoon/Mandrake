@@ -100,6 +100,8 @@ void plat_upload_game(const void *pixels, int width, int height, size_t pitch, i
                       int upscale, int filter);
 /* The core rendered this frame on the GPU (v2): the screen draws it. */
 void plat_upload_game_gpu(int width, int height);
+/* The game was unloaded: its last picture is not shown again. */
+void plat_forget_game(void);
 void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim);
 void plat_fill_rect(int x, int y, int w, int h, uint32_t argb);
 /* Where plat_draw_game last put the picture (for borders around it). */

@@ -755,6 +755,8 @@ static bool create_canvas(char *error, size_t size)
 
 #include "vk_ui.inc"
 
+#include "vk_cpu_image.inc"
+
 /* ---------------------------------------------------------------- API */
 
 bool vkp_open(int canvas_w, int canvas_h, char *error, size_t size)
@@ -1899,6 +1901,10 @@ static void present_frame(bool ui, const uint32_t *pixels, size_t pitch_bytes)
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
         V.canvas_ready = true;
     }
+    /* a core that draws on the CPU: its new picture into the image that stands in for a GPU core's */
+    if (C.pending && C.image && V.game_view == C.view)
+        cpu_upload(cb, f);
+    C.pending = false;
 
     bool game = V.game_shown && V.game_view;
     V.game_shown = false;
@@ -2159,6 +2165,9 @@ static void destroy_device_objects(void)
         return;
     vkDeviceWaitIdle(V.device);
     ui_destroy();
+    cpu_image_free(true);
+    C.pending = false;
+    C.pixels = NULL;
     fg_free();
     if (V.fg_pacing)
         ssfg_pacing_destroy(V.fg_pacing);
@@ -2268,6 +2277,7 @@ void vkp_close(void)
     if (V.instance && vkDestroyInstance)
         vkDestroyInstance(V.instance, NULL);
     memset(&V, 0, sizeof(V));
+    memset(&C, 0, sizeof(C));
 }
 
 /* ---------------------------------------------------------------- a core's device */
@@ -2347,6 +2357,8 @@ void vkp_set_game_image(VkImage image, VkImageView view, VkImageLayout layout)
         ++V.core_frames; /* frame generation counts the core's frames... */
         ++V.new_frames;  /* ...and the game's own (vkp_frame_repeated takes back the ones that repeat the last) */
     }
+    C.pending = false; /* a core's own image (or none) from now on, not a picture of the CPU's */
+    C.pixels = NULL;
     V.game_image = image;
     V.game_view = view;
     V.game_layout = layout;
@@ -2510,6 +2522,15 @@ const char *vkp_describe(void)
 bool vkp_game_image_ready(void)
 {
     return false;
+}
+bool vkp_set_game_pixels(const uint32_t *pixels, int w, int h)
+{
+    (void)pixels, (void)w, (void)h;
+    return false;
+}
+void vkp_count_frame(bool repeated)
+{
+    (void)repeated;
 }
 void vkp_set_colour(float brightness, float saturation, float warmth, float sharpen)
 {

@@ -900,11 +900,16 @@ void app_draw_game(uint8_t dim)
     size_t pitch;
     bool fresh;
     const void *pixels = host_frame(&w, &h, &pitch, &fmt, &fresh);
-    /* Beetle PSX's picture is drawn on the CPU and shown as it is: its pixels, scaled to the screen by the GPU with
-     * Smooth final scaling, Integer scaling and the scanlines (the prescalers' rows are hidden in Settings) */
+    /* A picture drawn on the CPU (Beetle PSX's) goes the GPU's way, as SwanStation's image does: the shaders, FSR,
+     * CAS, generated frames and supersampling work on it. Beetle PSX's own upscale filter (Settings > Graphics >
+     * Beetle PSX) prescales it 2x first; SwanStation's CPU renderer keeps the prescaler it always had. */
     if (pixels && fresh)
-        plat_upload_game(pixels, w, h, pitch, fmt, host_core() == CORE_BEETLE ? 1 : app.settings.upscale,
-                         app.settings.upscale_filter);
+    {
+        const bool beetle = host_core() == CORE_BEETLE;
+        const int filter = beetle ? app.settings.beetle_upscale - 1 : app.settings.upscale_filter;
+        plat_upload_game(pixels, w, h, pitch, fmt, beetle ? (app.settings.beetle_upscale > 0 ? 2 : 1) : app.settings.upscale,
+                         filter < 0 ? UPSCALE_SHARP : filter);
+    }
     else if (!pixels && fresh && w > 0)
         plat_upload_game_gpu(w, h); /* the core rendered through Vulkan */
     Settings view = app.settings;
@@ -2444,10 +2449,13 @@ static void game_screen(PadState *pads)
             --select_frames[i];
         }
         /* A digital pad has no sticks: let the left stick drive the D-pad. With a
-         * DualShock, Auto leaves that to the core (only while the game keeps it in
-         * digital mode: AnalogDPadInDigitalMode in host.c), Always does it here. */
+         * DualShock, Auto leaves that to SwanStation (only while the game keeps it in
+         * digital mode: AnalogDPadInDigitalMode in host.c), Always does it here. Beetle
+         * PSX has no such option: Auto does it here while its DualShock is in digital
+         * mode (host_analog_mode, from its messages). */
         bool map = app.settings.stick_dpad == STICK_DPAD_ALWAYS ||
-                   (app.settings.stick_dpad == STICK_DPAD_AUTO && !app.settings.analog);
+                   (app.settings.stick_dpad == STICK_DPAD_AUTO &&
+                    (!app.settings.analog || (host_core() == CORE_BEETLE && !host_analog_mode(i))));
         if (map)
         {
             const int16_t dead = 16000;

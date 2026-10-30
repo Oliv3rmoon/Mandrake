@@ -41,4 +41,8 @@ int beetle_analog_combo(int swanstation_combo);
 /* Calls set(key, value) for every option of BEETLE_OPTIONS, with the value for this choice. */
 void beetle_options_apply(const BeetleChoice *choice, void (*set)(const char *key, const char *value));
 
+/* A message of Beetle PSX's about a DualShock's mode ("DualShock on port 1: Analog Mode"): 1 analog, 0 digital, with
+ * the port (1 to 8) in *port; -1 for any other message. */
+int beetle_analog_message(const char *message, int *port);
+
 #endif
