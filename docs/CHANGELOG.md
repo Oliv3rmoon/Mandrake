@@ -5,6 +5,36 @@ until 1.6.0, and the entries for those releases keep the name they had. A releas
 are in `docs/releases/<version>.md`. What changed in SwanStationPS5 before Nightshade Station is in
 [its releases](https://github.com/darkxex/SwanStationPS5/releases).
 
+## Mandrake 1.8.1: nightly, the community on Discord
+
+Mandrake now says where its community is: [nightly](https://discord.gg/pSqgRU3YP9), the Discord of
+Mandrake and the other Nightshade apps. Its version, 1.8.1 (contentVersion 01.008.001), is the next
+patch after 1.8.0. What changed:
+
+- **Join the community.** **Settings > About** has a new row under **Community**, *Join the
+  community*, with the server's name, nightly, and its short link, `discord.gg/pSqgRU3YP9`. Selected,
+  its card shows a QR code that opens `https://discord.gg/pSqgRU3YP9` on a phone. The phone page lists
+  the row too.
+- **Once, after the update.** The question the first start asks after an update (the factory
+  settings, or yours) has one more line under its answers: "Join nightly, Mandrake's community on
+  Discord: discord.gg/pSqgRU3YP9", and where its QR code is. Either answer puts it away for good: the
+  settings file keeps `community_seen=1`, a factory reset keeps it too, and later updates ask their
+  question without the line. A new install has no question to ask, so it shows the invitation only on
+  About.
+- **In all five languages.** The new texts are in French, Portuguese, Spanish and Japanese as well;
+  the name and the link are never translated. The Japanese font is unchanged: its subset already had
+  every glyph they use.
+- **What stays.** Everything else is 1.8.0: both emulators, the picture settings, your settings and
+  your saves. The About page's GitHub QR code and its address are where they were.
+- **Checked on a computer.** A new host check, `tests/test_community.py` (CI runs it on every build),
+  makes the QR code with the app's own encoder (`src/ui/qr.h`, which the phone page's QR code now goes
+  through too) and reads it back with a reader of its own: it must open exactly
+  `https://discord.gg/pSqgRU3YP9`. The same reader reads the GitHub QR code, which segno made. The
+  About row, the one-time line and its flag in the settings file are checked in the sources, and every
+  new text in its five languages.
+
+Built and checked by the host tests; not yet run on a console.
+
 ## Mandrake 1.8.0: Beetle PSX with every picture setting, and SwanStationPS5 1.6.1's fixes
 
 Beetle PSX without the compromises of 1.7.0, and the fixes of SwanStationPS5 1.6.1. Its version,

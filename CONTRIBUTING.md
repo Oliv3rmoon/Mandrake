@@ -13,6 +13,6 @@ Bug reports, fixes and testing of Mandrake are all welcome. Ask for help on the
 - Every pull request is built by GitHub Actions (`.github/workflows/build.yml`). A change should build there.
 - Keep the SPDX header (`GPL-3.0-or-later`) on new source files.
 - Never commit BIOS files, games, keys, `.env`, `build/` or `dist/`.
-- Release tags are `MAJOR.MINOR.PATCH` (`1.8.0`), matching `SwanStationPS5_VERSION` in `src/SwanStationPS5.h` and the
-  `contentVersion` of `sce_sys/param.json` (`01.008.000`). A tag pushed to Oliv3rmoon/Mandrake builds
+- Release tags are `MAJOR.MINOR.PATCH` (`1.8.1`), matching `SwanStationPS5_VERSION` in `src/SwanStationPS5.h` and the
+  `contentVersion` of `sce_sys/param.json` (`01.008.001`). A tag pushed to Oliv3rmoon/Mandrake builds
   and publishes the release (`PPSA98510.zip`, `SwanStationPS5-DiscDaemon.elf` and `SHA256SUMS`).
