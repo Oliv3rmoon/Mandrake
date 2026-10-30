@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #include "../app.h"
+#include "../community.h"
 #include "../config.h"
 #include "../controls.h"
 #include "../core/cores.h"
@@ -17,10 +18,10 @@
 #include "../ra/achievements.h"
 #include "../remote.h"
 #include "../update.h"
-#include "../../third_party/qrcodegen/qrcodegen.h"
 #include "coverflow.h"
 #include "draw.h"
 #include "icons.h"
+#include "qr.h"
 #include "sfx.h"
 #include "text.h"
 #include "theme.h"
@@ -80,6 +81,7 @@ enum Special
     SP_USBFOLDER, /* the games folder on USB drives, typed */
     SP_NFSHARES,  /* the NFS servers that hold games, typed */
     SP_DRIVES,    /* the extended and USB drives found, with their free space */
+    SP_COMMUNITY, /* nightly on Discord (community.h): its name and link, and its QR code in the help */
 };
 
 typedef struct
@@ -399,6 +401,8 @@ static const Row ABOUT[] = {
      true, NO_FIELD, NULL, 0, 0},
     {NULL, "Created by", "The person behind SwanStationPS5.", K_INFO, APPLY_NOW, SP_CREDITS, true, NO_FIELD, NULL, 0,
      0},
+    {"Community", "Join the community", "Mandrake's Discord: ask for help, report bugs, hear about new versions.",
+     K_INFO, APPLY_NOW, SP_COMMUNITY, true, NO_FIELD, NULL, 0, 0},
     {"Updates", "Check for updates", "Looks for a newer Mandrake on GitHub and installs it.", K_ACTION, APPLY_NOW,
      SP_UPDATE, true, NO_FIELD, NULL, 0, 0},
     {NULL, "Check when Mandrake starts", "Tells you on the shelf when a new version is out.", K_TOGGLE, APPLY_NOW,
@@ -840,7 +844,8 @@ static const Tab *tab(void)
 
 static bool selectable(const Row *r)
 {
-    return r->kind != K_INFO || r->special == SP_DRIVES;
+    /* the info rows are only read, but for the drives (Cross shows the next one) and the community (its QR code) */
+    return r->kind != K_INFO || r->special == SP_DRIVES || r->special == SP_COMMUNITY;
 }
 
 static void first_selectable(void)
@@ -1200,6 +1205,7 @@ static const char *value_label(const Row *r, char *buf, size_t size)
         return app.drive_text[S.drive];
     }
     case SP_CREDITS: return "AngelXex";
+    case SP_COMMUNITY: snprintf(buf, size, "%s  \xc2\xb7  %s", COMMUNITY_NAME, COMMUNITY_LINK); return buf;
     case SP_HOTKEYS: return tr("{Touchpad} + {R2} / {L2}");
     case SP_USBFOLDER: return app.global.usb_folder[0] ? app.global.usb_folder : tr("Off");
     case SP_NFSHARES: return app.global.nfs_shares[0] ? app.global.nfs_shares : tr("Off");
@@ -1741,7 +1747,7 @@ static void draw_project_qr(float x, float y, float size)
     plat_draw_texture(qr, x, y, side, side, 0xffffffffu, false);
 }
 
-/* Any text as a QR code (the phone page's address), made on the console. */
+/* Any text as a QR code (the phone page's address, nightly's invitation), made on the console (qr.h). */
 static void draw_url_qr(const char *text, float x, float y, float size)
 {
     static char made_for[128];
@@ -1753,8 +1759,7 @@ static void draw_url_qr(const char *text, float x, float y, float size)
         plat_texture_free(tex);
         tex = NULL;
         static uint8_t qr[qrcodegen_BUFFER_LEN_MAX], temp[qrcodegen_BUFFER_LEN_MAX];
-        if (qrcodegen_encodeText(text, temp, qr, qrcodegen_Ecc_MEDIUM, qrcodegen_VERSION_MIN,
-                                 qrcodegen_VERSION_MAX, qrcodegen_Mask_AUTO, true))
+        if (qr_encode(text, qr, temp))
         {
             int n = qrcodegen_getSize(qr), side = n + 4;
             uint8_t *px = malloc((size_t)side * side * 4);
@@ -1830,6 +1835,17 @@ static void draw_help(const Row *r)
         }
         else if (app.global.remote)
             text_draw(x + 32, top + 360, 22, FONT_REGULAR, TH_DANGER, ALIGN_LEFT, tr("No network connection"));
+    }
+    else if (r->special == SP_COMMUNITY)
+    {
+        /* nightly on Discord: its invitation as a QR code for a phone, then its name and its short link */
+        float qs = 240, qx = x + (w - qs) * 0.5f, qy = top + 250;
+        draw_url_qr(COMMUNITY_URL, qx, qy, qs);
+        char line[160];
+        snprintf(line, sizeof(line), tr("Scan to join %s on Discord"), COMMUNITY_NAME);
+        text_draw_fit(x + w * 0.5f, qy + qs + 30, 22, FONT_BOLD, TH_TEXT, ALIGN_CENTER, w - 64, line);
+        text_draw(x + w * 0.5f, qy + qs + 64, 22, FONT_REGULAR, TH_TEXT_DIM, ALIGN_CENTER, COMMUNITY_LINK);
+        return; /* an info row: no notes */
     }
     else if (about)
     {

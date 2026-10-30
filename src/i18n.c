@@ -1777,6 +1777,26 @@ static const Entry ENTRIES[] = {
       "Amplia duas vezes a imagem do Beetle PSX com o processador antes de chegar à GPU, ao shader e ao seu ecrã: o xBR arredonda as arestas em escada, Píxeis suaves (Scale2x) alisa as serrilhadas, Píxeis nítidos mantém-nas quadradas com a Suavização final. Só na resolução Nativa: uma imagem 2x não precisa.",
       "Agranda dos veces la imagen de Beetle PSX con el procesador antes de que llegue a la GPU, al shader y a tu pantalla: xBR redondea los bordes en escalera, Píxeles suaves (Scale2x) alisa los dentados, Píxeles nítidos los mantiene cuadrados con el Suavizado final. Solo en resolución Nativa: una imagen 2x no lo necesita.",
       "Beetle PSX の画面を、GPU やシェーダー、テレビに届く前に CPU で 2 倍に拡大します。xBR は階段状の輪郭を丸め、「なめらか (Scale2x)」はギザギザを整え、「シャープ」は最終スケーリングを平滑化してもドットを四角く保ちます。「ネイティブ」解像度のときだけ働きます (2x の画面には不要です)。"}},
+    /* ---- 1.8.1: nightly, the community on Discord (Settings > About, and once in the update's question). The name
+     * and the link (community.h) are never translated: they come in through %s. */
+    {{"Community", "Communauté", "Comunidade", "Comunidad", "コミュニティ"}},
+    {{"Join the community", "Rejoindre la communauté", "Juntar-se à comunidade", "Unirse a la comunidad",
+      "コミュニティに参加"}},
+    {{"Mandrake's Discord: ask for help, report bugs, hear about new versions.",
+      "Le Discord de Mandrake : demandez de l'aide, signalez des bugs, suivez les nouvelles versions.",
+      "O Discord do Mandrake: peça ajuda, comunique erros, saiba das novas versões.",
+      "El Discord de Mandrake: pide ayuda, reporta errores, entérate de las nuevas versiones.",
+      "Mandrake の Discord です。 ヘルプを求めたり、 バグを伝えたりでき、 新しいバージョンもすぐわかります。"}},
+    {{"Scan to join %s on Discord", "Scannez pour rejoindre %s sur Discord", "Leia para se juntar ao %s no Discord",
+      "Escanea para unirte a %s en Discord", "スキャンして Discord の %s に参加"}},
+    {{"Join %s, Mandrake's community on Discord: %s",
+      "Rejoignez %s, la communauté de Mandrake sur Discord : %s",
+      "Junte-se ao %s, a comunidade do Mandrake no Discord: %s",
+      "Únete a %s, la comunidad de Mandrake en Discord: %s",
+      "Discord の Mandrake コミュニティ「%s」にご参加ください: %s"}},
+    {{"Its QR code is in Settings > About.", "Son code QR est dans Paramètres > À propos.",
+      "O código QR está em Definições > Sobre.", "Su código QR está en Configuración > Acerca de.",
+      "QR コードは「設定 > 情報」にあります。"}},
 #include "i18n_swanstation.inc"
 };
 

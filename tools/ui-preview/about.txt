@@ -4,4 +4,7 @@ wait 10
 press l1
 wait 40
 shot 12-about
+press down
+wait 20
+shot 13-about-community
 quit

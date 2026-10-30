@@ -80,6 +80,13 @@ jobs:
           CC: clang-18
         run: python3 -m unittest tests.test_update_release -v
 
+      # nightly's invitation on Settings > About: its QR code, made by the app's own encoder, read back to exactly
+      # https://discord.gg/pSqgRU3YP9, and its texts in all five languages (tests/test_community.py).
+      - name: Community invite host check
+        env:
+          CC: clang-18
+        run: python3 -m unittest tests.test_community -v
+
       # Beetle PSX built for this machine from the same pinned source and switches as the PS5's, and booted headless
       # on the test disc tools/make-test-disc.py writes (a homebrew program, no game or BIOS): tests/test_beetle.py.
       # Its BIOS test is skipped here, as no BIOS is ever given to CI; the disc boots on the core's own OpenBIOS.

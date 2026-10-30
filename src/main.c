@@ -9,6 +9,7 @@
 #include "ntfs/ntfsfs.h"
 #include "drives.h"
 #include "app.h"
+#include "community.h"
 
 #include "config.h"
 #include "core/beetle_options.h"
@@ -606,7 +607,9 @@ void app_save_settings(void)
 /* ---------------------------------------------------------------- the update question */
 
 /* After an update the first screen asks whether to start from the new version's factory settings: X does, Circle
- * keeps the settings as they are (the answer is saved, so it is asked once). */
+ * keeps the settings as they are (the answer is saved, so it is asked once). Below the answers, until one of them is
+ * given, a line tells of nightly, the community on Discord, and where its QR code is: the first time the question
+ * comes since 1.8.1, and never again (Settings.community_seen, saved with the answer). */
 static bool question_open;
 static float question_t;
 
@@ -633,7 +636,9 @@ static void reset_to_factory(void)
     remove_game_settings();
     Settings d;
     config_defaults(&d);
-    d.last_game = app.global.last_game; /* only where the shelf is stays; the rest, language included, is the factory's */
+    /* only where the shelf is, and that nightly's line was seen, stay; the rest, language included, is the factory's */
+    d.last_game = app.global.last_game;
+    d.community_seen = app.global.community_seen;
     app.global = d;
     app.settings = d;
     i18n_set(d.language);
@@ -656,6 +661,8 @@ static bool question_input(uint32_t *pressed)
 {
     if (!question_open)
         return false;
+    if (*pressed & (BIT(BTN_CROSS) | BIT(BTN_CIRCLE)))
+        app.global.community_seen = true; /* nightly's line goes with the question, for good */
     if (*pressed & BIT(BTN_CROSS))
     {
         question_open = false;
@@ -677,10 +684,12 @@ static void question_draw(void)
     if (!question_open)
         return;
     question_t = fminf(question_t + app.dt * 8.0f, 1.0f);
-    const float w = 940, h = 560, pad = 56, size = 30;
-    float x = (plat_width() - w) * 0.5f, y = (plat_height() - h) * 0.5f + (1.0f - question_t) * 24.0f;
+    /* nightly's line, while it has not been seen: under the answers, the card that much taller */
+    const bool invite = !app.global.community_seen;
+    const float w = 940, h = 560, pad = 56, size = 30, extra = invite ? 112.0f : 0.0f;
+    float x = (plat_width() - w) * 0.5f, y = (plat_height() - h - extra) * 0.5f + (1.0f - question_t) * 24.0f;
     draw_rect(0, 0, plat_width(), plat_height(), argb_alpha(0xa0000000u, question_t));
-    draw_rrect(x, y, w, h, TH_RADIUS, argb_alpha(TH_PILL_A(0xf8), question_t));
+    draw_rrect(x, y, w, h + extra, TH_RADIUS, argb_alpha(TH_PILL_A(0xf8), question_t));
     icon_draw(ICON_REFRESH, x + (w - 64) * 0.5f, y + pad, 64, argb_alpha(TH_FOCUS, question_t));
     text_draw_fit(x + w * 0.5f, y + pad + 64 + 18, 38, FONT_BOLD, argb_alpha(TH_TEXT, question_t), ALIGN_CENTER, w - 2 * pad,
                   tr("Mandrake was updated to the latest version!"));
@@ -728,6 +737,18 @@ static void question_draw(void)
     hx += w1 + space;
     draw_pad_glyph(GLYPH_CIRCLE, hx + gw2 * 0.5f, hy + hs * 0.6f, hs);
     text_draw(hx + gw2 + gap, hy, hs, FONT_REGULAR, argb_alpha(TH_TEXT, question_t), ALIGN_LEFT, no);
+    if (invite)
+    {
+        /* Join nightly, Mandrake's community on Discord: discord.gg/...   Its QR code is in Settings > About. */
+        char line[256];
+        snprintf(line, sizeof(line), tr("Join %s, Mandrake's community on Discord: %s"), COMMUNITY_NAME,
+                 COMMUNITY_LINK);
+        draw_rect(x + pad, y + h - 16, w - 2 * pad, 2, argb_alpha(TH_DIVIDER, question_t));
+        text_draw_fit(x + w * 0.5f, y + h + 8, 24, FONT_REGULAR, argb_alpha(TH_TEXT, question_t), ALIGN_CENTER,
+                      w - 2 * pad, line);
+        text_draw_fit(x + w * 0.5f, y + h + 44, 20, FONT_REGULAR, argb_alpha(TH_TEXT_DIM, question_t), ALIGN_CENTER,
+                      w - 2 * pad, tr("Its QR code is in Settings > About."));
+    }
 }
 
 /* ---------------------------------------------------------------- achievements banner */

@@ -117,6 +117,7 @@ typedef struct
     int border;           /* around the picture: 0 black, 1 glow, 2 TV frame */
     bool remote;          /* settings page for phones on the local network */
     bool update_check;    /* look for new SwanStationPS5 releases at start */
+    bool community_seen;  /* the update's question has shown nightly's line (community.h) and was answered: not again */
     bool pgxp;            /* precise geometry, no wobbling polygons */
     int shader;           /* 0 off, 1 LCD3x, 2 CRT Royale Fast, 3 and 4 retired, 5 to 8 NTSC, 9 to 12 CRT Lottes, CRT Pi, Game Boy LCD, zfast LCD, 13 to 16 CRT Royale, Newpixie, Hyllian NTSC, Mattias */
     bool hd_textures;     /* use a texture pack beside the game when there is one */

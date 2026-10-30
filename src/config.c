@@ -331,6 +331,8 @@ static bool config_apply(Settings *s, const char *path)
             s->remote = as_bool(value);
         else if (strcmp(key, "update_check") == 0)
             s->update_check = as_bool(value);
+        else if (strcmp(key, "community_seen") == 0)
+            s->community_seen = as_bool(value);
         else if (strcmp(key, "background") == 0)
             s->background = atoi(value) % 2;
         else if (strcmp(key, "shelf_category") == 0)
@@ -392,6 +394,7 @@ bool config_load_game(Settings *out, const Settings *global, const char *path)
     out->background = global->background;
     out->remote = global->remote;
     out->update_check = global->update_check;
+    out->community_seen = global->community_seen;
     snprintf(out->usb_folder, sizeof(out->usb_folder), "%s", global->usb_folder);
     snprintf(out->nfs_shares, sizeof(out->nfs_shares), "%s", global->nfs_shares);
     out->nfs_timeout = global->nfs_timeout;
@@ -482,6 +485,7 @@ bool config_save(const Settings *s, const char *path)
             s->widescreen, s->multitap, s->rewind, s->quick_resume, s->crt, s->border, s->remote,
             s->update_check);
     fprintf(f, "ntfs_enabled=%d\n", s->ntfs_enabled);
+    fprintf(f, "community_seen=%d\n", s->community_seen);
     fprintf(f, "renderer=%d\nusb_folder=%s\nnfs_timeout=%d\nnfs_shares=%s\n", s->renderer, s->usb_folder, s->nfs_timeout, s->nfs_shares);
     fprintf(f, "core=%s\nbeetle_res=%d\nbeetle_dither=%d\nbeetle_widescreen=%d\nbeetle_upscale=%d\n",
             CORES[core_index(s->core)].id, s->beetle_res, s->beetle_dither, s->beetle_widescreen, s->beetle_upscale);
