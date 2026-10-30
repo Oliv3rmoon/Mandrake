@@ -3,11 +3,13 @@
  * for other emulators, import from /data/SwanStationPS5/import.
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * The core keeps one card per game: <saves>/<serial>_1.mcd (raw, 128 KiB).
+ * The cores keep one card per game: <saves>/<serial>_1.mcd (raw, 128 KiB) for SwanStation, and the same in
+ * <saves>/beetle/ for Beetle PSX (core/cores.h); both are listed, Beetle PSX's marked with its name.
  * Imports accept raw cards (.mcr .mcd .srm, DuckStation/ePSXe/RetroArch) and
  * DexDrive .gme files; the card they replace is kept as .bak.
  */
 #include "../app.h"
+#include "../core/cores.h"
 #include "../i18n.h"
 #include "../platform/platform.h"
 #include "coverflow.h"
@@ -32,6 +34,7 @@ typedef struct
     char serial[24];
     char title[96];
     char path[SwanStationPS5_PATH_MAX];
+    int core; /* CORE_*: whose card it is */
     int used;            /* blocks in use */
     char saves[15][48];  /* one name per save */
     int save_blocks[15];
@@ -175,25 +178,37 @@ static void read_card(Card *c)
 static void scan(void)
 {
     C.count = 0;
-    DIR *d = opendir(app.paths.saves);
-    if (!d)
-        return;
-    struct dirent *e;
-    while ((e = readdir(d)) && C.count < MAX_CARDS)
+    for (int k = 0; k < CORE_COUNT; ++k)
     {
-        size_t len = strlen(e->d_name);
-        if (len < 7 || strcmp(e->d_name + len - 6, "_1.mcd") != 0)
+        char dir[SwanStationPS5_PATH_MAX];
+        core_saves_dir(k, app.paths.saves, dir, sizeof(dir));
+        DIR *d = opendir(dir);
+        if (!d)
             continue;
-        Card *c = &C.cards[C.count++];
-        snprintf(c->serial, sizeof(c->serial), "%.*s", (int)(len - 6), e->d_name);
-        path_join(c->path, sizeof(c->path), app.paths.saves, e->d_name);
-        str_copy(c->title, sizeof(c->title), c->serial);
-        for (int i = 0; i < app.library.count; ++i)
-            if (!str_icmp(app.library.games[i].serial, c->serial))
-                str_copy(c->title, sizeof(c->title), shelf_game_title(&app.library.games[i]));
-        read_card(c);
+        struct dirent *e;
+        while ((e = readdir(d)) && C.count < MAX_CARDS)
+        {
+            size_t len = strlen(e->d_name);
+            if (len < 7 || strcmp(e->d_name + len - 6, "_1.mcd") != 0)
+                continue;
+            Card *c = &C.cards[C.count++];
+            c->core = k;
+            snprintf(c->serial, sizeof(c->serial), "%.*s", (int)(len - 6), e->d_name);
+            path_join(c->path, sizeof(c->path), dir, e->d_name);
+            str_copy(c->title, sizeof(c->title), c->serial);
+            for (int i = 0; i < app.library.count; ++i)
+                if (!str_icmp(app.library.games[i].serial, c->serial))
+                    str_copy(c->title, sizeof(c->title), shelf_game_title(&app.library.games[i]));
+            if (k != CORE_SWANSTATION) /* the other emulator's card of the same game: marked with its name */
+            {
+                char titled[sizeof(c->title)];
+                snprintf(titled, sizeof(titled), "%.70s (%s)", c->title, CORES[k].name);
+                str_copy(c->title, sizeof(c->title), titled);
+            }
+            read_card(c);
+        }
+        closedir(d);
     }
-    closedir(d);
     /* by title */
     for (int a = 0; a < C.count; ++a)
         for (int b = a + 1; b < C.count; ++b)
@@ -241,7 +256,10 @@ static void export_card(const Card *c)
     char dir[SwanStationPS5_PATH_MAX], to[SwanStationPS5_PATH_MAX], file[64];
     path_join(dir, sizeof(dir), app.paths.root, "memcards-export");
     make_dirs(dir);
-    snprintf(file, sizeof(file), "%s.mcd", c->serial);
+    if (c->core == CORE_SWANSTATION)
+        snprintf(file, sizeof(file), "%s.mcd", c->serial);
+    else /* beside SwanStation's card of the same game, not over it */
+        snprintf(file, sizeof(file), "%s-%s.mcd", c->serial, CORES[c->core].id);
     path_join(to, sizeof(to), dir, file);
     char msg[SwanStationPS5_PATH_MAX + 32];
     if (copy_file(c->path, to, 0))

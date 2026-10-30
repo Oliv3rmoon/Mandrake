@@ -4,6 +4,7 @@
  */
 #include "config.h"
 
+#include "core/cores.h"
 #include "i18n.h"
 #include "platform/platform.h"
 #include "ui/theme.h"
@@ -62,6 +63,10 @@ void config_defaults(Settings *s)
         s->button_map[i] = (int8_t)i;
     s->aspect_before_wide = -1;
     s->mc_w = s->mc_h = 100;
+    s->core = CORE_SWANSTATION;
+    s->beetle_res = 0;          /* native: the software renderer's own size */
+    s->beetle_dither = true;    /* as the PS1 draws */
+    s->beetle_widescreen = false;
     for (int i = 0; i < SS_OPT_COUNT; ++i)
         s->ss_opt[i] = SS_OPTS[i].def;
 }
@@ -183,6 +188,17 @@ static bool config_apply(Settings *s, const char *path)
             s->multitap = as_bool(value);
         else if (strcmp(key, "renderer") == 0)
             s->renderer = atoi(value) % 2;
+        else if (strcmp(key, "core") == 0)
+        {
+            const CoreInfo *c = core_by_id(value); /* by name, so a later core's place in the table doesn't matter */
+            s->core = c ? (int)(c - CORES) : CORE_SWANSTATION;
+        }
+        else if (strcmp(key, "beetle_res") == 0)
+            s->beetle_res = atoi(value) == 1 ? 1 : 0;
+        else if (strcmp(key, "beetle_dither") == 0)
+            s->beetle_dither = as_bool(value);
+        else if (strcmp(key, "beetle_widescreen") == 0)
+            s->beetle_widescreen = as_bool(value);
         else if (strcmp(key, "pgxp") == 0)
             s->pgxp = as_bool(value);
         else if (strcmp(key, "theme") == 0)
@@ -464,6 +480,8 @@ bool config_save(const Settings *s, const char *path)
             s->update_check);
     fprintf(f, "ntfs_enabled=%d\n", s->ntfs_enabled);
     fprintf(f, "renderer=%d\nusb_folder=%s\nnfs_timeout=%d\nnfs_shares=%s\n", s->renderer, s->usb_folder, s->nfs_timeout, s->nfs_shares);
+    fprintf(f, "core=%s\nbeetle_res=%d\nbeetle_dither=%d\nbeetle_widescreen=%d\n", CORES[core_index(s->core)].id,
+            s->beetle_res, s->beetle_dither, s->beetle_widescreen);
     fprintf(f, "version=%s\n", SwanStationPS5_VERSION); /* a newer version starts with clean settings (main.c) */
     fprintf(f, "pgxp=%d\nra_popups=%d\nra_tracker=%d\ncrop_edges=%d\n", s->pgxp, s->ra_popups, s->ra_tracker,
             s->crop_edges);

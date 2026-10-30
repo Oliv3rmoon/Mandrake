@@ -211,9 +211,10 @@ bool play_load_thumb(const char *state_path, uint8_t *rgba)
 
 void play_resume_path(const Game *g, char *out, size_t size)
 {
-    char file[96];
+    char file[96], dir[SwanStationPS5_PATH_MAX];
     snprintf(file, sizeof(file), "%.80s.resume", g->id);
-    path_join(out, size, app.paths.states, file);
+    app_game_states_dir(g, dir, sizeof(dir)); /* the emulator it starts on: a resume of the other is not offered */
+    path_join(out, size, dir, file);
 }
 
 bool play_has_resume(const Game *g, long *age_seconds)
@@ -268,9 +269,10 @@ void play_save_resume(bool background)
 
 void play_auto_path(int slot, char *out, size_t size)
 {
-    char file[96];
+    char file[96], dir[SwanStationPS5_PATH_MAX];
     snprintf(file, sizeof(file), "%.80s.auto%d", app.game ? app.game->id : "game", slot + 1);
-    path_join(out, size, app.paths.states, file);
+    app_game_states_dir(app.game, dir, sizeof(dir));
+    path_join(out, size, dir, file);
 }
 
 int play_auto_list(int slots[AUTO_SLOTS], long ages[AUTO_SLOTS])
@@ -336,7 +338,9 @@ static bool save_state_to(const char *path, bool background)
         return false;
     }
     w->size = size;
-    make_dirs(app.paths.states);
+    char dir[SwanStationPS5_PATH_MAX];
+    app_game_states_dir(app.game, dir, sizeof(dir)); /* the folder of the path, made by every caller of this */
+    make_dirs(dir);
     str_copy(w->path, sizeof(w->path), path);
     play_save_thumb(w->path);
     SDL_AtomicSet(&writing, 1);

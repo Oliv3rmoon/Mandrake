@@ -26,11 +26,24 @@ const BeetleOption BEETLE_OPTIONS[] = {
     /* controllers: the DualShock's ANALOG button by its combination, the multitap, no cursor of the core's (the
      * frontend draws the light gun's crosshair) */
     {"beetle_psx_analog_toggle", {"enabled", "enabled-analog", NULL}},
+    {"beetle_psx_analog_toggle_combo",
+     {"l1+l2+r1+r2+start+select", "l1+r1+select", "l1+r1+start", "l1+r1+l3", "l1+r1+r3", "l2+r2+select", "l2+r2+start",
+      "l2+r2+l3", "l2+r2+r3", "l3+r3", NULL}},
     {"beetle_psx_enable_multitap_port1", {"disabled", "enabled", NULL}},
     {"beetle_psx_gun_cursor", {"off", NULL}},
 };
 
 const int BEETLE_OPTION_COUNT = (int)(sizeof(BEETLE_OPTIONS) / sizeof(BEETLE_OPTIONS[0]));
+
+/* SwanStation's Analog Mode Combo, 0..10, in Beetle PSX's words */
+static const char *const COMBOS[] = {"l1+r1+select", "l1+l2+r1+r2+start+select", "l1+r1+select", "l1+r1+start",
+                                     "l1+r1+l3", "l1+r1+r3", "l2+r2+select", "l2+r2+start", "l2+r2+l3",
+                                     "l2+r2+r3", "l3+r3"};
+
+int beetle_analog_combo(int swanstation_combo)
+{
+    return swanstation_combo >= 1 && swanstation_combo <= 10 ? swanstation_combo : 2;
+}
 
 void beetle_options_apply(const BeetleChoice *c, void (*set)(const char *key, const char *value))
 {
@@ -52,6 +65,7 @@ void beetle_options_apply(const BeetleChoice *c, void (*set)(const char *key, co
     set("beetle_psx_use_mednafen_memcard0_method", "libretro");
     set("beetle_psx_enable_memcard1", "disabled");
     set("beetle_psx_analog_toggle", c->analog_from_start ? "enabled-analog" : "enabled");
+    set("beetle_psx_analog_toggle_combo", COMBOS[beetle_analog_combo(c->analog_combo)]);
     set("beetle_psx_enable_multitap_port1", c->multitap ? "enabled" : "disabled");
     set("beetle_psx_gun_cursor", "off");
 }

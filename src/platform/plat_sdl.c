@@ -1742,6 +1742,17 @@ void plat_draw_game(const Settings *settings, float display_aspect, uint8_t dim)
             vkp_ui_texture_update(soft_tex, rgba);
             gpu_quad(soft_tex, (float)dx, (float)dy, (float)(dx + dw), (float)(dy + dh), 0.0f, (float)cut / game_image_h, 1.0f,
                      (float)(cut + vis_h) / game_image_h, 0xff000000u | (uint32_t)dim << 16 | (uint32_t)dim << 8 | dim);
+            /* CRT scanlines over it, each row's darkness as the GPU picture gets them (the tint has dimmed it) */
+            if (scan && lines > 0)
+                for (int y = 0; y < dh; ++y)
+                {
+                    int64_t pos = ((int64_t)y * 2 + 1) * lines * 128 / dh;
+                    int phase = (int)(pos & 255) - 128;
+                    uint32_t edge = (uint32_t)(phase * phase) >> 6;
+                    uint32_t keep = 255u * (256 - ((edge * scan) >> 8)) >> 8;
+                    if (keep < 255)
+                        plat_fill_rect(dx, dy + y, dw, 1, (255 - keep) << 24);
+                }
         }
         return;
     }

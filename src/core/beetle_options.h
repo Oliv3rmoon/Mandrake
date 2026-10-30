@@ -14,7 +14,7 @@
 typedef struct
 {
     const char *key;
-    const char *values[8]; /* every value Mandrake may give it, NULL after the last */
+    const char *values[12]; /* every value Mandrake may give it, NULL after the last */
 } BeetleOption;
 
 extern const BeetleOption BEETLE_OPTIONS[];
@@ -31,7 +31,12 @@ typedef struct
     bool boot_intro;        /* the BIOS's own start-up (off: skipped, with a BIOS of the player's) */
     bool multitap;          /* 4 players through a multitap in port 1 */
     bool analog_from_start; /* the DualShock starts in analog mode (games known to want it) */
+    int analog_combo;       /* the ANALOG button's combination, as SwanStation's Analog Mode Combo numbers it (0..10) */
 } BeetleChoice;
+
+/* The combination analog_combo gives Beetle PSX, as SwanStation's numbering: Beetle PSX has all but the first
+ * (L1 + R1 + L3 + R3), which becomes L1 + R1 + Select, both cores' default (2). */
+int beetle_analog_combo(int swanstation_combo);
 
 /* Calls set(key, value) for every option of BEETLE_OPTIONS, with the value for this choice. */
 void beetle_options_apply(const BeetleChoice *choice, void (*set)(const char *key, const char *value));

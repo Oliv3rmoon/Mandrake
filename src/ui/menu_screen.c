@@ -282,7 +282,11 @@ void menu_screen(uint32_t pressed)
             app.screen = SCREEN_GAME;
             return;
         case MI_SAVE:
-            make_dirs(app.paths.states);
+        {
+            char dir[SwanStationPS5_PATH_MAX];
+            app_game_states_dir(app.game, dir, sizeof(dir));
+            make_dirs(dir);
+        }
             if (host_save_state(st))
             {
                 play_save_thumb(st);
@@ -415,13 +419,13 @@ void menu_screen(uint32_t pressed)
     if (g)
     {
         text_draw_fit(cx, cy + 20, 32, FONT_BOLD, TH_TEXT, ALIGN_LEFT, px + pw - cx - 40, shelf_game_title(g));
-        /* the serial and the storage, as pills like the shelf's (the second wraps if it does not fit) */
+        /* the serial, the storage and the emulator, as pills like the shelf's (they wrap if they do not fit) */
         char folder[64];
         shelf_folder_tag(g, folder, sizeof(folder));
-        const char *tags[2] = {g->serial[0] ? g->serial : tr("No serial"), folder};
+        const char *tags[3] = {g->serial[0] ? g->serial : tr("No serial"), folder, host_core_name()};
         const float limit = px + pw - 40, pill_h = 38;
         float tx = cx, ty = cy + 64;
-        for (int i = 0; i < 2; ++i)
+        for (int i = 0; i < 3; ++i)
         {
             if (!tags[i][0])
                 continue;

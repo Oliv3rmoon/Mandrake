@@ -115,6 +115,7 @@ fi
 
 # ---- host: the headless frontend of tests/core, linked to the core as it is (its API keeps the retro_ names).
 echo "==> [beetle] the headless check (tests/core/beetle_headless.c)"
+rm -f "$result"
 "$cc" -std=c11 -O2 -g -Wall -Wextra -Werror -I"$out/src/libretro-common/include" -I"$root/src/core" \
     "$root/tests/core/beetle_headless.c" "$root/src/core/beetle_options.c" "$objects" -lpthread -lm -o "$result"
 echo "==> [beetle] $result"

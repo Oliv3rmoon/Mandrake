@@ -1,5 +1,5 @@
 /*
- * SwanStationPS5 - libretro host for the statically linked SwanStation core.
+ * SwanStationPS5 - libretro host for the statically linked cores (cores.h: SwanStation and Beetle PSX).
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 #ifndef SwanStationPS5_HOST_H
@@ -8,14 +8,19 @@
 #include "../SwanStationPS5.h"
 #include "../gamedb.h"
 
-/* serial: the disc's (SLUS-00662), for the emulator choice and the memory
- * card; may be empty. */
+/* serial: the disc's (SLUS-00662), for the memory card; may be empty. The emulator is settings->core (CORE_* of
+ * cores.h); the BIOS with no disc (an empty game_path) always starts on SwanStation. */
 bool host_load(const char *game_path, const char *serial, const Paths *paths, const Settings *settings,
                char *error, size_t error_size);
 void host_unload(void);
 bool host_loaded(void);
-/* "SwanStation": the emulator of the loaded game */
+/* "SwanStation" or "Beetle PSX": the emulator of the loaded game (the last one loaded) */
 const char *host_core_name(void);
+/* Its CORE_* index (cores.h) */
+int host_core(void);
+/* Beetle PSX found no BIOS of the player's (scph5500/5501/5502.bin or a file that is one) and runs the game on the
+ * OpenBIOS built into it */
+bool host_openbios(void);
 /* The emulator a game would get with these settings ("SwanStation"). */
 const char *host_emulator_for(const Settings *settings, const char *serial);
 

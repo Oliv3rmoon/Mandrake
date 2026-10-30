@@ -18,6 +18,8 @@
  */
 #include "remote.h"
 
+#include "core/cores.h"
+
 #include "app.h"
 #include "discimport.h"
 #include "ra/achievements.h"
@@ -158,23 +160,26 @@ static const RemoteGame *find_game(const char *id)
     return NULL;
 }
 
-static void state_file(const RemoteGame *g, int slot, char *out, size_t size)
+/* In the folder of the emulator the game starts on (app_game_states_dir) */
+static void state_file(const RemoteGame *g, int core, int slot, char *out, size_t size)
 {
-    char file[96];
+    char file[96], dir[SwanStationPS5_PATH_MAX];
     snprintf(file, sizeof(file), "%.80s.state%d", g->id, slot);
-    path_join(out, size, app.paths.states, file);
+    core_states_dir(core, app.paths.states, dir, sizeof(dir));
+    path_join(out, size, dir, file);
 }
 
-/* The card: <saves>/<serial>_1.mcd (lower case as some
- * discs spell it). "" when the game has no serial. */
-static void card_file(const RemoteGame *g, char *out, size_t size)
+/* The card: <saves>/<serial>_1.mcd (lower case as some discs spell it), in the folder of the game's emulator
+ * (saves/beetle/ for Beetle PSX). "" when the game has no serial. */
+static void card_file(const RemoteGame *g, int core, char *out, size_t size)
 {
     out[0] = '\0';
     if (!g->serial[0])
         return;
-    char name[48];
+    char name[48], saves[SwanStationPS5_PATH_MAX];
+    core_saves_dir(core, app.paths.saves, saves, sizeof(saves));
     snprintf(name, sizeof(name), "%s_1.mcd", g->serial);
-    path_join(out, size, app.paths.saves, name);
+    path_join(out, size, saves, name);
     FILE *f = fopen(out, "rb");
     if (f)
     {
@@ -184,7 +189,7 @@ static void card_file(const RemoteGame *g, char *out, size_t size)
     for (char *c = name; *c; ++c)
         *c = (char)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c);
     char lower[SwanStationPS5_PATH_MAX];
-    path_join(lower, sizeof(lower), app.paths.saves, name);
+    path_join(lower, sizeof(lower), saves, name);
     if ((f = fopen(lower, "rb")) != NULL)
     {
         fclose(f);
@@ -247,7 +252,8 @@ static void send_saves(int fd)
     {
         const RemoteGame *g = &games[i];
         char path[SwanStationPS5_PATH_MAX], text[400];
-        card_file(g, path, sizeof(path));
+        const int core = app_game_core_by_id(g->id); /* its emulator's card and states */
+        card_file(g, core, path, sizeof(path));
         long long card = path[0] ? file_time(path, NULL) : 0;
         w += (size_t)snprintf(out + w, cap - w, "%s{\"id\":\"", i ? "," : "");
         w += json_text(out + w, cap - w, g->id);
@@ -258,7 +264,7 @@ static void send_saves(int fd)
         bool first = true;
         for (int s = 0; s < 10; ++s)
         {
-            state_file(g, s, path, sizeof(path));
+            state_file(g, core, s, path, sizeof(path));
             long bytes = 0;
             long long t = file_time(path, &bytes);
             if (!t)
@@ -410,20 +416,22 @@ static void serve_saves(int fd, const char *method, const char *path, const char
     }
     char file[SwanStationPS5_PATH_MAX], name[160];
     bool card = !strcmp(kind, "card");
+    const int core = app_game_core_by_id(g.id); /* the card and states of the emulator the game starts on */
     if (card)
     {
-        card_file(&g, file, sizeof(file));
+        card_file(&g, core, file, sizeof(file));
         if (!file[0] && g.serial[0])
         {
-            char n[48];
+            char n[48], saves[SwanStationPS5_PATH_MAX];
             snprintf(n, sizeof(n), "%s_1.mcd", g.serial);
-            path_join(file, sizeof(file), app.paths.saves, n);
+            core_saves_dir(core, app.paths.saves, saves, sizeof(saves));
+            path_join(file, sizeof(file), saves, n);
         }
         snprintf(name, sizeof(name), "%s.mcd", g.serial[0] ? g.serial : g.id);
     }
     else
     {
-        state_file(&g, slot, file, sizeof(file));
+        state_file(&g, core, slot, file, sizeof(file));
         snprintf(name, sizeof(name), "%s.state%d", g.id, slot);
     }
     if (!file[0])
@@ -472,6 +480,12 @@ static void serve_saves(int fd, const char *method, const char *path, const char
                 rename(file, backup);
             }
         }
+        char folder[SwanStationPS5_PATH_MAX];
+        str_copy(folder, sizeof(folder), file);
+        char *slash = strrchr(folder, '/');
+        if (slash)
+            *slash = '\0';
+        make_dirs(folder); /* saves/beetle or states/beetle may not be there yet */
         ok = (!card || len == 128 * 1024) && write_atomic(file, body, len);
     }
     free(body);

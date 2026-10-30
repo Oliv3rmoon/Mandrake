@@ -10,6 +10,7 @@
 #include "coverflow.h"
 
 #include "../app.h"
+#include "../core/cores.h"
 #include "../art.h"
 #include "../config.h"
 #include "../covers.h"
@@ -940,10 +941,22 @@ static void draw_info(const Game *g, float alpha)
     }
     char source[64];
     shelf_folder_tag(g, source, sizeof(source));
-    const char *tags[6] = {shelf_region_name(g->serial), g->serial[0] ? g->serial : tr("No serial"),
-                           discs, played_tag, when, source};
-    float widths[6], total = 0;
-    for (int i = 0; i < 6; ++i)
+    /* the emulator, when it is not the default one: the game's own settings say it (read again every second) */
+    static const Game *core_game;
+    static int core_of_game;
+    static uint64_t core_read_at;
+    const uint64_t now_us = plat_ticks_us();
+    if (g != core_game || now_us - core_read_at > 1000000)
+    {
+        core_game = g;
+        core_of_game = app_game_core(g);
+        core_read_at = now_us;
+    }
+    const char *emulator = core_of_game != CORE_SWANSTATION ? CORES[core_of_game].name : "";
+    const char *tags[7] = {shelf_region_name(g->serial), g->serial[0] ? g->serial : tr("No serial"),
+                           discs, played_tag, when, source, emulator};
+    float widths[7], total = 0;
+    for (int i = 0; i < 7; ++i)
         if (tags[i][0])
         {
             widths[i] = text_width(22, FONT_REGULAR, tags[i]) + 36;
@@ -952,7 +965,7 @@ static void draw_info(const Game *g, float alpha)
         else
             widths[i] = 0;
     float x = CENTER_X - (total - 10) * 0.5f, ty = tags_y;
-    for (int i = 0; i < 6; ++i)
+    for (int i = 0; i < 7; ++i)
         if (widths[i] > 0)
             x += draw_pill(x, ty, 40, 22, argb_alpha(TH_PILL_A(0xc0), alpha),
                            argb_alpha(TH_TEXT_SOFT, alpha), tags[i]) + 10;

@@ -172,6 +172,10 @@ typedef struct
     int video_out;        /* picture output to the TV: 0 60 Hz, 1 120 Hz (from the next start) */
     int framegen;         /* generated frames: 0 off, 1 one between two of the game's (x2), 2 three (x4, a 30 fps game on a 120 Hz screen) */
     int aspect_before_wide; /* the aspect ratio (index) the widescreen hack replaced with 16:9, or -1; saved by value */
+    int core;             /* the emulator, CORE_* of core/cores.h: SwanStation (default) or Beetle PSX; per game too */
+    int beetle_res;       /* Beetle PSX's internal resolution: 0 native, 1 2x */
+    bool beetle_dither;   /* Beetle PSX: the PS1's dithering in 16-bit colour (off: none) */
+    bool beetle_widescreen; /* Beetle PSX: its widescreen hack (3D drawn for 16:9) */
     int ss_opt[SS_OPT_COUNT]; /* SwanStation's own core options: the chosen value's index in SS_OPTS[i].values */
 } Settings;
 

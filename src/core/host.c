@@ -2,13 +2,15 @@
  * SwanStationPS5 - libretro host for the statically linked cores.
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * SwanStation is linked into SwanStationPS5 as a static archive (libswanstation.a, its
- * retro_* renamed swanstation_retro_* by tools/build-swanstation.sh). A table of
- * functions drives the core. Only the
- * environment callbacks the cores rely on are implemented; everything else
- * answers "unsupported" as libretro allows.
+ * Mandrake links two PlayStation emulators, each a static archive with its retro_* renamed: SwanStation
+ * (swanstation_retro_*, tools/build-swanstation.sh), the default, and Beetle PSX (beetle_retro_*,
+ * tools/build-beetle.sh). The table of cores.h drives the one a game runs on (Settings.core). Only the environment
+ * callbacks the cores rely on are implemented; everything else answers "unsupported" as libretro allows.
  */
 #include "host.h"
+
+#include "beetle_options.h"
+#include "cores.h"
 
 #include "../gamedb.h"
 #include "../i18n.h"
@@ -35,73 +37,14 @@ void app_toast(const char *message); /* main.c: a short notice on screen */
 
 /* ---------------------------------------------------------------- the cores */
 
-typedef struct
-{
-    const char *name;
-    void (*set_environment)(retro_environment_t);
-    void (*set_video_refresh)(retro_video_refresh_t);
-    void (*set_audio_sample)(retro_audio_sample_t);
-    void (*set_audio_sample_batch)(retro_audio_sample_batch_t);
-    void (*set_input_poll)(retro_input_poll_t);
-    void (*set_input_state)(retro_input_state_t);
-    void (*init)(void);
-    void (*deinit)(void);
-    bool (*load_game)(const struct retro_game_info *);
-    void (*unload_game)(void);
-    void (*get_system_av_info)(struct retro_system_av_info *);
-    void (*set_controller_port_device)(unsigned, unsigned);
-    void (*run)(void);
-    void (*reset)(void);
-    size_t (*serialize_size)(void);
-    bool (*serialize)(void *, size_t);
-    bool (*unserialize)(const void *, size_t);
-    void *(*get_memory_data)(unsigned);
-    size_t (*get_memory_size)(unsigned);
-    void (*cheat_reset)(void);
-    void (*cheat_set)(unsigned, bool, const char *);
-} CoreApi;
-
-#define CORE_API(label, p)                                                                         \
-    {                                                                                              \
-        label, p##retro_set_environment, p##retro_set_video_refresh, p##retro_set_audio_sample,  \
-            p##retro_set_audio_sample_batch, p##retro_set_input_poll, p##retro_set_input_state,  \
-            p##retro_init, p##retro_deinit, p##retro_load_game, p##retro_unload_game,            \
-            p##retro_get_system_av_info, p##retro_set_controller_port_device, p##retro_run,      \
-            p##retro_reset, p##retro_serialize_size, p##retro_serialize, p##retro_unserialize,   \
-            p##retro_get_memory_data, p##retro_get_memory_size, p##retro_cheat_reset,           \
-            p##retro_cheat_set                                                                  \
-    }
-
 #if !defined(SwanStationPS5_VULKAN)
 #error "SwanStation renders through Vulkan: build with APP_VULKAN=1"
 #endif
 
-#if defined(SwanStationPS5_VULKAN)
-void swanstation_retro_set_environment(retro_environment_t);
-void swanstation_retro_set_video_refresh(retro_video_refresh_t);
-void swanstation_retro_set_audio_sample(retro_audio_sample_t);
-void swanstation_retro_set_audio_sample_batch(retro_audio_sample_batch_t);
-void swanstation_retro_set_input_poll(retro_input_poll_t);
-void swanstation_retro_set_input_state(retro_input_state_t);
-void swanstation_retro_init(void);
-void swanstation_retro_deinit(void);
-bool swanstation_retro_load_game(const struct retro_game_info *);
-void swanstation_retro_unload_game(void);
-void swanstation_retro_get_system_av_info(struct retro_system_av_info *);
-void swanstation_retro_set_controller_port_device(unsigned, unsigned);
-void swanstation_retro_run(void);
-void swanstation_retro_reset(void);
-size_t swanstation_retro_serialize_size(void);
-bool swanstation_retro_serialize(void *, size_t);
-bool swanstation_retro_unserialize(const void *, size_t);
-void *swanstation_retro_get_memory_data(unsigned);
-size_t swanstation_retro_get_memory_size(unsigned);
-void swanstation_retro_cheat_reset(void);
-void swanstation_retro_cheat_set(unsigned, bool, const char *);
-static const CoreApi SWANSTATION = CORE_API("SwanStation", swanstation_);
-#endif
+#define SWANSTATION (&CORES[CORE_SWANSTATION])
+#define BEETLE (&CORES[CORE_BEETLE])
 
-static const CoreApi *core = &SWANSTATION;
+static const CoreInfo *core = SWANSTATION;
 
 typedef struct
 {
@@ -114,6 +57,7 @@ static int option_count;
 static bool options_dirty;
 
 static const Paths *host_paths;
+static char core_saves[SwanStationPS5_PATH_MAX]; /* <saves>/<the core's folder>: its memory cards */
 /* The game being loaded, for the HD texture pack check. */
 static char loading_path[SwanStationPS5_PATH_MAX];
 static bool sbi_missing; /* the core refused the disc: a libcrypt game with no SBI file */
@@ -337,15 +281,33 @@ static void apply_swanstation_options(const Settings *s)
 }
 #endif
 
+/* Beetle PSX: the options of beetle_options.c, from Settings > Graphics > Beetle PSX and the settings both cores
+ * share (region, fast CD loading, the BIOS's start-up, players), with what the game database knows the game breaks
+ * with or needs. */
+static void apply_beetle_options(const Settings *s)
+{
+    BeetleChoice c;
+    c.internal_res = (game_fixes & GDB_NO_UPSCALING) ? 0 : s->beetle_res;
+    c.dithering = s->beetle_dither;
+    c.widescreen = s->beetle_widescreen && !(game_fixes & GDB_NO_WIDESCREEN);
+    c.region = s->region % REGION_COUNT;
+    c.cd_speed = (game_fixes & GDB_NO_CD_SPEEDUP) ? 1 : s->cd_speed;
+    c.boot_intro = s->boot_intro;
+    c.multitap = s->multitap && !(game_fixes & GDB_NO_MULTITAP);
+    c.analog_from_start = s->analog && (game_fixes & GDB_ANALOG);
+    c.analog_combo = 2; /* Settings > Controls > Analog Mode Combo, shared with SwanStation */
+    for (int i = 0; i < SS_OPT_COUNT; ++i)
+        if (!strcmp(SS_OPTS[i].key, "swanstation_Controller_AnalogCombo"))
+            c.analog_combo = s->ss_opt[i];
+    beetle_options_apply(&c, set_option);
+}
+
 static void apply_settings_to_options(const Settings *s)
 {
-#if defined(SwanStationPS5_VULKAN)
-    if (core == &SWANSTATION)
-    {
+    if (core == SWANSTATION)
         apply_swanstation_options(s);
-        return;
-    }
-#endif
+    else if (core == BEETLE)
+        apply_beetle_options(s);
 }
 
 /* ---------------------------------------------------------------- Vulkan rendering */
@@ -478,6 +440,8 @@ static void hw_stop(void)
 
 /* ---------------------------------------------------------------- callbacks */
 
+static bool beetle_openbios; /* Beetle PSX found no BIOS of the player's and runs its built-in OpenBIOS */
+
 static void RETRO_CALLCONV core_log(enum retro_log_level level, const char *fmt, ...)
 {
     if (level < RETRO_LOG_INFO)
@@ -488,6 +452,16 @@ static void RETRO_CALLCONV core_log(enum retro_log_level level, const char *fmt,
     vsnprintf(line, sizeof(line), fmt, args);
     va_end(args);
     SwanStationPS5_log("core: %s", line);
+    /* Beetle PSX says which BIOS it found while the game loads: none ("Firmware is missing") means OpenBIOS */
+    if (core == BEETLE && strstr(line, "Firmware is missing"))
+        beetle_openbios = true;
+    else if (core == BEETLE && strstr(line, "Firmware found"))
+        beetle_openbios = false;
+}
+
+bool host_openbios(void)
+{
+    return loaded && core == BEETLE && beetle_openbios;
 }
 
 static float rumble_scale = 1.0f; /* Settings > Controls > Vibration */
@@ -716,7 +690,7 @@ static bool RETRO_CALLCONV environment(unsigned cmd, void *data)
         *(const char **)data = host_paths->cache;
         return true;
     case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
-        *(const char **)data = host_paths->saves;
+        *(const char **)data = core_saves; /* the core's own folder of saves/ (cores.h) */
         return true;
     case RETRO_ENVIRONMENT_GET_LOG_INTERFACE:
         ((struct retro_log_callback *)data)->log = core_log;
@@ -823,7 +797,7 @@ static bool RETRO_CALLCONV environment(unsigned cmd, void *data)
     case RETRO_ENVIRONMENT_SET_HW_RENDER:
     {
         struct retro_hw_render_callback *cb = data;
-        if (core != &SWANSTATION || cb->context_type != RETRO_HW_CONTEXT_VULKAN || !vkp_describe()[0])
+        if (!core->gpu || cb->context_type != RETRO_HW_CONTEXT_VULKAN || !vkp_describe()[0])
             return false;
         hw = *cb;
         hw_requested = true;
@@ -985,9 +959,10 @@ static int16_t RETRO_CALLCONV input_state_cb(unsigned port, unsigned device, uns
 
 /* ---------------------------------------------------------------- memory card */
 
-/* One card per game, whichever emulator runs it: <saves>/<serial>_1.mcd,
- * the file the memory card manager shows. The core's card is the frontend's (SAVE_RAM): loaded from that
- * file after retro_load_game, written back when it changes. */
+/* One card per game and emulator: <saves>/<serial>_1.mcd for SwanStation, <saves>/beetle/<serial>_1.mcd for Beetle
+ * PSX (core_saves_dir), the files the memory card manager shows. Switching a game's emulator never hands one core's
+ * card to the other. The core's card is the frontend's (SAVE_RAM): loaded from that file after retro_load_game,
+ * written back when it changes. */
 static char card_path[SwanStationPS5_PATH_MAX];
 static uint8_t card_saved[128 * 1024];
 static int card_check;
@@ -1010,7 +985,7 @@ static void card_prepare(const char *serial, const char *game_path)
             *dot = '\0';
         strncat(name, "_1.mcd", sizeof(name) - strlen(name) - 1);
     }
-    path_join(card_path, sizeof(card_path), host_paths->saves, name);
+    path_join(card_path, sizeof(card_path), core_saves, name);
     /* older saves name it as the disc spells its ID, sometimes lower case */
     FILE *f = fopen(card_path, "rb");
     if (f)
@@ -1020,7 +995,7 @@ static void card_prepare(const char *serial, const char *game_path)
     }
     for (char *c = name; *c; ++c)
         *c = (char)(*c >= 'A' && *c <= 'Z' ? *c + 32 : *c);
-    path_join(path, sizeof(path), host_paths->saves, name);
+    path_join(path, sizeof(path), core_saves, name);
     if ((f = fopen(path, "rb")) != NULL)
     {
         fclose(f);
@@ -1037,7 +1012,7 @@ static void card_prepare(const char *serial, const char *game_path)
         if (dot)
             *dot = '\0';
         strncat(old, "_1.mcd", sizeof(old) - strlen(old) - 1);
-        path_join(old_path, sizeof(old_path), host_paths->saves, old);
+        path_join(old_path, sizeof(old_path), core_saves, old);
         if ((f = fopen(old_path, "rb")) != NULL)
         {
             fclose(f);
@@ -1166,13 +1141,18 @@ static void card_flush(void)
 
 const char *host_emulator_for(const Settings *settings, const char *serial)
 {
-    (void)settings, (void)serial;
-    return SWANSTATION.name;
+    (void)serial;
+    return CORES[core_index(settings->core)].name;
 }
 
 const char *host_core_name(void)
 {
     return core->name;
+}
+
+int host_core(void)
+{
+    return (int)(core - CORES);
 }
 
 static void apply_devices(const Settings *settings);
@@ -1185,8 +1165,14 @@ bool host_load(const char *game_path, const char *serial, const Paths *paths, co
     host_unload();
     host_paths = paths;
     str_copy(loading_path, sizeof(loading_path), game_path);
-    core = &SWANSTATION;
+    /* the game's emulator (Settings > System > Emulator); the BIOS with no disc is SwanStation's (Beetle PSX needs a
+     * disc to start) */
+    core = &CORES[core_index(settings->core)];
+    if (!game_path[0] && !core->boots_bios)
+        core = SWANSTATION;
     SwanStationPS5_log("host: emulator %s", core->name);
+    core_saves_dir((int)(core - CORES), paths->saves, core_saves, sizeof(core_saves));
+    make_dirs(core_saves);
     card_prepare(serial ? serial : "", game_path);
     disc_prepare(serial ? serial : "", game_path);
     option_count = 0;
@@ -1211,6 +1197,7 @@ bool host_load(const char *game_path, const char *serial, const Paths *paths, co
     core->set_input_poll(input_poll_cb);
     core->set_input_state(input_state_cb);
     STEP("retro_init");
+    beetle_openbios = false;
     core->init();
 
     /* the controllers go in before the game boots: it asks what is plugged in only at the start, so a
@@ -1322,8 +1309,9 @@ static void apply_devices_for(bool analog)
 {
     devices_analog = analog;
     /* DualShock starts in digital mode, so it is also safe for digital-only games. */
-    unsigned device = analog ? RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, (core == &SWANSTATION ? 0 : 1))
-                                       : RETRO_DEVICE_JOYPAD;
+    /* the DualShock: SwanStation's analog subclass 0, Beetle PSX's 1 (its 0 is the older Analog Controller) */
+    unsigned device = analog ? RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, (core == SWANSTATION ? 0 : 1))
+                             : RETRO_DEVICE_JOYPAD;
     for (unsigned port = 0; port < (multitap ? 4u : 2u); ++port)
         core->set_controller_port_device(port, device);
     /* NeGcon Rumble (analog subclass 3) in every port, or a mouse in port 1 */

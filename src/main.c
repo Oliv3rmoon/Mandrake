@@ -11,6 +11,8 @@
 #include "app.h"
 
 #include "config.h"
+#include "core/beetle_options.h"
+#include "core/cores.h"
 #include "core/host.h"
 #include "core/swanstation_options.h"
 #include "bezels.h"
@@ -357,11 +359,45 @@ static uint32_t nav_pressed(const PadState *pads)
 
 /* ---------------------------------------------------------------- helpers */
 
+int app_game_core_by_id(const char *id)
+{
+    /* the running game: the emulator it runs on, whatever its settings say now (a change waits for its next start) */
+    const Game *running = app.game;
+    if (running && host_loaded() && id && !strcmp(running->id, id))
+        return host_core();
+    if (!id)
+        return core_index(app.global.core);
+    char dir[SwanStationPS5_PATH_MAX], file[96], path[SwanStationPS5_PATH_MAX], value[32];
+    path_join(dir, sizeof(dir), app.paths.user, "game-settings");
+    snprintf(file, sizeof(file), "%.80s.ini", id);
+    path_join(path, sizeof(path), dir, file);
+    if (config_peek_string(path, "core", value, sizeof(value)))
+    {
+        const CoreInfo *c = core_by_id(value);
+        if (c)
+            return (int)(c - CORES);
+    }
+    return core_index(app.global.core);
+}
+
+int app_game_core(const Game *g)
+{
+    if (g && game_is_bios(g))
+        return CORE_SWANSTATION;
+    return g ? app_game_core_by_id(g->id) : core_index(app.global.core);
+}
+
+void app_game_states_dir(const Game *g, char *out, size_t size)
+{
+    core_states_dir(app_game_core(g), app.paths.states, out, size);
+}
+
 void app_state_path(char *out, size_t size, int slot)
 {
-    char file[96];
+    char file[96], dir[SwanStationPS5_PATH_MAX];
     snprintf(file, sizeof(file), "%.80s.state%d", app.game ? app.game->id : "game", slot);
-    path_join(out, size, app.paths.states, file);
+    app_game_states_dir(app.game, dir, sizeof(dir));
+    path_join(out, size, dir, file);
 }
 
 /* The BIOS a region will run, from the choice in Console (core): that file when it is in bios/ (OpenBIOS is built into
@@ -864,8 +900,11 @@ void app_draw_game(uint8_t dim)
     size_t pitch;
     bool fresh;
     const void *pixels = host_frame(&w, &h, &pitch, &fmt, &fresh);
+    /* Beetle PSX's picture is drawn on the CPU and shown as it is: its pixels, scaled to the screen by the GPU with
+     * Smooth final scaling, Integer scaling and the scanlines (the prescalers' rows are hidden in Settings) */
     if (pixels && fresh)
-        plat_upload_game(pixels, w, h, pitch, fmt, app.settings.upscale, app.settings.upscale_filter);
+        plat_upload_game(pixels, w, h, pitch, fmt, host_core() == CORE_BEETLE ? 1 : app.settings.upscale,
+                         app.settings.upscale_filter);
     else if (!pixels && fresh && w > 0)
         plat_upload_game_gpu(w, h); /* the core rendered through Vulkan */
     Settings view = app.settings;
@@ -1983,9 +2022,15 @@ void app_start_game(int index, bool resume)
         st->last_played = (int64_t)time(NULL);
         stats_save();
     }
-    if (!bios_file_present()) /* after the load: it blocks, and the notice would run out before it was drawn */
+    /* after the load: it blocks, and the notice would run out before it was drawn */
+    if (host_core() == CORE_BEETLE)
+    {
+        if (host_openbios()) /* Beetle PSX looks for its own three BIOS files, by name or by content */
+            app_toast_for("Beetle PSX found no BIOS of yours and starts the game on OpenBIOS: put scph5501.bin (North America), scph5500.bin (Japan) or scph5502.bin (Europe) in the BIOS folder.", 10.0f);
+    }
+    else if (!bios_file_present())
         app_toast_for("BIOS not found, SCPH1001.BIN is recommended due to the low compatibility of OpenBios.", 10.0f);
-    if (app.settings.renderer == 1)
+    if (host_core() == CORE_SWANSTATION && app.settings.renderer == 1)
         app_toast_for("Rendering on the CPU, using the GPU is recommended.", 5.0f);
     {
         char hint[200];
@@ -2005,6 +2050,8 @@ void app_start_game(int index, bool resume)
                     int v = app.settings.ss_opt[i];
                     combo = v >= 0 && v < 11 ? v : SS_OPTS[i].def;
                 }
+            if (host_core() == CORE_BEETLE)
+                combo = beetle_analog_combo(combo); /* the one of SwanStation's it has, or its default */
             size_t n = strlen(hint);
             snprintf(hint + n, sizeof(hint) - n, "\n");
             n = strlen(hint);

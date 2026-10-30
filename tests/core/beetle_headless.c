@@ -403,14 +403,20 @@ int main(int argc, char **argv)
            retro_api_version());
 
     /* the app's defaults (Settings > Graphics > Beetle PSX: native, dithering on, widescreen hack off) */
-    BeetleChoice choice = {scale - 1, true, false, 0, 1, true, false, false};
+    BeetleChoice choice = {scale - 1, true, false, 0, 1, true, false, false, 2};
     if (!start(disc, &choice))
     {
         printf("FAIL: the core did not load %s\n", disc);
         return 1;
     }
-    check(option_problems == 0, "the %d options Mandrake sets are all offered by the core (%d registered)",
-          BEETLE_OPTION_COUNT, var_count);
+    /* every value the app may give (beetle_options.c), not only today's defaults */
+    int values = 0;
+    for (int i = 0; i < BEETLE_OPTION_COUNT; ++i)
+        for (int k = 0; BEETLE_OPTIONS[i].values[k]; ++k, ++values)
+            set_option(BEETLE_OPTIONS[i].key, BEETLE_OPTIONS[i].values[k]);
+    beetle_options_apply(&choice, set_option); /* back to the choice the game was loaded with */
+    check(option_problems == 0, "the %d options Mandrake sets, %d values, are all offered by the core (%d registered)",
+          BEETLE_OPTION_COUNT, values, var_count);
     printf("av: %ux%u (max %ux%u), aspect %.3f, %.3f fps, %.0f Hz sound\n", av.geometry.base_width,
            av.geometry.base_height, av.geometry.max_width, av.geometry.max_height, av.geometry.aspect_ratio,
            av.timing.fps, av.timing.sample_rate);
@@ -462,6 +468,17 @@ int main(int argc, char **argv)
         retro_run();
     check(loaded && last_hash == hash_after, "the state loaded again replays the same picture 30 frames later");
     free(state);
+
+    /* Settings > Graphics > Beetle PSX resolution applies at once: the next frames are the other size */
+    BeetleChoice other = choice;
+    other.internal_res = !choice.internal_res;
+    beetle_options_apply(&other, set_option);
+    for (int f = 0; f < 10; ++f)
+        retro_run();
+    check(last_h == 240u * (other.internal_res + 1), "the resolution changed while it ran: %ux%u", last_w, last_h);
+    beetle_options_apply(&choice, set_option);
+    for (int f = 0; f < 10; ++f)
+        retro_run();
     printf("frames: %d run, %u with a picture; %d places of the square, line %d\n", frames, drawn, seen.x_count,
            seen.square_y);
 

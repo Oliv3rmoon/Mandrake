@@ -67,7 +67,15 @@ void app_draw_toast(void);
 void app_message_box(const char *message);
 /* The running game behind a menu; dim 255 = full brightness. */
 void app_draw_game(uint8_t dim);
+/* A save state slot of the running game, in its emulator's folder (app_game_states_dir). */
 void app_state_path(char *out, size_t size, int slot);
+/* The emulator (CORE_* of core/cores.h) a game starts on: the one in its own settings, else the console-wide one. The
+ * running game's is the one it runs on. By the game's id too (the phone page's thread has no Game). */
+int app_game_core(const Game *g);
+int app_game_core_by_id(const char *id);
+/* Where a game's save states, quick-resume save and auto-saves are kept: its emulator's folder of states/
+ * (SwanStation's is states/ itself, Beetle PSX's states/beetle), so one core's states never reach the other. */
+void app_game_states_dir(const Game *g, char *out, size_t size);
 void app_describe_bios(char *out, size_t size);
 void app_rescan(void);
 void app_restart_covers(void);
