@@ -9,6 +9,13 @@ and boots it: the disc must start, draw its picture frame after frame at 1x and 
 save state, and start again in the same process, with the options the app sets (src/core/beetle_options.c), which
 the core must all offer.
 
+Around the core, the app's own code that 1.8.0 added for it runs on the same frames: the picture's way to the GPU
+(src/platform/cpu_frame.c: the picture as drawn, and Beetle PSX's upscale filter), the repeated pictures found as
+the app finds them, rewind's ring (src/rewind.c) stepped back and played forward again, and the DualShock's mode told
+by the ANALOG combination in the words host.c reads. Where the computer has Vulkan (lavapipe on the CI's runner,
+which sets MANDRAKE_REQUIRE_VULKAN so that it can't be skipped there) the picture is also uploaded through the
+presenter's own code (src/platform/vk/vk_cpu_image.inc) and read back, pixel for pixel.
+
 Beetle PSX needs no BIOS: without one it starts discs with the OpenBIOS built into it (PCSX-Redux's, MIT). To boot the
 disc with a real BIOS as well, set MANDRAKE_PS1_BIOS to a folder holding your own dump: scph5501.bin (or any file
 that is that BIOS) for this NTSC-U disc. That test is skipped, and says so, when it is not set. No BIOS is ever
@@ -69,6 +76,45 @@ class BeetleTest(unittest.TestCase):
             output = self.boot(empty)
         self.assertIn("Firmware is missing", output)  # no BIOS in the folder: the core's own OpenBIOS ran the disc
         self.assertIn("the picture is 320x240", output)
+
+    def check_gpu_path(self, output, size):
+        self.assertIn(f"ok   the GPU path's picture is the core's {size}, pixel for pixel (0 differ)", output)
+        if os.environ.get("MANDRAKE_REQUIRE_VULKAN"):
+            self.assertIn("vulkan: ", output)
+            self.assertIn(f"the picture as drawn: uploaded to the GPU and read back, the {size} picture is the same",
+                          output)
+
+    def test_a_frame_through_the_gpu_path(self):
+        with tempfile.TemporaryDirectory() as empty:
+            output = self.boot(empty)
+        self.check_gpu_path(output, "320x240")
+        # Beetle PSX upscale filter: xBR doubles a native picture before the upload
+        self.assertIn("ok   Beetle PSX upscale filter, xBR: 320x240 becomes 640x480, its white square 64x64", output)
+        if os.environ.get("MANDRAKE_REQUIRE_VULKAN"):
+            self.assertIn("the upscaled picture: uploaded to the GPU and read back, the 640x480 picture is the same",
+                          output)
+
+    def test_a_frame_through_the_gpu_path_at_2x(self):
+        with tempfile.TemporaryDirectory() as empty:
+            output = self.boot(empty, "900", "2x")
+        self.check_gpu_path(output, "640x480")
+        self.assertIn("ok   Beetle PSX upscale filter, xBR: a 640x480 picture is wide enough already", output)
+
+    def test_rewind_round_trips(self):
+        with tempfile.TemporaryDirectory() as empty:
+            output = self.boot(empty)
+        self.assertRegex(output, r"ok   rewind: 5 steps back \(.*\), the 48 frames played again are the ones played "
+                                 r"the first time \(0 differ\)")
+        self.assertIn("ok   rewind: 20 more steps reach the oldest state, and then no more", output)
+        self.assertIn("ok   rewind: the ring keeps the last 40 states", output)
+
+    def test_repeated_pictures_and_the_analog_button(self):
+        with tempfile.TemporaryDirectory() as empty:
+            output = self.boot(empty)
+        self.assertRegex(output, r"ok   [1-9][0-9]* of [0-9]+ pictures repeat the one before: the app finds the same "
+                                 r"ones \(0 differ\)")
+        self.assertIn("ok   the DualShock's ANALOG combination: Beetle PSX says port 1 went to analog mode, then back "
+                      "to digital", output)
 
     def test_twice_the_internal_resolution(self):
         with tempfile.TemporaryDirectory() as empty:

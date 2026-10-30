@@ -72,7 +72,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes clang-18 lld-18 llvm-18 libclang-rt-18-dev make ninja-build ccache \
-            pkg-config tar unzip wget python3 python3-venv zstd
+            pkg-config tar unzip wget python3 python3-venv zstd libvulkan-dev mesa-vulkan-drivers
 
       # The update's release decision and SHA-256, under the sanitizers (tests/test_update_release.py).
       - name: Host checks
@@ -83,9 +83,12 @@ jobs:
       # Beetle PSX built for this machine from the same pinned source and switches as the PS5's, and booted headless
       # on the test disc tools/make-test-disc.py writes (a homebrew program, no game or BIOS): tests/test_beetle.py.
       # Its BIOS test is skipped here, as no BIOS is ever given to CI; the disc boots on the core's own OpenBIOS.
+      # Its pictures also go through the app's way to the GPU: uploaded with the presenter's code on lavapipe (Mesa's
+      # Vulkan on the CPU) and read back, which MANDRAKE_REQUIRE_VULKAN makes sure is not skipped here.
       - name: Beetle PSX host check
         env:
           CC: clang-18
+          MANDRAKE_REQUIRE_VULKAN: "1"
         run: python3 -m unittest tests.test_beetle -v
 
       - name: Restore downloaded SDK and libraries

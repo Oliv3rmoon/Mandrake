@@ -113,9 +113,19 @@ if [[ $target == ps5 ]]; then
     exit 0
 fi
 
-# ---- host: the headless frontend of tests/core, linked to the core as it is (its API keeps the retro_ names).
+# ---- host: the headless frontend of tests/core, linked to the core as it is (its API keeps the retro_ names), with the
+# app's own code it checks around the core: the options, the picture's way to the GPU (cpu_frame.c, xbr.c) and rewind.
+# Where this computer has Vulkan (pkg-config vulkan; lavapipe on the CI's runner) the picture is also uploaded through
+# the presenter's code (src/platform/vk/vk_cpu_image.inc) and read back.
 echo "==> [beetle] the headless check (tests/core/beetle_headless.c)"
 rm -f "$result"
+vulkan=()
+if [[ ${MANDRAKE_HEADLESS_VULKAN:-auto} != 0 ]] && pkg-config --exists vulkan 2>/dev/null; then
+    read -r -a vulkan <<<"-DMANDRAKE_HEADLESS_VULKAN $(pkg-config --cflags --libs vulkan)"
+    echo "==> [beetle] with Vulkan $(pkg-config --modversion vulkan)"
+fi
 "$cc" -std=c11 -O2 -g -Wall -Wextra -Werror -I"$out/src/libretro-common/include" -I"$root/src/core" \
-    "$root/tests/core/beetle_headless.c" "$root/src/core/beetle_options.c" "$objects" -lpthread -lm -o "$result"
+    "$root/tests/core/beetle_headless.c" "$root/src/core/beetle_options.c" "$root/src/platform/cpu_frame.c" \
+    "$root/src/platform/xbr.c" "$root/src/rewind.c" "$objects" ${vulkan[@]+"${vulkan[@]}"} -lpthread -lm \
+    -o "$result"
 echo "==> [beetle] $result"
