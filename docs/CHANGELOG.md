@@ -5,6 +5,48 @@ until 1.6.0, and the entries for those releases keep the name they had. A releas
 are in `docs/releases/<version>.md`. What changed in SwanStationPS5 before Nightshade Station is in
 [its releases](https://github.com/darkxex/SwanStationPS5/releases).
 
+## Mandrake 1.8.0: Beetle PSX with every picture setting, and SwanStationPS5 1.6.1's fixes
+
+Beetle PSX without the compromises of 1.7.0, and the fixes of SwanStationPS5 1.6.1. Its version,
+1.8.0 (contentVersion 01.008.000), is the next minor after 1.7.0. What changed:
+
+- **The picture settings work on Beetle PSX.** Beetle PSX draws on the CPU; each new picture is now
+  uploaded to the GPU and takes the same way to the screen as SwanStation's image. The shaders (CRT
+  Royale, the NTSC ones, LCD3x...), AMD FSR 1, AMD CAS, *Generate frames* and supersampling work for a
+  game on Beetle PSX, and Settings no longer locks them for it. The colours (brightness, Vivid, Warm...)
+  are the GPU's for both emulators. Should the GPU have no room for the picture, it is drawn by the CPU
+  as in 1.7.0.
+- **Generated frames and Show FPS count Beetle PSX's own frames.** Beetle PSX hands over every frame,
+  also the ones that only repeat the last picture (a 30 fps game); those are now found by comparing
+  the pictures, so frame generation starts from the game's real rate and *Show FPS* shows it in
+  brackets, as with SwanStation.
+- **Beetle PSX upscale filter.** Settings > Graphics > Beetle PSX: Off (the default), Sharp pixels,
+  Smooth pixels (Scale2x) or xBR. It enlarges a Native picture twice on the CPU before the GPU, the
+  shader and the screen take it; a 2x picture is left as it is. 1.7.0 bypassed the prescaler for
+  Beetle PSX.
+- **The ANALOG button on Beetle PSX.** The light bar's *Analog mode* (red in analog mode, off in
+  digital) and *Left stick as D-pad: Auto* (the stick moves the D-pad while the DualShock is in digital
+  mode) now follow Beetle PSX's DualShock: its own messages say when the mode changes, and a game the
+  database starts in analog mode is known to be in it.
+- **PAL games at 60 Hz on Beetle PSX.** SwanStation's *Force NTSC Timings* (Settings > Graphics) is
+  given to Beetle PSX too, at once, and its row is no longer locked for a Beetle PSX game.
+- **Japanese.** Every Beetle PSX text is in Japanese now, and the Japanese font has the ten kanji it
+  lacked (two of them for texts that were already there).
+- **SwanStationPS5 1.6.1's fixes.** The sandbox unlock waits for a resident Lapy service before it
+  sends the Lapy helper, and gives the request files to LegacyJB and the PS5SX2 Helper before it asks
+  etaHEN's command server; the helper is built with Payload SDK v0.42 again. SwanStationPS5 1.6.0 also
+  took out the Game Boy LCD shader: Mandrake keeps it.
+- **What stays.** SwanStation's GPU renderer, its settings and its picture are as they were. Its CPU
+  renderer's pictures take the GPU's way too, with the prescaler they always had, so the shaders now
+  work on them.
+- **Checked on a computer.** The host check now runs the app's own code on Beetle PSX's frames: the
+  picture through the GPU path's preparation at 1x, 2x and with xBR, and, with Vulkan (lavapipe in CI),
+  uploaded through the presenter's own code and read back pixel for pixel; the repeated pictures; rewind
+  stepped back and played forward again, frame for frame (rewind's ring is in `src/rewind.c` now); the
+  ANALOG combination as Beetle PSX reports it; and a PAL disc at 50 Hz and at 60 Hz.
+
+Built and checked by the host tests; not yet run on a console.
+
 ## Mandrake 1.7.0: Beetle PSX, a second emulator
 
 A second PlayStation emulator, [Beetle PSX](https://github.com/libretro/beetle-psx-libretro)

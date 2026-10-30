@@ -20,13 +20,14 @@
 </p>
 
 Mandrake is Oliv3rmoon's release of SwanStationPS5 by darkxex, built on SwanStation. It is
-[SwanStationPS5](https://github.com/darkxex/SwanStationPS5) 1.5.9, the PS1 emulator that installs as
-an app on the PS5 home screen and runs games on [SwanStation](https://github.com/libretro/swanstation)
-(DuckStation's libretro core) through Vulkan, with the look of [Nightshade](https://github.com/Oliv3rmoon/Nightshade)
-and updates from this repository. Since 1.7.0 it also carries a second emulator,
-[Beetle PSX](https://github.com/libretro/beetle-psx-libretro) (Mednafen's PlayStation), for the games
-SwanStation runs badly. The current release is **1.7.0**; what changed is in the
-[changelog](docs/CHANGELOG.md).
+[SwanStationPS5](https://github.com/darkxex/SwanStationPS5) 1.5.9 with the fixes of SwanStationPS5 1.6.1,
+the PS1 emulator that installs as an app on the PS5 home screen and runs games on
+[SwanStation](https://github.com/libretro/swanstation) (DuckStation's libretro core) through Vulkan, with
+the look of [Nightshade](https://github.com/Oliv3rmoon/Nightshade) and updates from this repository. Since
+1.7.0 it also carries a second emulator, [Beetle PSX](https://github.com/libretro/beetle-psx-libretro)
+(Mednafen's PlayStation), for the games SwanStation runs badly, and since 1.8.0 the shaders, AMD FSR and
+CAS, generated frames and supersampling work on both. The current release is **1.8.0**; what changed is
+in the [changelog](docs/CHANGELOG.md).
 
 ## What you get
 
@@ -45,8 +46,13 @@ SwanStation runs badly. The current release is **1.7.0**; what changed is in the
 - **A second emulator for the games that need it.** SwanStation runs every game by default. Set
   **Settings > System > Emulator** to **Beetle PSX** for one game (in *This game*, **L2** / **R2**)
   or for all of them, and that game starts on Beetle PSX: Mednafen's PlayStation, slower than
-  SwanStation and closer to the real console, drawn on the CPU at 1x or 2x. Each emulator keeps
-  its own save states and memory cards. See [Beetle PSX](#beetle-psx-the-second-emulator).
+  SwanStation and closer to the real console, drawn on the CPU at 1x or 2x. Its picture then takes the
+  same way to the screen as SwanStation's, so the CRT and NTSC shaders, AMD FSR and CAS, generated
+  frames and supersampling work for it too. Each emulator keeps its own save states and memory cards.
+  See [Beetle PSX](#beetle-psx-the-second-emulator).
+- **SwanStationPS5's fixes.** SwanStationPS5 1.6.1's change to the sandbox unlock (a resident Lapy
+  service is waited for first, the request files go before etaHEN's command server) is in. The Game
+  Boy LCD shader, which SwanStationPS5 1.6.0 took out, is still here.
 - **No BIOS, no games.** Like SwanStationPS5, it ships neither: use dumps of your own console and discs.
 
 ## Beetle PSX, the second emulator
@@ -62,10 +68,14 @@ that SwanStation runs badly; keep SwanStation for the rest.
   or from the shelf) only that game's. It applies the next time the game starts. The shelf shows a
   **Beetle PSX** tag on the games set to it, and the game menu shows the emulator that is running.
 - **Its settings.** **Settings > Graphics > Beetle PSX**: resolution (Native, the default, or 2x),
-  dithering (on, as on a PS1) and the widescreen hack (off). Region, fast CD loading, the PS1 startup
-  intro, players (multitap), controller, analog mode combination, rumble, light guns, NeGcon and
-  mouse, cheats, RetroAchievements, rewind, run-ahead, fast forward, quick resume, auto-save and the
-  screen's framing, scanlines and colours work with both emulators.
+  dithering (on, as on a PS1), the widescreen hack (off) and its upscale filter (off; Sharp pixels,
+  Scale2x or xBR enlarge a Native picture twice on the CPU before the GPU and the shader take it).
+  Region, fast CD loading, the PS1 startup intro, players (multitap), controller, analog mode
+  combination, Force NTSC Timings (PAL games at 60 Hz), rumble, light guns, NeGcon and mouse, cheats,
+  RetroAchievements, rewind, run-ahead, fast forward, quick resume, auto-save, the shaders, AMD FSR and
+  CAS, generated frames, supersampling and the screen's framing, scanlines and colours work with both
+  emulators. The light bar's *Analog mode* and *Left stick as D-pad: Auto* follow Beetle PSX's
+  DualShock as they follow SwanStation's.
 - **Saves.** Each emulator keeps its own: Beetle PSX's save states are in
   `/data/SwanStationPS5/states/beetle/` and its memory cards in `/data/SwanStationPS5/saves/beetle/`
   (in a profile's folder, the same under it). A save state of one emulator never loads into the other,
@@ -76,11 +86,14 @@ that SwanStation runs badly; keep SwanStation for the rest.
   names, or any file that is one of those BIOS dumps. Other BIOS versions (`SCPH1001.BIN`...) are
   SwanStation's only. Without one, Beetle PSX starts the game on its built-in OpenBIOS and the game
   says so when it starts; fewer games run on it.
-- **What only SwanStation has.** Beetle PSX's picture is drawn on the CPU, so the shaders, AMD FSR,
-  AMD CAS, generated frames, supersampling and HD texture packs, which work on SwanStation's GPU
-  picture, don't apply to it, nor do SwanStation's own options (renderer, 16x resolution, PGXP, true
-  colour, its aspect ratio and widescreen hack). For a game on Beetle PSX, Settings shows them locked
-  with whose they are and why. Start BIOS always runs SwanStation (Beetle PSX needs a disc).
+- **Its picture.** Beetle PSX draws on the CPU; Mandrake uploads each new picture to the GPU, where
+  it takes the same way to the screen as SwanStation's own image: the shader, FSR 1, CAS, the
+  interpolator of *Generate frames* and supersampling read it as they read SwanStation's. A picture
+  that repeats the one before (a 30 fps game) is found by comparing the two, so generated frames and
+  *Show FPS* count the game's own frames, as SwanStation tells them itself.
+- **What only SwanStation has.** Its own options (renderer, up to 16x resolution, PGXP, true colour,
+  its aspect ratio and widescreen hack) and HD texture packs. For a game on Beetle PSX, Settings shows
+  them locked with whose they are and why. Start BIOS always runs SwanStation (Beetle PSX needs a disc).
 
 ## Install
 
@@ -167,7 +180,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 - **Always 4K.** The picture is sent to the TV at 4K, and it falls back to 1080p if the TV lacks the mode.
 - **Up to 16x resolution on the GPU.** SwanStation renders through Vulkan: native, 2x, 4x, 8x or 16x (4x by default), at full speed.
 - **No more wobbly 3D.** PGXP (precise geometry) keeps polygons still and textures straight.
-- **Two emulators.** Every game runs on SwanStation unless you set it to Beetle PSX (Mandrake 1.7.0, [Beetle PSX](#beetle-psx-the-second-emulator)). Memory cards are saved per game and per emulator.
+- **Two emulators.** Every game runs on SwanStation unless you set it to Beetle PSX (Mandrake 1.7.0, [Beetle PSX](#beetle-psx-the-second-emulator)); the shaders, FSR, CAS and generated frames work on both (1.8.0). Memory cards are saved per game and per emulator.
 - **SwanStation's own options.** 104 of its core options (MSAA, texture filter, widescreen hack, PGXP details, controller ports, CPU overclock...) in Settings → Display, Graphics, Controls and System. They are in English and only on the console.
 
 - **Five themes.** Neon Arcade (the default), Classic, Memory Card (light and dark, a grid of covers) and Record Shelf (spines on a shelf), each with its own colours and fonts. Around a 4:3 picture: black, the current background or a 90s TV, or the game's own artwork frame (off by default).
@@ -183,12 +196,12 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 - **Text guides and manuals.** Read a walkthrough `.txt` or a manual's pages from the in-game menu.
 - **Game art.** Title screens and gameplay pictures in Details, and the game's own artwork around the picture.
 - **Quick resume.** Leave a game and pick it up later: the shelf offers *Continue* (with a picture of where you were) or *Start over*.
-- **Rewind and fast forward.** Hold the touchpad and press L2 to go back a few seconds, or R2 to speed through cutscenes.
+- **Rewind and fast forward.** Hold the touchpad and press L2 to go back a few seconds (up to about 8, with Rewind on in Settings → System), or R2 to speed through cutscenes. Both work on either emulator.
 - **Save states with pictures.** Ten slots per game, each showing a thumbnail and how long ago it was saved.
 - **Widescreen.** SwanStation's widescreen hack (Settings → Graphics) draws the 3D picture in 16:9.
 - **CRT look.** Light or strong scanlines, and the current background or a 90s TV around the picture.
 - **Shaders for the picture** (Settings → Display → Shader): LCD3x (a handheld's LCD), Game Boy LCD and zfast LCD, four NTSC ones (320px or 256px, S-Video or Composite) that recreate the analog TV signal, and CRT looks: CRT Royale Fast and CRT Royale (detailed, with bloom and a phosphor mask; heavy), CRT Newpixie, CRT Hyllian NTSC, CRT Mattias, CRT Lottes and CRT Pi.
-- **Generate frames.** AMD FSR 3's frame interpolation adds frames between the game's real ones. x2 puts one between each two: a 30 fps game is shown at 60, and with *Video output* at 120 Hz a 60 fps one at 120. x4 puts three: with *Video output* at 120 Hz a 30 fps game is shown at 120. At 60 Hz it only doubles. SwanStation tells the app when a picture is a repeat, so it starts from the game's real rate. The shaders run after it, CRT Royale Fast and NTSC included.
+- **Generate frames.** AMD FSR 3's frame interpolation adds frames between the game's real ones. x2 puts one between each two: a 30 fps game is shown at 60, and with *Video output* at 120 Hz a 60 fps one at 120. x4 puts three: with *Video output* at 120 Hz a 30 fps game is shown at 120. At 60 Hz it only doubles. SwanStation tells the app when a picture is a repeat (on Beetle PSX the app compares the pictures itself), so it starts from the game's real rate. The shaders run after it, CRT Royale Fast and NTSC included.
 - **Show FPS that tells the truth.** It shows the emulated frames, the game's own rate when the game repeats pictures (`60.0 FPS (game 25.0)`) and, while frames are generated, the frames you actually see and how many are made for each of the game's (`100.0 FPS (game 25.0) | FG x4`).
 - **HD texture packs.** The *Load HD textures* switch turns on SwanStation's texture replacement; put a pack's PNG files in `/data/SwanStationPS5/cache/textures/<serial>/` (for example `SCUS-94900`).
 - **PS1 homebrew.** Homebrew discs boot too: [Yume Nikki PS1](https://eliasdaler.itch.io/yume-nikki-ps1) and [Doki Doki Literature Club PSX](https://www.psxhomebrewgames.com/2025/09/doki-doki-literature-club-psx.html) are confirmed.
@@ -489,7 +502,7 @@ It also shows the time and how long you've been playing.
 | Section | Settings |
 |---|---|
 | Display | Aspect ratio, texture filtering (including MMPX), shader (LCD3x, CRT Royale and Royale Fast, Newpixie, Hyllian NTSC, Mattias, Lottes, Pi, Game Boy LCD, zfast LCD, NTSC), crop black edges, integer scaling, smooth final scaling, scanlines, border, game artwork border, brightness, colours, FPS counter, load HD textures, double frames, and SwanStation's display options |
-| Graphics | Internal resolution (native to 16x), PGXP, true colour, supersampling, and SwanStation's enhancement options (MSAA, PGXP details...); Beetle PSX's resolution (native or 2x), dithering and widescreen hack |
+| Graphics | Internal resolution (native to 16x), PGXP, true colour, supersampling, and SwanStation's enhancement options (MSAA, PGXP details...); Beetle PSX's resolution (native or 2x), dithering, widescreen hack and upscale filter |
 | Controls | Controller (digital or DualShock), left stick as D-pad, vibration, light bar, players (multitap), player order, dead zone, stick response, rumble feel, trigger effects, gas and brake on R2 / L2, light gun, button mapping, and SwanStation's controller port options |
 | Achievements | Account, your profile, unlock pop-ups and their style, progress tracker, hardcore mode |
 | Library | Theme, cover style, download missing covers, sort, your library, memory cards, rescan |
