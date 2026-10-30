@@ -10,6 +10,7 @@
 #include "platform/platform.h"
 #include "i18n.h"
 #include "ra/achievements.h"
+#include "rewind.h"
 #include "ui/coverflow.h"
 
 #include <SDL2/SDL.h>
@@ -368,58 +369,31 @@ bool play_load_resume(void)
 
 /* ---------------------------------------------------------------- rewind */
 
-/* A ring of states, one every STEP frames: about 8 seconds back. */
-#define SLOTS 40
-#define STEP 12
-
-static uint8_t *ring;
-static size_t state_size;
-static int head, filled, counter;
+/* rewind.c's ring of states, through the running core's save states (the same for both emulators) */
+static Rewind rewind_ring;
+static const RewindCore REWIND_CORE = {host_state_size, host_serialize, host_unserialize};
 
 void play_rewind_reset(void)
 {
-    free(ring);
-    ring = NULL;
-    state_size = 0;
-    head = filled = counter = 0;
+    rewind_reset(&rewind_ring);
 }
 
 void play_rewind_record(void)
 {
     if (!app.settings.rewind || ra_hardcore())
     {
-        if (ring)
+        if (rewind_ring.ring)
             play_rewind_reset();
         return;
     }
-    if (++counter < STEP)
-        return;
-    counter = 0;
-    if (!ring)
+    if (!rewind_record(&rewind_ring, &REWIND_CORE))
     {
-        state_size = host_state_size();
-        ring = state_size ? malloc(state_size * SLOTS) : NULL;
-        if (!ring)
-        {
-            SwanStationPS5_log("rewind: no memory for %d x %zu bytes", SLOTS, state_size);
-            app.settings.rewind = false;
-            return;
-        }
-    }
-    if (host_serialize(ring + (size_t)head * state_size, state_size))
-    {
-        head = (head + 1) % SLOTS;
-        if (filled < SLOTS)
-            ++filled;
+        SwanStationPS5_log("rewind: no memory for %d states of %zu bytes", REWIND_SLOTS, host_state_size());
+        app.settings.rewind = false;
     }
 }
 
 bool play_rewind_step(void)
 {
-    if (!ring || filled == 0)
-        return false;
-    head = (head + SLOTS - 1) % SLOTS;
-    --filled;
-    counter = 0;
-    return host_unserialize(ring + (size_t)head * state_size, state_size);
+    return rewind_step(&rewind_ring, &REWIND_CORE);
 }
