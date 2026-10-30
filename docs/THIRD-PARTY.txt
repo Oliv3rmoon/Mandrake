@@ -11,6 +11,12 @@ SwanStation (DuckStation's libretro core)
   LICENSE-swanstation.txt
   https://github.com/libretro/swanstation
 
+Beetle PSX (libretro's port of Mednafen's PlayStation emulator), the second emulator
+  GNU GPL v2 (Mednafen's sources: version 2 or any later version) - COPYING-beetle-psx.txt
+  https://github.com/libretro/beetle-psx-libretro - https://mednafen.github.io
+  with libretro-common (MIT) and PCSX-Redux's OpenBIOS (MIT License - LICENSE-openbios.txt,
+  https://github.com/pcsx-redux/pcsx-redux), started when no BIOS of yours is found
+
 RADV, Mesa's Vulkan driver for AMD GPUs (PS5 port by Mihawk-99)
   MIT License
   https://gitlab.freedesktop.org/mesa/mesa

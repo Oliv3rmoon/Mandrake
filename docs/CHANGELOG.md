@@ -5,6 +5,49 @@ until 1.6.0, and the entries for those releases keep the name they had. A releas
 are in `docs/releases/<version>.md`. What changed in SwanStationPS5 before Nightshade Station is in
 [its releases](https://github.com/darkxex/SwanStationPS5/releases).
 
+## Mandrake 1.7.0: Beetle PSX, a second emulator
+
+A second PlayStation emulator, [Beetle PSX](https://github.com/libretro/beetle-psx-libretro)
+(Mednafen's PlayStation), for the games SwanStation runs badly. SwanStation stays the default, and
+every game runs on it until you choose otherwise. Its version, 1.7.0 (contentVersion 01.007.000),
+is the next minor after 1.6.1. What changed:
+
+- **Choose the emulator, for one game or all.** **Settings > System > Emulator**: SwanStation or
+  Beetle PSX. In *All games* it sets every game without settings of its own; in *This game*
+  (**L2** / **R2** in Settings, from the game or from the shelf) only that game. It applies the next
+  time the game starts. The shelf shows a **Beetle PSX** tag on the games set to it, and the game
+  menu shows which emulator is running.
+- **Beetle PSX's settings.** **Settings > Graphics > Beetle PSX**: resolution (Native, the default,
+  or 2x), dithering (on, as the PS1 draws) and its widescreen hack (off). They apply at once. Region,
+  fast CD loading, the PS1 startup intro, players (multitap), the controller and its analog-mode
+  combination, rumble, light guns, the NeGcon and the mouse, cheats, RetroAchievements, rewind,
+  run-ahead, fast forward, quick resume, auto-save and the screen's framing, scanlines and colours
+  work with both emulators.
+- **Saves kept apart.** Each emulator keeps its own save states (Beetle PSX's in
+  `states/beetle/`) and memory cards (`saves/beetle/`), so a save state of one is never loaded into
+  the other, and switching a game's emulator never hands it the other's card. The shelf offers
+  Continue only from the emulator the game will start on. The memory card manager and the phone page
+  show each game's cards and states of its emulator; the manager lists Beetle PSX's cards with its
+  name.
+- **What only SwanStation does.** Beetle PSX draws its picture on the CPU, so the shaders, AMD FSR,
+  AMD CAS, generated frames, supersampling and HD texture packs, which work on SwanStation's GPU
+  picture, don't apply to it, nor do SwanStation's own settings (renderer, up to 16x, PGXP, true
+  colour, its aspect ratio and widescreen hack, its console and controller options). For a game on
+  Beetle PSX, Settings shows those rows locked, says they are SwanStation's only and why. Start BIOS
+  always runs SwanStation, as Beetle PSX needs a disc.
+- **Its BIOS.** Beetle PSX reads the same BIOS folder, `/data/SwanStationPS5/bios/`, and uses
+  `scph5501.bin` (North America), `scph5500.bin` (Japan) or `scph5502.bin` (Europe), by those names
+  or by their content. With none for the game's region it starts the game on its built-in OpenBIOS,
+  and a notice says so.
+- **Scanlines on CPU pictures.** Settings > Display > CRT scanlines now darkens the lines of a
+  picture the frontend gets drawn on the CPU too, as Beetle PSX's is.
+- **Built and checked.** `tools/build-beetle.sh` builds Beetle PSX from a pinned commit, software
+  renderer only, as one self-contained archive beside SwanStation's. A host check builds the same core
+  for a computer and boots a test disc on it, at 1x and 2x: a small program and disc image made by
+  `tools/make-test-disc.py`, no game and no BIOS. CI runs it on every build.
+
+Built and checked by the host tests; not yet run on a console.
+
 ## Mandrake 1.6.1: renamed from Nightshade Station
 
 Renamed to Mandrake; same app, same title ID, your settings stay. Mandrake, a Nightshade app, is the

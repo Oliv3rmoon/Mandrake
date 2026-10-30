@@ -21,9 +21,11 @@
 
 Mandrake is Oliv3rmoon's release of SwanStationPS5 by darkxex, built on SwanStation. It is
 [SwanStationPS5](https://github.com/darkxex/SwanStationPS5) 1.5.9, the PS1 emulator that installs as
-an app on the PS5 home screen and runs every game on [SwanStation](https://github.com/libretro/swanstation)
+an app on the PS5 home screen and runs games on [SwanStation](https://github.com/libretro/swanstation)
 (DuckStation's libretro core) through Vulkan, with the look of [Nightshade](https://github.com/Oliv3rmoon/Nightshade)
-and updates from this repository. The current release is **1.6.1**; what changed is in the
+and updates from this repository. Since 1.7.0 it also carries a second emulator,
+[Beetle PSX](https://github.com/libretro/beetle-psx-libretro) (Mednafen's PlayStation), for the games
+SwanStation runs badly. The current release is **1.7.0**; what changed is in the
 [changelog](docs/CHANGELOG.md).
 
 ## What you get
@@ -40,7 +42,45 @@ and updates from this repository. The current release is **1.6.1**; what changed
   [Oliv3rmoon/Mandrake](https://github.com/Oliv3rmoon/Mandrake/releases) for a
   newer release and installs it, after checking `PPSA98510.zip` against the release's `SHA256SUMS`.
   It never offers SwanStationPS5's own releases, which would put the old name and look back.
+- **A second emulator for the games that need it.** SwanStation runs every game by default. Set
+  **Settings > System > Emulator** to **Beetle PSX** for one game (in *This game*, **L2** / **R2**)
+  or for all of them, and that game starts on Beetle PSX: Mednafen's PlayStation, slower than
+  SwanStation and closer to the real console, drawn on the CPU at 1x or 2x. Each emulator keeps
+  its own save states and memory cards. See [Beetle PSX](#beetle-psx-the-second-emulator).
 - **No BIOS, no games.** Like SwanStationPS5, it ships neither: use dumps of your own console and discs.
+
+## Beetle PSX, the second emulator
+
+[Beetle PSX](https://github.com/libretro/beetle-psx-libretro) is libretro's port of
+[Mednafen](https://mednafen.github.io/)'s PlayStation emulator, known for its accuracy. Mandrake
+builds its software renderer and its interpreter (no recompiler: a PS5 app can't make code it runs
+itself), so it asks more of the CPU than SwanStation and draws at 1x or 2x only. Use it for a game
+that SwanStation runs badly; keep SwanStation for the rest.
+
+- **Choosing it.** **Settings > System > Emulator**. In *All games* it sets the emulator of every
+  game without settings of its own; in *This game* (press **L2** / **R2** in Settings, from the game
+  or from the shelf) only that game's. It applies the next time the game starts. The shelf shows a
+  **Beetle PSX** tag on the games set to it, and the game menu shows the emulator that is running.
+- **Its settings.** **Settings > Graphics > Beetle PSX**: resolution (Native, the default, or 2x),
+  dithering (on, as on a PS1) and the widescreen hack (off). Region, fast CD loading, the PS1 startup
+  intro, players (multitap), controller, analog mode combination, rumble, light guns, NeGcon and
+  mouse, cheats, RetroAchievements, rewind, run-ahead, fast forward, quick resume, auto-save and the
+  screen's framing, scanlines and colours work with both emulators.
+- **Saves.** Each emulator keeps its own: Beetle PSX's save states are in
+  `/data/SwanStationPS5/states/beetle/` and its memory cards in `/data/SwanStationPS5/saves/beetle/`
+  (in a profile's folder, the same under it). A save state of one emulator never loads into the other,
+  and switching a game's emulator doesn't move its card: the memory card manager lists both, Beetle
+  PSX's marked with its name, and can export one for the other.
+- **BIOS.** It looks in the same folder as SwanStation, `/data/SwanStationPS5/bios/`, for
+  `scph5501.bin` (North America), `scph5500.bin` (Japan) or `scph5502.bin` (Europe): by those
+  names, or any file that is one of those BIOS dumps. Other BIOS versions (`SCPH1001.BIN`...) are
+  SwanStation's only. Without one, Beetle PSX starts the game on its built-in OpenBIOS and the game
+  says so when it starts; fewer games run on it.
+- **What only SwanStation has.** Beetle PSX's picture is drawn on the CPU, so the shaders, AMD FSR,
+  AMD CAS, generated frames, supersampling and HD texture packs, which work on SwanStation's GPU
+  picture, don't apply to it, nor do SwanStation's own options (renderer, 16x resolution, PGXP, true
+  colour, its aspect ratio and widescreen hack). For a game on Beetle PSX, Settings shows them locked
+  with whose they are and why. Start BIOS always runs SwanStation (Beetle PSX needs a disc).
 
 ## Install
 
@@ -127,7 +167,7 @@ Its frontend (the shelf, menus, controls and tools) began as PSXS5's and has bee
 - **Always 4K.** The picture is sent to the TV at 4K, and it falls back to 1080p if the TV lacks the mode.
 - **Up to 16x resolution on the GPU.** SwanStation renders through Vulkan: native, 2x, 4x, 8x or 16x (4x by default), at full speed.
 - **No more wobbly 3D.** PGXP (precise geometry) keeps polygons still and textures straight.
-- **One emulator, nothing to choose.** Every game runs on SwanStation. Memory cards are saved per game.
+- **Two emulators.** Every game runs on SwanStation unless you set it to Beetle PSX (Mandrake 1.7.0, [Beetle PSX](#beetle-psx-the-second-emulator)). Memory cards are saved per game and per emulator.
 - **SwanStation's own options.** 104 of its core options (MSAA, texture filter, widescreen hack, PGXP details, controller ports, CPU overclock...) in Settings → Display, Graphics, Controls and System. They are in English and only on the console.
 
 - **Five themes.** Neon Arcade (the default), Classic, Memory Card (light and dark, a grid of covers) and Record Shelf (spines on a shelf), each with its own colours and fonts. Around a 4:3 picture: black, the current background or a 90s TV, or the game's own artwork frame (off by default).
@@ -259,6 +299,8 @@ You can also pick one folder name for drives in Settings > System > SwanStationP
 | 2nd (only if the first has no `.bin`) | `/data/PSXS5/bios/` (PSXS5's folder) |
 
 Put the BIOS files directly in the folder, not in a subfolder, and keep their standard names: `SCPH1001.BIN` (recommended), `scph5500.bin` (Japan), `scph5501.bin` (USA), `scph5502.bin` (Europe), `scph101.bin`. A BIOS on a USB drive or extended storage is not read. With no BIOS, SwanStation uses its built-in OpenBIOS. *Settings → About* shows which one is in use.
+
+Beetle PSX reads the same folder. It uses `scph5501.bin` (USA), `scph5500.bin` (Japan) and `scph5502.bin` (Europe), by those names or by their content under any name, and its own built-in OpenBIOS when it finds none for the game's region.
 
 > On a USB drive or extended storage SwanStationPS5 needs `/data` unlocked to list the folders (see below). Sandboxed, it only shows the games listed in `/data/SwanStationPS5/library.txt`.
 
@@ -447,13 +489,13 @@ It also shows the time and how long you've been playing.
 | Section | Settings |
 |---|---|
 | Display | Aspect ratio, texture filtering (including MMPX), shader (LCD3x, CRT Royale and Royale Fast, Newpixie, Hyllian NTSC, Mattias, Lottes, Pi, Game Boy LCD, zfast LCD, NTSC), crop black edges, integer scaling, smooth final scaling, scanlines, border, game artwork border, brightness, colours, FPS counter, load HD textures, double frames, and SwanStation's display options |
-| Graphics | Internal resolution (native to 16x), PGXP, true colour, supersampling, and SwanStation's enhancement options (MSAA, PGXP details...) |
+| Graphics | Internal resolution (native to 16x), PGXP, true colour, supersampling, and SwanStation's enhancement options (MSAA, PGXP details...); Beetle PSX's resolution (native or 2x), dithering and widescreen hack |
 | Controls | Controller (digital or DualShock), left stick as D-pad, vibration, light bar, players (multitap), player order, dead zone, stick response, rumble feel, trigger effects, gas and brake on R2 / L2, light gun, button mapping, and SwanStation's controller port options |
 | Achievements | Account, your profile, unlock pop-ups and their style, progress tracker, hardcore mode |
 | Library | Theme, cover style, download missing covers, sort, your library, memory cards, rescan |
-| System | SwanStationPS5 (start the BIOS, games folder on USB drives, NFS shares), region, PS1 startup intro, fast CD loading, known game fixes, SwanStation's console and advanced options, quick resume, rewind, auto-save, who's playing (profiles), settings from your phone, language, unlocking `/data`, PS5SX2 Helper whitelist |
+| System | SwanStationPS5 (start the BIOS, games folder on USB drives, NFS shares), the emulator (SwanStation or Beetle PSX), region, PS1 startup intro, fast CD loading, known game fixes, SwanStation's console and advanced options, quick resume, rewind, auto-save, who's playing (profiles), settings from your phone, language, unlocking `/data`, PS5SX2 Helper whitelist |
 
-Video settings apply while you play. Internal resolution, PGXP, region, BIOS, controller and SwanStation's options apply from the next game.
+Video settings apply while you play. Internal resolution, PGXP, region, BIOS, controller and SwanStation's options apply from the next game, and so does the emulator. For a game on Beetle PSX, the settings that are SwanStation's alone are shown locked, with the reason.
 
 ## RetroAchievements
 
@@ -510,6 +552,7 @@ It remembers what is already on the console, so you can run it again whenever yo
 ## Known limitations
 
 - **SwanStation works best with a BIOS** for the game's region; without one it uses its built-in OpenBIOS, which is less compatible.
+- **Beetle PSX** draws on the CPU, at 1x or 2x, and runs its interpreter (no recompiler on the PS5): it asks more of the console than SwanStation, and the GPU-only features (shaders, FSR, CAS, generated frames, supersampling, HD textures) don't apply to it. It finds only `scph5500.bin`, `scph5501.bin` and `scph5502.bin` (by name or content); with none, it runs its built-in OpenBIOS. Its analog-mode light bar doesn't follow the controller's mode, and its *Left stick as D-pad: Auto* doesn't drive the D-pad while a DualShock is in digital mode (use *Always*).
 - **Sandboxed mode.** If etaHEN won't unlock `/data`, SwanStationPS5 still runs: it reads the game list the PC tool uploads (`library.txt`) instead of listing the folder.
 - **Closing from the PS button** crashed the console once during testing while `/data` was unlocked through etaHEN. If it happens to you, set *Settings → System → Unlock /data with etaHEN* to Off and let us know.
 - The PS5's own keyboard and on-screen keyboard aren't used, so text entry (like the RetroAchievements sign-in) happens on the PC.
@@ -523,18 +566,22 @@ sudo apt install clang-18 lld-18 llvm-18 make ninja-build ccache pkg-config pyth
 git clone https://github.com/darkxex/SwanStationPS5.git
 cd SwanStationPS5
 git submodule update --init --recursive third_party/rcheevos
-git submodule update --init third_party/swanstation
+git submodule update --init third_party/swanstation third_party/beetle-psx
 make            # -> dist/PPSA98510/ and dist/PPSA98510.zip
 make disc-daemon                # -> dist/SwanStationPS5-DiscDaemon.elf, the disc daemon payload
 python3 tools/make_release.py   # optional: build the payload and the app, and pack PPSA98510.zip
 ```
 
-`make` builds SwanStation (`tools/build-swanstation.sh`) and rcheevos (`tools/build-rcheevos.sh`) as static libraries, links the RADV Vulkan driver (`tools/fetch-radv.sh`), compiles `src/` and signs `eboot.bin`. `APP_VULKAN=0` builds without Vulkan and SwanStation.
+`make` builds SwanStation (`tools/build-swanstation.sh`), Beetle PSX (`tools/build-beetle.sh`, its software renderer, at the commit its submodule pins) and rcheevos (`tools/build-rcheevos.sh`) as static libraries, links the RADV Vulkan driver (`tools/fetch-radv.sh`), compiles `src/` and signs `eboot.bin`. `APP_VULKAN=0` builds without Vulkan and SwanStation.
+
+`make test-beetle` builds Beetle PSX for your computer (`tools/build-beetle.sh host`) and boots a test disc on it headless (`tests/test_beetle.py`): the disc is made by `tools/make-test-disc.py` from a small program written for the check, no game and no BIOS, and runs on the core's built-in OpenBIOS. To boot it with a BIOS of your own too, set `MANDRAKE_PS1_BIOS` to the folder that holds it (`scph5501.bin` for that NTSC-U disc); without it, that test is skipped and says so. CI runs the same check.
 
 | Path | What |
 |---|---|
 | `src/main.c` | screens and main loop |
 | `src/core/host.c` | libretro host for the built-in cores |
+| `src/core/cores.c` | the two emulators, SwanStation and Beetle PSX: their libretro functions and their folders |
+| `src/core/beetle_options.c` | the options Mandrake gives Beetle PSX, shared with its host check |
 | `src/core/swanstation_options.c` | SwanStation's core options, made by `tools/gen_swanstation_options.py` |
 | `src/ra/` | RetroAchievements |
 | `src/ui/` | cover flow, text, sounds |
@@ -551,6 +598,7 @@ python3 tools/make_release.py   # optional: build the payload and the app, and p
 SwanStationPS5 started as a fork of [PSXS5](https://github.com/SynoPiia/PSXS5) by SynoPiia and is built on the work of a lot of people. Thank you all.
 
 * **The SwanStation and DuckStation contributors**, for [SwanStation](https://github.com/libretro/swanstation), the emulator SwanStationPS5 runs.
+* **Mednafen's authors and the Beetle PSX contributors**, for [Beetle PSX](https://github.com/libretro/beetle-psx-libretro), Mandrake's second emulator, and **the PCSX-Redux authors** for the OpenBIOS built into it.
 * **Mihawk-99**, for the PS5 port of Mesa's RADV Vulkan driver.
 * **BlackBearReloaded**, for [ps5-native-app-boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate), the build pipeline, runtime and deploy tooling that turn SwanStationPS5 into a home-screen app.
 * **John Törnblom**, for the [ps5-payload-dev](https://github.com/ps5-payload-dev) SDK, and PacBrew's SDL2 and libcurl ports.

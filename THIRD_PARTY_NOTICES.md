@@ -22,13 +22,24 @@
 
 ## Emulation cores shipped
 
-SwanStationPS5 ships **one** emulation core:
+Mandrake ships **two** emulation cores, both built from source into the app (`eboot.bin`):
 
 | Core | Upstream | License | Notes |
 | --- | --- | --- | --- |
-| SwanStation (libretro) | [libretro/swanstation](https://github.com/libretro/swanstation), a fork of [DuckStation](https://github.com/stenzek/duckstation) | GPL-3.0 (`third_party/swanstation/LICENSE`) | PlayStation 1. Built from source into the app |
+| SwanStation (libretro) | [libretro/swanstation](https://github.com/libretro/swanstation), a fork of [DuckStation](https://github.com/stenzek/duckstation) | GPL-3.0 (`third_party/swanstation/LICENSE`) | PlayStation 1, the default. Built by `tools/build-swanstation.sh` |
+| Beetle PSX (libretro) | [libretro/beetle-psx-libretro](https://github.com/libretro/beetle-psx-libretro), a fork of [Mednafen](https://mednafen.github.io/)'s PSX module, at the commit `third_party/beetle-psx` pins | GPL-2.0 (`third_party/beetle-psx/COPYING`; Mednafen's sources are "version 2 of the License, or (at your option) any later version", which is how they combine with this GPL-3.0-or-later app) | PlayStation 1, chosen per game. Built by `tools/build-beetle.sh`: its software renderer and interpreter, with `tools/patches/beetle-psx-ps5-vfs.patch` |
 
-No other core is included, and no non-commercial-licensed core is shipped. SwanStationPS5 is free and has no paid features, ads or in-app purchases.
+Beetle PSX carries pieces under their own permissive licences: libretro-common (MIT) and
+[PCSX-Redux](https://github.com/pcsx-redux/pcsx-redux)'s OpenBIOS (MIT,
+`third_party/beetle-psx/deps/openbios/LICENSE.txt`), the free BIOS replacement it starts games with
+when no BIOS of the player's is found. Both licence texts travel in the app's `licenses/` folder
+(`COPYING-beetle-psx.txt`, `LICENSE-openbios.txt`).
+
+No other core is included, and no non-commercial-licensed core is shipped. Mandrake is free and has no paid features, ads or in-app purchases.
+
+The host check of Beetle PSX (`tests/test_beetle.py`) boots a test disc that `tools/make-test-disc.py`
+writes from scratch: a small program written for this repository, on an ISO 9660 image it builds.
+It is no game and holds no BIOS, and it is made at test time, not stored here.
 
 ## Native build dependencies
 
