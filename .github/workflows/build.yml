@@ -61,11 +61,12 @@ jobs:
           print(f"{tag}: SwanStationPS5_VERSION {version}, contentVersion {content}")
           PY
 
-      # SwanStation is the PS5 emulator.
+      # SwanStation and Beetle PSX are the PS5 emulators (Beetle at the commit its submodule pins).
       - name: Fetch submodules
         run: |
           git submodule update --init --recursive --depth=1 third_party/rcheevos
           git submodule update --init --depth=1 third_party/swanstation
+          git submodule update --init --depth=1 third_party/beetle-psx
 
       - name: Install toolchain
         run: |
@@ -78,6 +79,14 @@ jobs:
         env:
           CC: clang-18
         run: python3 -m unittest tests.test_update_release -v
+
+      # Beetle PSX built for this machine from the same pinned source and switches as the PS5's, and booted headless
+      # on the test disc tools/make-test-disc.py writes (a homebrew program, no game or BIOS): tests/test_beetle.py.
+      # Its BIOS test is skipped here, as no BIOS is ever given to CI; the disc boots on the core's own OpenBIOS.
+      - name: Beetle PSX host check
+        env:
+          CC: clang-18
+        run: python3 -m unittest tests.test_beetle -v
 
       - name: Restore downloaded SDK and libraries
         uses: actions/cache@v4

@@ -75,6 +75,15 @@ int sceImeDialogGetStatus(void) { return 0; /* SCE_IME_DIALOG_STATUS_NONE */ }
 int sceImeDialogGetResult(void *result) { (void)result; return SCE_UNAVAILABLE; }
 int sceImeDialogTerm(void) { return SCE_UNAVAILABLE; }
 
+/* posix_fadvise is only in the SDK's static libc, which a title doesn't link: Beetle PSX's file streams (libretro-common)
+ * hint with it that a disc image's next sectors will be read. It is advice, which a system may ignore. */
+#include <sys/types.h>
+int posix_fadvise(int fd, off_t offset, off_t len, int advice)
+{
+    (void)fd, (void)offset, (void)len, (void)advice;
+    return 0;
+}
+
 #if defined(SwanStationPS5_VULKAN)
 /* RADV (its shader cache) calls dirfd, which the PS5's libc doesn't export.
  * SwanStationPS5 keeps libc's opendir, whose DIR is FreeBSD's struct _dirdesc: the

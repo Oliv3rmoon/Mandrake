@@ -26,7 +26,9 @@ SwanStationPS5_SWANSTATION := build/swanstation-ps5/libswanstation.a
 # Frame generation (AMD FSR 3's frame interpolation, from PS5SX2), built by tools/build-framegen.sh
 SwanStationPS5_FRAMEGEN := build/framegen-ps5/libframegen.a
 endif
-APP_STATIC_ARCHIVES ?= $(SwanStationPS5_LIBNFS) $(SwanStationPS5_RCHEEVOS) $(SwanStationPS5_SWANSTATION) $(SwanStationPS5_FRAMEGEN)
+# Beetle PSX (Mednafen's PlayStation, software renderer), the second emulator, built by tools/build-beetle.sh
+SwanStationPS5_BEETLE := build/beetle-ps5/libbeetle.a
+APP_STATIC_ARCHIVES ?= $(SwanStationPS5_LIBNFS) $(SwanStationPS5_RCHEEVOS) $(SwanStationPS5_SWANSTATION) $(SwanStationPS5_BEETLE) $(SwanStationPS5_FRAMEGEN)
 APP_RUNTIME_MODULES ?=
 # fcntl: console_curl. The allocator family: ps5_heap.c (the C heap is too small). The file family: src/nfs/nfs.cpp
 # (a game on an /nfs share is read through libnfs by the scan and by the core alike).
@@ -276,12 +278,19 @@ ifeq ($(APP_VULKAN),1)
 	@bash tools/build-swanstation.sh
 	@bash tools/build-framegen.sh
 endif
+	@bash tools/build-beetle.sh ps5
+
+.PHONY: test-beetle
+# Beetle PSX built for this computer and booted headless on the test disc (tests/test_beetle.py).
+test-beetle:
+	@python3 -m unittest tests.test_beetle -v
 
 help:
 	@printf '%s\n' \
 	  'SwanStationPS5:' \
 	  'make                 Build the PS5 app folder dist/PPSA98510 (core + frontend)' \
 	  'make deploy PS5_HOST=<ip>  Build and upload to /data/homebrew over FTP' \
+	  'make test-beetle     Build Beetle PSX for this computer and boot the test disc headless' \
 	  '' \
 	  'Boilerplate:' \
 	  'make                 Generate libc.prx and build the app folder' \
