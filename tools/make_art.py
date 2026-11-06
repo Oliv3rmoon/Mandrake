@@ -3,10 +3,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Original SwanStationPS5 artwork, generated so it can be tweaked and rebuilt:
 
-    python tools/make_art.py            -> sce_sys/icon0.png
-                                           sce_sys/background-source.png (selected)
+    python tools/make_art.py            -> sce_sys/background-source.png (selected)
                                            sce_sys/launch-background-source.png (launching)
 Convert the two backgrounds to pic0.dds / pic1.dds with tools/make_dds.py.
+Mandrake: icon0.png is no longer drawn here; it is Mandrake's logo, resized from
+assets/branding/mandrake-logo-1024.png.
 
 The look matches the in-app shelf: a deep blue gradient, a glowing CD with a
 rainbow sheen and the four face-button shapes in their classic colours.
@@ -216,7 +217,6 @@ def banner():
 
 
 if __name__ == "__main__":
-    import shutil
     import sys
     media = ROOT / "docs" / "media"
     media.mkdir(parents=True, exist_ok=True)
@@ -225,8 +225,7 @@ if __name__ == "__main__":
         print("wrote", media / "banner.png")
         sys.exit(0)
     out = ROOT / "sce_sys"
-    icon().save(out / "icon0.png", optimize=True)
-    shutil.copyfile(out / "icon0.png", media / "icon.png")
+    # icon0.png is Mandrake's logo (assets/branding/mandrake-logo-1024.png), not drawn here.
     selection_background().save(out / "background-source.png", optimize=True)
     launch_background().save(out / "launch-background-source.png", optimize=True)
-    print("wrote icon0.png, background-source.png, launch-background-source.png in", out)
+    print("wrote background-source.png, launch-background-source.png in", out)

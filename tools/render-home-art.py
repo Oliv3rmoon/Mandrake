@@ -12,9 +12,8 @@ PlayStation disc in place of the television: the same nightshade flower (five re
 pale cone), black berries and dark leaves, on near black with a red glow and faint stars, in
 Nightshade's palette (its "nightly" theme).
 
-Writes, in sce_sys/:
-  icon0.png                     512x512: a black disc lit red, the flower at its hub and berries
-                                at its edge
+Writes, in sce_sys/ (icon0.png is no longer drawn here: it is Mandrake's logo, resized from
+assets/branding/mandrake-logo-1024.png; --preview still draws the old one):
   background-source.png         3840x2160 (pic0, on the home screen): a disc risen at the right
                                 like an eclipsed moon, with the nightshade climbing to flower
                                 beside it
@@ -439,7 +438,7 @@ def main():
         to_image(background(960, 540)).save(out / 'background.png')
         to_image(launch(960, 540)).save(out / 'launch.png')
         return
-    pictures = {'icon0.png': to_image(icon())}
+    pictures = {}  # icon0.png is the logo (assets/branding/mandrake-logo-1024.png), not drawn here
     for source, name, draw in (('background-source.png', 'pic0.dds', background),
                                ('launch-background-source.png', 'pic1.dds', launch)):
         picture = to_image(draw(), 'RGB')
