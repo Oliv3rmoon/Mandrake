@@ -58,6 +58,12 @@ Mandrake installs over SwanStationPS5, so here is where they differ. A dash mean
 | Title ID and data folder | `PPSA98510`, `/data/SwanStationPS5` | The same |
 | Games, drives, NFS, NTFS, USB CD drive, RetroAchievements, cheats, PC tool | The same | The same |
 
+## nightly insider
+
+**nightly insider** is early access to the Nightshade family's new builds for members of nightly on Discord. For now it covers Nightshade and Dulcamara: Nightshade builds after v1.010.012 and Dulcamara builds after 0.2.12 go to insiders first and are published on GitHub for everyone about two months later. Mandrake's releases come out here as before.
+
+To become one, join [nightly on Discord](https://discord.gg/pSqgRU3YP9), verify, run `/rank Tester` in #bot-commands, then sign in with Discord at [nightly-insider.nightly-ps5.workers.dev](https://nightly-insider.nightly-ps5.workers.dev) to get your code.
+
 ## Install
 
 1. Close the app if it is running.
